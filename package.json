@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev:backend": "cd core && cargo run",
+    "dev:backend": "cd core && cargo run --color always",
     "dev:frontend": "cd web && pnpm run dev",
-    "dev": "concurrently \"pnpm run dev:backend\" \"pnpm run dev:frontend\""
+    "dev": "concurrently -n core,web -c blue,green \"pnpm run dev:backend\" \"pnpm run dev:frontend\""
   },
   "devDependencies": {
     "concurrently": "^9.2.1"
