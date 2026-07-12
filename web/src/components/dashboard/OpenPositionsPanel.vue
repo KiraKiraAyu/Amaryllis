@@ -28,7 +28,7 @@ function signed(value: number) {
 </script>
 
 <template>
-  <Card class="border border-surface-200 dark:border-surface-800 bg-surface-0 dark:bg-surface-900 shadow-none! mb-6">
+  <Card class="border border-surface-200 dark:border-surface-800 bg-surface-0 dark:bg-surface-900 shadow-none!">
     <template #content>
       <div class="flex items-center justify-between mb-4">
         <h2 class="font-bold text-lg text-surface-900 dark:text-white">Open Positions</h2>

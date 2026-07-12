@@ -23,7 +23,7 @@ function eventIcon(type: string) {
 
 <template>
   <div>
-    <h2 class="font-bold text-sm mb-4">Live Events</h2>
+    <h2 class="font-bold text-sm">Live Events</h2>
     <div class="flex flex-col gap-2 max-h-55 overflow-auto">
       <div
         v-if="events.length === 0"

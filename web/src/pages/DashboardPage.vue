@@ -17,7 +17,6 @@ const {
   handleTraderCreated,
   initialLoadDone,
   loadAll,
-  loadError,
   loading,
   positions,
   selectEquityTrader,
@@ -32,7 +31,7 @@ const {
 </script>
 
 <template>
-  <div class="flex flex-col">
+  <div class="flex flex-col gap-6">
     <DashboardHeader @refresh="loadAll" />
 
     <DashboardStats
@@ -42,13 +41,6 @@ const {
       :initial-load-done="initialLoadDone"
     />
 
-    <div
-      v-if="loadError"
-      class="text-xs px-3 py-2 rounded-lg text-[--color-error] bg-[oklch(0.65_0.21_15/0.1)]"
-    >
-      {{ loadError }}
-    </div>
-
     <EquityCurvePanel
       :trader-ids="traderIdOptions"
       :active-trader-id="activeChart"
@@ -57,8 +49,7 @@ const {
       @select="selectEquityTrader"
     />
 
-    <div class="grid grid-cols-1 gap-6">
-      <TradersPanel
+    <TradersPanel
         :traders="traders"
         :loading="loading"
         :initial-load-done="initialLoadDone"
@@ -66,13 +57,13 @@ const {
         @start="startTrader"
         @stop="stopTrader"
         @sync="syncBalance"
-      />
-      <OpenPositionsPanel
+    />
+
+    <OpenPositionsPanel
         :positions="positions"
         :trader-name="traderName"
         @close="closePosition"
-      />
-    </div>
+    />
 
     <LiveEventsPanel :events="events" />
   </div>
