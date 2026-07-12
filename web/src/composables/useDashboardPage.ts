@@ -9,6 +9,7 @@ import {
   syncTraderBalanceApi,
 } from "@/api/trading"
 import { useRealtimeStore } from "@/stores/realtime"
+import { useToast } from "@/stores/toast"
 import type {
   DashboardEquitySnapshot,
   DashboardLiveEvent,
@@ -20,9 +21,9 @@ import type { EquityHistoryPointPayload } from "@/types/public"
 
 export function useDashboardPage() {
   const realtime = useRealtimeStore()
+  const toast = useToast()
   const loading = ref(true)
   const initialLoadDone = ref(false)
-  const loadError = ref("")
   const showCreateTrader = ref(false)
 
   const traders = ref<DashboardTrader[]>([])
@@ -36,39 +37,24 @@ export function useDashboardPage() {
   const events = ref<DashboardLiveEvent[]>([])
   const equityHistory = ref<EquityChartPoint[]>([])
   const activeChart = ref("")
-  const connected = computed(() => realtime.isConnected)
   const traderIdOptions = computed(() =>
     traders.value.map((trader) => trader.id).slice(0, 5),
   )
 
   function traderName(id: string) {
     return (
-      (traders.value.find((trader) => trader.id === id)?.name as string) ||
+      traders.value.find((trader) => trader.id === id)?.name ||
       `${id.slice(0, 8)}...`
     )
   }
 
-  function actionErrorMessage(error: unknown) {
-    const err = error as {
-      response?: { data?: { error?: string }; status?: number }
-      message?: string
-    }
-    const statusMsg = err?.response?.status
-      ? `Request failed (${err.response.status})`
-      : ""
-    return err?.response?.data?.error || statusMsg || err?.message || "Action failed"
-  }
-
   async function runActionAndReload(action: () => Promise<unknown>) {
-    let actionError: unknown = null
     try {
       await action()
-    } catch (error: unknown) {
-      actionError = error
-    }
-    await loadAll()
-    if (actionError) {
-      loadError.value = actionErrorMessage(actionError)
+    } catch {
+      // Request errors are reported by the shared response interceptor.
+    } finally {
+      await loadAll()
     }
   }
 
@@ -83,7 +69,6 @@ export function useDashboardPage() {
 
   async function loadAll() {
     loading.value = true
-    loadError.value = ""
     try {
       const data = await getTraderListApi()
       traders.value = data.traders
@@ -102,25 +87,14 @@ export function useDashboardPage() {
 
       await loadOpenPositions(traders.value.map((trader) => trader.id))
 
-      if (traders.value.length > 0 && !activeChart.value) {
-        activeChart.value = traders.value[0]!.id
-        await loadEquityHistory(traders.value[0]!.id)
+      if (!activeChart.value) {
+        const traderId = traders.value[0]!.id
+        activeChart.value = traderId
+        await loadEquityHistory(traderId)
       }
-    } catch (error: unknown) {
+    } catch {
       traders.value = []
       positions.value = []
-      const err = error as {
-        response?: { data?: { error?: string }; status?: number }
-        message?: string
-      }
-      const statusMsg = err?.response?.status
-        ? `Request failed (${err.response.status})`
-        : ""
-      loadError.value =
-        err?.response?.data?.error ||
-        statusMsg ||
-        err?.message ||
-        "Failed to load dashboard data"
       equity.value = {
         equity: 0,
         available_cash: 0,
@@ -201,9 +175,7 @@ export function useDashboardPage() {
         loading.value = false
         initialLoadDone.value = true
         equity.value.loaded = true
-        if (!loadError.value) {
-          loadError.value = "Dashboard init timed out. Please click Refresh."
-        }
+        toast.error("Dashboard init timed out. Please click Refresh.")
       }
     }, 5000)
   })
@@ -238,14 +210,12 @@ export function useDashboardPage() {
   return {
     activeChart,
     closePosition,
-    connected,
     equity,
     equityHistory,
     events,
     handleTraderCreated,
     initialLoadDone,
     loadAll,
-    loadError,
     loading,
     positions,
     selectEquityTrader,
