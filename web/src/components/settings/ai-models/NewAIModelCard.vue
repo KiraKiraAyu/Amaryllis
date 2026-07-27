@@ -22,14 +22,14 @@ const emit = defineEmits<{
         <label class="text-sm font-medium text-surface-700 dark:text-surface-300">Display Name</label>
         <InputText
           v-model="model.name"
-          placeholder="GPT-4 Turbo"
+          placeholder="GPT-5.6 Sol"
         />
       </div>
       <div class="flex flex-col gap-1">
         <label class="text-sm font-medium text-surface-700 dark:text-surface-300">Model ID</label>
         <InputText
           v-model="model.modelId"
-          placeholder="gpt-4-turbo-preview"
+          placeholder="gpt-5.6-sol"
         />
       </div>
     </div>

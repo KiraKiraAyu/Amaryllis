@@ -80,66 +80,94 @@ pub struct ModelPreset {
 
 const DEEPSEEK_MODELS: &[ModelPreset] = &[
     ModelPreset {
-        id: "deepseek-chat",
-        name: "DeepSeek Chat",
-        model_id: "deepseek-chat",
+        id: "deepseek-v4-pro",
+        name: "DeepSeek V4 Pro",
+        model_id: "deepseek-v4-pro",
     },
     ModelPreset {
-        id: "deepseek-reasoner",
-        name: "DeepSeek Reasoner",
-        model_id: "deepseek-reasoner",
+        id: "deepseek-v4-flash",
+        name: "DeepSeek V4 Flash",
+        model_id: "deepseek-v4-flash",
     },
 ];
 
 const OPENAI_MODELS: &[ModelPreset] = &[
     ModelPreset {
-        id: "openai-gpt-4o",
-        name: "GPT-4o",
-        model_id: "gpt-4o",
+        id: "openai-gpt-5-6-sol",
+        name: "GPT-5.6 Sol",
+        model_id: "gpt-5.6-sol",
     },
     ModelPreset {
-        id: "openai-gpt-4-1-mini",
-        name: "GPT-4.1 Mini",
-        model_id: "gpt-4.1-mini",
+        id: "openai-gpt-5-6-terra",
+        name: "GPT-5.6 Terra",
+        model_id: "gpt-5.6-terra",
     },
 ];
 
-const CLAUDE_MODELS: &[ModelPreset] = &[ModelPreset {
-    id: "claude-3-5-sonnet",
-    name: "Claude 3.5 Sonnet",
-    model_id: "claude-3-5-sonnet-20241022",
-}];
+const CLAUDE_MODELS: &[ModelPreset] = &[
+    ModelPreset {
+        id: "claude-sonnet-5",
+        name: "Claude Sonnet 5",
+        model_id: "claude-sonnet-5",
+    },
+    ModelPreset {
+        id: "claude-opus-5",
+        name: "Claude Opus 5",
+        model_id: "claude-opus-5",
+    },
+];
 
 const QWEN_MODELS: &[ModelPreset] = &[
     ModelPreset {
-        id: "qwen-max",
-        name: "Qwen Max",
-        model_id: "qwen-max",
+        id: "qwen3-7-max",
+        name: "Qwen3.7 Max",
+        model_id: "qwen3.7-max",
     },
     ModelPreset {
-        id: "qwen-plus",
-        name: "Qwen Plus",
-        model_id: "qwen-plus",
+        id: "qwen3-7-plus",
+        name: "Qwen3.7 Plus",
+        model_id: "qwen3.7-plus",
     },
 ];
 
-const GEMINI_MODELS: &[ModelPreset] = &[ModelPreset {
-    id: "gemini-2-0-flash",
-    name: "Gemini 2.0 Flash",
-    model_id: "gemini-2.0-flash",
-}];
+const GEMINI_MODELS: &[ModelPreset] = &[
+    ModelPreset {
+        id: "gemini-3-5-flash",
+        name: "Gemini 3.5 Flash",
+        model_id: "gemini-3.5-flash",
+    },
+    ModelPreset {
+        id: "gemini-3-1-flash-lite",
+        name: "Gemini 3.1 Flash Lite",
+        model_id: "gemini-3.1-flash-lite",
+    },
+];
 
-const GROK_MODELS: &[ModelPreset] = &[ModelPreset {
-    id: "grok-3-latest",
-    name: "Grok 3",
-    model_id: "grok-3-latest",
-}];
+const GROK_MODELS: &[ModelPreset] = &[
+    ModelPreset {
+        id: "grok-4-5",
+        name: "Grok 4.5",
+        model_id: "grok-4.5",
+    },
+    ModelPreset {
+        id: "grok-4-3",
+        name: "Grok 4.3",
+        model_id: "grok-4.3",
+    },
+];
 
-const KIMI_MODELS: &[ModelPreset] = &[ModelPreset {
-    id: "kimi-auto",
-    name: "Kimi Auto",
-    model_id: "moonshot-v1-auto",
-}];
+const KIMI_MODELS: &[ModelPreset] = &[
+    ModelPreset {
+        id: "kimi-k3",
+        name: "Kimi K3",
+        model_id: "kimi-k3",
+    },
+    ModelPreset {
+        id: "kimi-k2-6",
+        name: "Kimi K2.6",
+        model_id: "kimi-k2.6",
+    },
+];
 
 const PROVIDER_PRESETS: &[ProviderPreset] = &[
     ProviderPreset {
