@@ -16,7 +16,6 @@ pub struct Model {
     pub name: String,
     #[sea_orm(column_type = "Text")]
     pub model_id: String,
-    pub enabled: i32,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
 }

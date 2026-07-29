@@ -49,7 +49,6 @@ impl ModelService {
                             provider_id: model.provider_id,
                             name: model.name,
                             model_id: model.model_id,
-                            enabled: model.enabled != 0,
                         })
                         .collect(),
                 })
@@ -84,7 +83,6 @@ impl ModelService {
                     id: model.id,
                     name: model.name.trim().to_string(),
                     model_id: model.model_id.trim().to_string(),
-                    enabled: model.enabled,
                 });
             }
 

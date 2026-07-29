@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import Button from "primevue/button"
-import ToggleSwitch from "primevue/toggleswitch"
 import type { LlmModel } from "@/types/ai-models-ui"
 
 defineProps<{
@@ -15,8 +14,6 @@ const emit = defineEmits<{
 
 <template>
   <div class="flex items-center gap-3 rounded-md border border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800 px-3 py-2">
-    <ToggleSwitch v-model="model.enabled" />
-
     <div class="min-w-0 flex-1">
       <div class="truncate text-sm font-medium text-surface-900 dark:text-surface-0">
         {{ model.name || model.modelId }}

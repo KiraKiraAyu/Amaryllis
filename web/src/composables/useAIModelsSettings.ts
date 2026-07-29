@@ -44,7 +44,6 @@ export function useAIModelsSettings() {
     return {
       name: "",
       modelId: "",
-      enabled: true,
     }
   }
 
@@ -83,7 +82,6 @@ export function useAIModelsSettings() {
             providerId: model.providerId,
             name: model.name ?? "",
             modelId: model.modelId ?? "",
-            enabled: model.enabled ?? true,
           }))
         : [],
     }
@@ -153,7 +151,6 @@ export function useAIModelsSettings() {
               id: model.id,
               name: model.name,
               modelId: model.modelId,
-              enabled: model.enabled,
             })),
         })),
       }
@@ -203,10 +200,7 @@ export function useAIModelsSettings() {
   function openProviderCheckModal(provider: LlmProvider) {
     checkMessage.value = ""
     providerCheckModelId.value =
-      provider.models.find((model) => model.enabled && model.modelId.trim())
-        ?.modelId ??
-      provider.models.find((model) => model.modelId.trim())?.modelId ??
-      ""
+      provider.models.find((model) => model.modelId.trim())?.modelId ?? ""
     providerCheckModalOpen.value = true
   }
 
@@ -255,7 +249,6 @@ export function useAIModelsSettings() {
     provider.models.push({
       name: model.name || model.id,
       modelId: model.id,
-      enabled: true,
     })
   }
 

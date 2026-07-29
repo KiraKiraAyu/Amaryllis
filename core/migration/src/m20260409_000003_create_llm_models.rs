@@ -17,12 +17,6 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(LlmModels::Name).string().not_null())
                     .col(ColumnDef::new(LlmModels::ModelId).string().not_null())
                     .col(
-                        ColumnDef::new(LlmModels::Enabled)
-                            .integer()
-                            .not_null()
-                            .default(1),
-                    )
-                    .col(
                         ColumnDef::new(LlmModels::CreatedAt)
                             .timestamp_with_time_zone()
                             .not_null(),
@@ -79,7 +73,6 @@ enum LlmModels {
     ProviderId,
     Name,
     ModelId,
-    Enabled,
     CreatedAt,
     UpdatedAt,
 }

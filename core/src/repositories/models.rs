@@ -20,7 +20,6 @@ pub struct ModelConfigRecord {
     pub provider_id: String,
     pub name: String,
     pub model_id: String,
-    pub enabled: i64,
 }
 
 #[derive(Debug, Clone)]
@@ -50,7 +49,6 @@ pub struct UpsertModelConfig {
     pub id: Option<String>,
     pub name: String,
     pub model_id: String,
-    pub enabled: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -252,7 +250,6 @@ impl ModelRepo {
                     provider_id: row.provider_id,
                     name: row.name,
                     model_id: row.model_id,
-                    enabled: i64::from(row.enabled),
                 });
         }
 
@@ -380,7 +377,6 @@ impl ModelRepo {
                     provider_id: Set(provider_id.clone()),
                     name: Set(model.name.trim().to_string()),
                     model_id: Set(model.model_id.trim().to_string()),
-                    enabled: Set(if model.enabled { 1 } else { 0 }),
                     created_at: Set(now),
                     updated_at: Set(now),
                 })
@@ -390,7 +386,6 @@ impl ModelRepo {
                             llm_models::Column::ProviderId,
                             llm_models::Column::Name,
                             llm_models::Column::ModelId,
-                            llm_models::Column::Enabled,
                             llm_models::Column::UpdatedAt,
                         ])
                         .to_owned(),
@@ -424,8 +419,7 @@ impl ModelRepo {
             .find_map(|provider| {
                 provider
                     .models
-                    .iter()
-                    .find(|model| model.enabled != 0)
+                    .first()
                     .map(|model| resolved_model(provider, model))
             });
 
@@ -451,7 +445,7 @@ impl ModelRepo {
                 continue;
             }
 
-            for model in provider.models.iter().filter(|model| model.enabled != 0) {
+            for model in &provider.models {
                 items.push(resolved_model(&provider, model));
             }
         }
@@ -496,7 +490,6 @@ impl ModelRepo {
                     provider_id: Set(provider.id.to_string()),
                     name: Set(model.name.to_string()),
                     model_id: Set(model.model_id.to_string()),
-                    enabled: Set(1),
                     created_at: Set(now),
                     updated_at: Set(now),
                 }
@@ -742,7 +735,6 @@ mod tests {
                         id: Some("legacy-deepseek-chat".to_string()),
                         name: "DeepSeek Chat".to_string(),
                         model_id: "deepseek-chat".to_string(),
-                        enabled: true,
                     }],
                 },
                 UpsertProviderConfig {
@@ -756,7 +748,6 @@ mod tests {
                         id: Some("legacy-claude-sonnet".to_string()),
                         name: "Claude Sonnet".to_string(),
                         model_id: "claude-3-5-sonnet-20241022".to_string(),
-                        enabled: true,
                     }],
                 },
             ],

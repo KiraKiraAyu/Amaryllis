@@ -3,7 +3,6 @@ import { computed, ref, watch } from "vue"
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import InputText from "primevue/inputtext"
-import ToggleSwitch from "primevue/toggleswitch"
 import type { LlmModel } from "@/types/ai-models-ui"
 
 const props = defineProps<{
@@ -70,11 +69,6 @@ function close() {
           v-model="model.modelId"
           placeholder="e.g. gpt-5.6-sol"
         />
-      </div>
-
-      <div class="flex items-center gap-2">
-        <ToggleSwitch v-model="model.enabled" />
-        <span class="text-sm font-medium text-surface-700 dark:text-surface-300">Enabled</span>
       </div>
     </div>
 

@@ -66,30 +66,26 @@ onMounted(async () => {
   strategies.value = stRes.strategies
 
   const providerItems = modelRes.providers
-  const enabledModels = providerItems.flatMap(
-    (provider: {
-      name?: string
-      enabled?: boolean
-      models?: { id?: string; name?: string; enabled?: boolean }[]
-    }) =>
-      (provider.models ?? [])
-        .filter(
-          (model) => (provider.enabled ?? true) && (model.enabled ?? true),
-        )
-        .map((model) => ({
+  models.value = providerItems
+    .filter((provider) => provider.enabled ?? true)
+    .flatMap(
+      (provider: {
+        name?: string
+        models?: { id?: string; name?: string }[]
+      }) =>
+        (provider.models ?? []).map((model) => ({
           id: model.id ?? "",
           label: `${provider.name ?? "Provider"} / ${model.name ?? model.id ?? ""}`,
         })),
-  )
+    )
 
-  models.value = enabledModels
   if (
     !form.value.ai_model_id ||
-    !enabledModels.some(
+    !models.value.some(
       (model: { id: string }) => model.id === form.value.ai_model_id,
     )
   ) {
-    form.value.ai_model_id = enabledModels[0]?.id ?? ""
+    form.value.ai_model_id = models.value[0]?.id ?? ""
   }
 })
 </script>

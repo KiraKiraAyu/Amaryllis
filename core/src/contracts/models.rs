@@ -49,7 +49,6 @@ pub struct ModelConfigInput {
     pub name: String,
     #[serde(rename = "modelId")]
     pub model_id: String,
-    pub enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -96,7 +95,6 @@ pub struct SafeModelConfig {
     pub name: String,
     #[serde(rename = "modelId")]
     pub model_id: String,
-    pub enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]

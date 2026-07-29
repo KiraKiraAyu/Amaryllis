@@ -40,7 +40,6 @@ export interface ModelConfigInput {
   id?: string | null
   name: string
   modelId: string
-  enabled: boolean
 }
 
 export interface ModelConfigPayload {
@@ -62,7 +61,6 @@ export interface SafeModelConfig {
   providerId: string
   name: string
   modelId: string
-  enabled: boolean
 }
 
 export interface MessagePayload {

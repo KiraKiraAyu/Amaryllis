@@ -3,7 +3,6 @@ export interface LlmModel {
   providerId?: string
   name: string
   modelId: string
-  enabled: boolean
 }
 
 export interface LlmProvider {

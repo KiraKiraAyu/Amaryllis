@@ -48,28 +48,24 @@ export function useBacktestPage() {
     try {
       const data = await getModelConfigsApi()
       const providers = Array.isArray(data?.providers) ? data.providers : []
-      const enabledModels = providers.flatMap(
-        (provider: {
-          name?: string
-          enabled?: boolean
-          models?: { id?: string; name?: string; enabled?: boolean }[]
-        }) =>
-          (provider.models ?? [])
-            .filter(
-              (model) => (provider.enabled ?? true) && (model.enabled ?? true),
-            )
-            .map((model) => ({
+      modelOptions.value = providers
+        .filter((provider) => provider.enabled ?? true)
+        .flatMap(
+          (provider: {
+            name?: string
+            models?: { id?: string; name?: string }[]
+          }) =>
+            (provider.models ?? []).map((model) => ({
               id: model.id ?? "",
               label: `${provider.name ?? "Provider"} / ${model.name ?? model.id ?? ""}`,
             })),
-      )
+        )
 
-      modelOptions.value = enabledModels
       if (
         !cfg.value.ai_model_id ||
-        !enabledModels.some((model) => model.id === cfg.value.ai_model_id)
+        !modelOptions.value.some((model) => model.id === cfg.value.ai_model_id)
       ) {
-        cfg.value.ai_model_id = enabledModels[0]?.id ?? ""
+        cfg.value.ai_model_id = modelOptions.value[0]?.id ?? ""
       }
     } catch {
       modelOptions.value = []
