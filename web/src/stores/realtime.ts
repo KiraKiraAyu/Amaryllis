@@ -1,6 +1,7 @@
 import { defineStore } from "pinia"
 import { computed, ref } from "vue"
 import type { PositionPayload } from "@/types/trading"
+import { SseClient } from "@/utils/sse-client"
 import { useAuthStore } from "./auth"
 
 export interface RealtimeEvent {
@@ -11,52 +12,53 @@ export interface RealtimeEvent {
 }
 
 export const useRealtimeStore = defineStore("realtime", () => {
-  const source = ref<EventSource | null>(null)
   const connected = ref(false)
   const lastEvent = ref<RealtimeEvent | null>(null)
   const equitySnapshot = ref<Record<string, unknown> | null>(null)
   const positionsByTrader = ref<Record<string, PositionPayload[]>>({})
   const engineStatus = ref<Record<string, string>>({})
 
+  let client: SseClient | null = null
+
   const isConnected = computed(() => connected.value)
   const positions = computed(() => Object.values(positionsByTrader.value).flat())
 
   function connect() {
     const auth = useAuthStore()
-    const state = source.value?.readyState
-    if (
-      !auth.token ||
-      state === EventSource.OPEN ||
-      state === EventSource.CONNECTING
-    ) {
-      return
-    }
+    if (!auth.token || client) return
 
-    const eventSource = new EventSource(buildEventsUrl(auth.token))
-    source.value = eventSource
+    client = new SseClient({
+      onMessage: (data) => dispatchEventData(data),
+      onOpen: () => {
+        connected.value = true
+      },
+      onClose: () => {
+        connected.value = false
+      },
+      onResponse: (status) => {
+        if (status === 401) {
+          client?.disconnect()
+          useAuthStore().logout()
+        }
+      },
+    })
+    client.connect(buildEventsUrl(auth.token))
+  }
 
-    eventSource.onopen = () => {
-      if (source.value !== eventSource) return
-      connected.value = true
-    }
+  function disconnect() {
+    client?.disconnect()
+    client = null
+    connected.value = false
+  }
 
-    eventSource.onerror = () => {
-      if (source.value !== eventSource) return
-      connected.value = false
-      if (eventSource.readyState === EventSource.CLOSED) {
-        source.value = null
-      }
-    }
-
-    eventSource.onmessage = (evt) => {
-      if (source.value !== eventSource) return
-      try {
-        const data: RealtimeEvent = JSON.parse(evt.data)
-        lastEvent.value = data
-        handleEvent(data)
-      } catch {
-        /* ignore parse errors */
-      }
+  function dispatchEventData(data: string) {
+    if (!data) return
+    try {
+      const event: RealtimeEvent = JSON.parse(data)
+      lastEvent.value = event
+      handleEvent(event)
+    } catch {
+      /* ignore parse errors */
     }
   }
 
@@ -67,12 +69,6 @@ export const useRealtimeStore = defineStore("realtime", () => {
 
     url.searchParams.set("token", token)
     return url.toString()
-  }
-
-  function disconnect() {
-    source.value?.close()
-    source.value = null
-    connected.value = false
   }
 
   function handleEvent(ev: RealtimeEvent) {
