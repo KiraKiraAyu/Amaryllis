@@ -55,19 +55,22 @@ function close() {
   >
     <div class="flex flex-col gap-4 py-2">
       <div class="flex flex-col gap-1">
-        <label class="text-sm font-medium text-surface-700 dark:text-surface-300">Display Name</label>
+        <label
+          class="text-sm font-medium text-surface-700 dark:text-surface-300"
+          >Model ID</label
+        >
+        <InputText v-model="model.modelId" placeholder="e.g. gpt-5.6-sol" />
+      </div>
+
+      <div class="flex flex-col gap-1">
+        <label
+          class="text-sm font-medium text-surface-700 dark:text-surface-300"
+          >Display Name</label
+        >
         <InputText
           v-model="model.name"
           placeholder="e.g. GPT-5.6 Sol"
           @input="displayNameEdited = true"
-        />
-      </div>
-
-      <div class="flex flex-col gap-1">
-        <label class="text-sm font-medium text-surface-700 dark:text-surface-300">Model ID</label>
-        <InputText
-          v-model="model.modelId"
-          placeholder="e.g. gpt-5.6-sol"
         />
       </div>
     </div>

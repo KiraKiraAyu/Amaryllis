@@ -13,11 +13,9 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="flex items-center gap-3 rounded-md border border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800 px-3 py-2">
-    <div class="min-w-0 flex-1">
-      <div class="truncate text-sm font-medium text-surface-900 dark:text-surface-0">
-        {{ model.name || model.modelId }}
-      </div>
+  <div class="flex items-center gap-3 rounded-full bg-surface-50 dark:bg-surface-800 px-3 py-2">
+    <div class="flex-1 ml-4 truncate text-sm font-medium text-surface-900 dark:text-surface-0">
+      {{ model.name || model.modelId }}
     </div>
 
     <div class="flex shrink-0 gap-1">
