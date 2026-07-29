@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AIModelDialog from "@/components/settings/ai-models/AIModelDialog.vue"
 import AIModelList from "@/components/settings/ai-models/AIModelList.vue"
 import AIProviderForm from "@/components/settings/ai-models/AIProviderForm.vue"
 import AIProviderList from "@/components/settings/ai-models/AIProviderList.vue"
@@ -11,14 +12,14 @@ const {
   addRemoteModel,
   apiCategories,
   apiCategoryLabel,
-  cancelAddModel,
   checkMessage,
   checkingProvider,
   fetchRemoteModels,
   fetchingRemoteModels,
   hasModel,
-  isAddingModel,
-  newModel,
+  modelDialogOpen,
+  modelDialogIsNew,
+  modelDraft,
   openProviderCheckModal,
   providers,
   providerCheckModalOpen,
@@ -29,11 +30,12 @@ const {
   removeModel,
   removeProvider,
   saveModels,
-  saveNewModel,
+  saveModelDraft,
   savingModels,
   selectProvider,
   selectedProviderIndex,
   startAddModel,
+  startEditModel,
   supportedProviderTypes,
   checkProvider,
 } = useAIModelsSettings()
@@ -68,16 +70,12 @@ const {
         :provider="activeProvider"
         :remote-models="remoteModels"
         :fetching-remote-models="fetchingRemoteModels"
-        :is-adding-model="isAddingModel"
-        :new-model="newModel"
         :has-model="hasModel"
         @fetch-remote-models="fetchRemoteModels"
         @start-add-model="startAddModel"
+        @edit-model="startEditModel"
         @add-remote-model="addRemoteModel"
-        @save-models="saveModels"
         @remove-model="removeModel"
-        @cancel-add-model="cancelAddModel"
-        @save-new-model="saveNewModel"
       />
     </div>
 
@@ -95,6 +93,14 @@ const {
       :provider="activeProvider"
       :checking="checkingProvider"
       @confirm="checkProvider(activeProvider)"
+    />
+
+    <AIModelDialog
+      v-if="activeProvider"
+      v-model:open="modelDialogOpen"
+      :model="modelDraft"
+      :is-new="modelDialogIsNew"
+      @save="saveModelDraft(activeProvider)"
     />
   </div>
 </template>

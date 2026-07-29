@@ -1,28 +1,23 @@
 <script setup lang="ts">
 import Button from "primevue/button"
 import AIModelCard from "@/components/settings/ai-models/AIModelCard.vue"
-import NewAIModelCard from "@/components/settings/ai-models/NewAIModelCard.vue"
 import RemoteModelList from "@/components/settings/ai-models/RemoteModelList.vue"
-import type { LlmModel, LlmProvider } from "@/types/ai-models-ui"
+import type { LlmProvider } from "@/types/ai-models-ui"
 import type { AvailableModelPayload } from "@/types/models"
 
 const props = defineProps<{
   provider: LlmProvider
   remoteModels: AvailableModelPayload[]
   fetchingRemoteModels: boolean
-  isAddingModel: boolean
-  newModel: LlmModel
   hasModel: (provider: LlmProvider, modelId: string) => boolean
 }>()
 
 const emit = defineEmits<{
   fetchRemoteModels: [provider: LlmProvider]
   startAddModel: []
+  editModel: [provider: LlmProvider, modelIndex: number]
   addRemoteModel: [provider: LlmProvider, model: AvailableModelPayload]
-  saveModels: []
   removeModel: [provider: LlmProvider, modelIndex: number]
-  cancelAddModel: []
-  saveNewModel: [provider: LlmProvider]
 }>()
 
 function providerHasModel(modelId: string) {
@@ -45,7 +40,6 @@ function providerHasModel(modelId: string) {
           @click="emit('fetchRemoteModels', provider)"
         />
         <Button
-          v-if="!isAddingModel"
           label="Add Model"
           icon="pi pi-plus"
           size="small"
@@ -65,26 +59,9 @@ function providerHasModel(modelId: string) {
         v-for="(model, modelIndex) in provider.models"
         :key="model.id ?? `model-${modelIndex}`"
         :model="model"
-        @save-models="emit('saveModels')"
+        @edit-model="emit('editModel', provider, modelIndex)"
         @remove-model="emit('removeModel', provider, modelIndex)"
       />
-
-      <NewAIModelCard
-        v-if="isAddingModel"
-        :model="newModel"
-        @cancel-add-model="emit('cancelAddModel')"
-        @save-new-model="emit('saveNewModel', provider)"
-      />
-
-      <button
-        v-if="!isAddingModel"
-        type="button"
-        class="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-surface-300 dark:border-surface-700 bg-transparent p-4 text-sm font-medium text-surface-500 transition-colors hover:bg-surface-100 dark:hover:bg-surface-800"
-        @click="emit('startAddModel')"
-      >
-        <i class="pi pi-plus text-base"></i>
-        Add Model
-      </button>
     </div>
   </div>
 </template>

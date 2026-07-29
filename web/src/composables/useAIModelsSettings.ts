@@ -20,8 +20,10 @@ export function useAIModelsSettings() {
   const savingModels = ref(false)
   const checkingProvider = ref(false)
   const fetchingRemoteModels = ref(false)
-  const isAddingModel = ref(false)
-  const newModel = ref(createModel())
+  const modelDialogOpen = ref(false)
+  const modelDialogIsNew = ref(true)
+  const modelDraft = ref(createModel())
+  const editingModelIndex = ref(-1)
   const checkMessage = ref("")
   const remoteModels = ref<AvailableModelPayload[]>([])
   const providerCheckModalOpen = ref(false)
@@ -175,7 +177,7 @@ export function useAIModelsSettings() {
 
   function selectProvider(index: number) {
     selectedProviderIndex.value = index
-    isAddingModel.value = false
+    modelDialogOpen.value = false
     checkMessage.value = ""
     remoteModels.value = []
     providerCheckModalOpen.value = false
@@ -191,7 +193,7 @@ export function useAIModelsSettings() {
   function removeProvider(index: number) {
     if (!confirm("Delete this provider and its models?")) return
     providers.value.splice(index, 1)
-    isAddingModel.value = false
+    modelDialogOpen.value = false
     selectedProviderIndex.value = Math.min(
       selectedProviderIndex.value,
       providers.value.length - 1,
@@ -258,18 +260,33 @@ export function useAIModelsSettings() {
   }
 
   function startAddModel() {
-    newModel.value = createModel()
-    isAddingModel.value = true
+    modelDraft.value = createModel()
+    modelDialogIsNew.value = true
+    editingModelIndex.value = -1
+    modelDialogOpen.value = true
   }
 
-  function cancelAddModel() {
-    isAddingModel.value = false
+  function startEditModel(provider: LlmProvider, modelIndex: number) {
+    const model = provider.models[modelIndex]
+    if (!model) return
+    modelDraft.value = { ...model }
+    modelDialogIsNew.value = false
+    editingModelIndex.value = modelIndex
+    modelDialogOpen.value = true
   }
 
-  function saveNewModel(provider: LlmProvider) {
-    if (!newModel.value.name.trim() || !newModel.value.modelId.trim()) return
-    provider.models.push({ ...newModel.value })
-    isAddingModel.value = false
+  function saveModelDraft(provider: LlmProvider) {
+    if (!modelDraft.value.name.trim() || !modelDraft.value.modelId.trim()) {
+      return
+    }
+    if (modelDialogIsNew.value) {
+      provider.models.push({ ...modelDraft.value })
+    } else if (editingModelIndex.value >= 0) {
+      provider.models.splice(editingModelIndex.value, 1, {
+        ...modelDraft.value,
+      })
+    }
+    modelDialogOpen.value = false
   }
 
   function removeModel(provider: LlmProvider, modelIndex: number) {
@@ -286,15 +303,17 @@ export function useAIModelsSettings() {
     addRemoteModel,
     apiCategories,
     apiCategoryLabel,
-    cancelAddModel,
     checkMessage,
     checkingProvider,
     closeProviderCheckModal,
     fetchRemoteModels,
     fetchingRemoteModels,
     hasModel,
-    isAddingModel,
-    newModel,
+    modelDialogOpen,
+    modelDialogIsNew,
+    modelDraft,
+    startEditModel,
+    saveModelDraft,
     openProviderCheckModal,
     providers,
     providerCheckModalOpen,
@@ -305,7 +324,6 @@ export function useAIModelsSettings() {
     removeModel,
     removeProvider,
     saveModels,
-    saveNewModel,
     savingModels,
     selectProvider,
     selectedProviderIndex,
