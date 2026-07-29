@@ -83,7 +83,7 @@ const {
 
     <div
       v-else
-      class="flex flex-1 items-center justify-center px-4 text-sm text-[--color-text-muted]"
+      class="flex flex-1 items-center justify-center px-4 text-sm text-text-muted"
     >
       Select a provider or add a new one.
     </div>

@@ -143,14 +143,14 @@ function changeCostMode(index: number, mode: 'fixed' | 'dynamic') {
         <label class="text-xs font-bold text-surface-500">Trading Target Symbols</label>
         
         <div class="overflow-x-auto border border-surface-200 dark:border-surface-800 rounded-2xl">
-          <table class="w-full text-left border-collapse min-w-[600px]">
+          <table class="w-full text-left border-collapse min-w-150">
             <thead>
               <tr class="bg-surface-50 dark:bg-surface-950 border-b border-surface-200 dark:border-surface-800">
-                <th class="p-3 text-xs font-bold text-surface-500 uppercase tracking-wider w-[120px]">Symbol</th>
-                <th class="p-3 text-xs font-bold text-surface-500 uppercase tracking-wider w-[120px]">Leverage</th>
-                <th class="p-3 text-xs font-bold text-surface-500 uppercase tracking-wider w-[120px]">Cost Mode</th>
+                <th class="p-3 text-xs font-bold text-surface-500 uppercase tracking-wider w-30">Symbol</th>
+                <th class="p-3 text-xs font-bold text-surface-500 uppercase tracking-wider w-30">Leverage</th>
+                <th class="p-3 text-xs font-bold text-surface-500 uppercase tracking-wider w-30">Cost Mode</th>
                 <th class="p-3 text-xs font-bold text-surface-500 uppercase tracking-wider">Cost Settings</th>
-                <th class="p-3 text-xs font-bold text-surface-500 uppercase tracking-wider w-[80px] text-center">Actions</th>
+                <th class="p-3 text-xs font-bold text-surface-500 uppercase tracking-wider w-20 text-center">Actions</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-surface-200 dark:divide-surface-800">
@@ -172,7 +172,7 @@ function changeCostMode(index: number, mode: 'fixed' | 'dynamic') {
                     :min="1"
                     :max="50"
                     showButtons
-                    class="h-8 rounded-lg w-[90px]"
+                    class="h-8 rounded-lg w-22.5"
                     inputClass="text-center font-mono py-1"
                   />
                 </td>
@@ -188,13 +188,13 @@ function changeCostMode(index: number, mode: 'fixed' | 'dynamic') {
                     ]"
                     optionLabel="label"
                     optionValue="value"
-                    class="h-8 rounded-lg w-[110px] text-xs flex items-center"
+                    class="h-8 rounded-lg w-27.5 text-xs flex items-center"
                   />
                 </td>
                 
                 <!-- Cost Settings -->
                 <td class="p-3">
-                  <div v-if="getCostMode(item) === 'fixed'" class="flex items-center gap-1.5 max-w-[150px]">
+                  <div v-if="getCostMode(item) === 'fixed'" class="flex items-center gap-1.5 max-w-37.5">
                     <span class="text-xs text-surface-400">$</span>
                     <InputNumber
                       v-model="item.fixed_cost"
@@ -204,7 +204,7 @@ function changeCostMode(index: number, mode: 'fixed' | 'dynamic') {
                       inputClass="py-1 font-mono text-sm"
                     />
                   </div>
-                  <div v-else class="flex items-center gap-2 max-w-[240px]">
+                  <div v-else class="flex items-center gap-2 max-w-60">
                     <span class="text-xs text-surface-400">$</span>
                     <InputNumber
                       v-model="item.min_cost"
@@ -251,7 +251,7 @@ function changeCostMode(index: number, mode: 'fixed' | 'dynamic') {
                       class="h-8 rounded-lg text-xs cursor-pointer"
                     />
                   </div>
-                  <div v-else class="flex items-center gap-2 max-w-[320px]">
+                  <div v-else class="flex items-center gap-2 max-w-80">
                     <InputText
                       v-model="newSymbolName"
                       placeholder="e.g. SOLUSDT"

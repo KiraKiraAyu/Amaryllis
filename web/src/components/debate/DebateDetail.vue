@@ -51,7 +51,7 @@ function msgStyle(personality: string) {
         <div class="flex items-center gap-2 mt-1 text-xs text-surface-500 dark:text-surface-400">
           <span>Round {{ debate.current_round }}/{{ debate.max_rounds }}</span>
           <span>·</span>
-          <span class="capitalize px-2 py-0.5 rounded-md font-semibold text-[10px] tracking-wider"
+          <span class="capitalize px-2 py-0.5 rounded-md font-semibold text-xs tracking-wider"
             :class="{
               'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400': debate.status === 'running',
               'bg-orange-100 text-orange-700 dark:bg-orange-950/30 dark:text-orange-400': debate.status === 'pending',
@@ -125,12 +125,12 @@ function msgStyle(personality: string) {
               {{ personalityEmoji(message.personality) }}
             </span>
             <span class="font-bold capitalize text-surface-800 dark:text-surface-200">{{ message.personality }}</span>
-            <span class="text-[10px] ml-auto text-surface-500 dark:text-surface-500 font-medium">
+            <span class="text-xs ml-auto text-surface-500 dark:text-surface-500 font-medium">
               Round {{ message.round }}
             </span>
             <span
               v-if="message.vote"
-              class="text-[10px] font-black uppercase px-1.5 py-0.5 rounded border ml-1.5"
+              class="text-xs font-black uppercase px-1.5 py-0.5 rounded border ml-1.5"
               :class="
                 message.vote === 'BULLISH'
                   ? 'text-emerald-500 border-emerald-500/20 bg-emerald-500/5'

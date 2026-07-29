@@ -36,7 +36,7 @@ function closeFromBackdrop() {
       @click.self="closeFromBackdrop"
     >
       <div
-        class="w-full max-w-md rounded-xl border border-[--color-border-subtle] bg-[--color-surface] p-5 shadow-2xl"
+        class="w-full max-w-md rounded-xl border border-border-subtle bg-surface p-5 shadow-2xl"
         role="dialog"
         aria-modal="true"
       >
@@ -46,7 +46,7 @@ function closeFromBackdrop() {
           </h2>
           <button
             type="button"
-            class="rounded-full p-1 text-[--color-text-muted] transition-colors hover:bg-[--color-surface-elevated] hover:text-[--color-text-primary]"
+            class="rounded-full p-1 text-text-muted transition-colors hover:bg-surface-elevated hover:text-text-primary"
             title="Close"
             @click="close"
           >

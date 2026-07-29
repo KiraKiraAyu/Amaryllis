@@ -33,6 +33,14 @@
   --color-warning: oklch(0.8 0.18 85);
   --color-error: oklch(0.65 0.22 25);
   --color-info: oklch(0.7 0.15 240);
+
+  /* ── Semantic surface/text tokens (map to PrimeVue semantic vars) ── */
+  --color-surface: var(--p-content-background);
+  --color-surface-elevated: var(--p-content-hover-background);
+  --color-border-subtle: var(--p-content-border-color);
+  --color-text-primary: var(--p-text-color);
+  --color-text-secondary: var(--p-surface-600);
+  --color-text-muted: var(--p-text-muted-color);
 }
 
 @variant dark (&:where(.dark, .dark *));
@@ -46,6 +54,9 @@ html {
 
 html.dark {
   color-scheme: dark;
+
+  /* semantic token dark overrides */
+  --color-text-secondary: var(--p-surface-300);
 
   /* reisa-lilac dark mode overrides */
   --color-reisa-lilac-50: oklch(0.96 0.02 301);

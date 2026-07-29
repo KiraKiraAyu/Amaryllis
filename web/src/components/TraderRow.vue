@@ -35,7 +35,7 @@ defineEmits(["start", "stop", "sync"])
     <!-- Actions -->
     <div class="flex items-center gap-2 shrink-0">
       <span
-        class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md"
+        class="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-md"
         :class="
           trader.is_running
             ? 'bg-emerald-500/10 text-emerald-500 dark:bg-emerald-500/20'

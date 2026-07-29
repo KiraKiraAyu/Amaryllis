@@ -54,11 +54,11 @@ onMounted(loadExchanges)
               </p>
             </div>
             <div class="flex items-center gap-3">
-              <span class="text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded bg-surface-100 text-surface-600 dark:bg-surface-800 dark:text-surface-400">
+              <span class="text-xs font-bold uppercase tracking-wide px-2 py-1 rounded bg-surface-100 text-surface-600 dark:bg-surface-800 dark:text-surface-400">
                 {{ ex.testnet ? "Testnet" : "Live" }}
               </span>
               <span
-                class="text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded"
+                class="text-xs font-bold uppercase tracking-wide px-2 py-1 rounded"
                 :class="ex.enabled ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-surface-100 text-surface-600 dark:bg-surface-800 dark:text-surface-400'"
               >
                 {{ ex.enabled ? "Active" : "Disabled" }}

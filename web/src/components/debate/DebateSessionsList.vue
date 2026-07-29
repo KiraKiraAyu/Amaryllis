@@ -37,7 +37,7 @@ const emit = defineEmits<{
               {{ debate.name || debate.symbol }}
             </span>
             <span
-              class="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded"
+              class="text-xs font-black uppercase tracking-wider px-1.5 py-0.5 rounded"
               :class="
                 debate.status === 'completed'
                   ? 'bg-emerald-500/10 text-emerald-500'
@@ -53,7 +53,7 @@ const emit = defineEmits<{
             Symbol: <span class="font-bold text-primary font-mono">{{ debate.symbol }}</span> · {{ debate.max_rounds }} rounds ·
             {{ debate.current_round }} completed
           </p>
-          <p class="text-[10px] mt-3 text-surface-400 dark:text-surface-500">
+          <p class="text-xs mt-3 text-surface-400 dark:text-surface-500">
             Created {{ formatDateTime(debate.created_at) }}
           </p>
         </template>

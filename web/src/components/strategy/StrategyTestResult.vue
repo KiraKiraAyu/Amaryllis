@@ -18,7 +18,7 @@ defineProps<{
           class="flex items-center gap-3 py-2.5 px-4 rounded-xl text-xs bg-surface-50 dark:bg-surface-950 border border-surface-200 dark:border-surface-800"
         >
           <span
-            class="font-black uppercase text-[10px] px-2 py-0.5 rounded-md"
+            class="font-black uppercase text-xs px-2 py-0.5 rounded-md"
             :class="
               decision.action.toLowerCase() === 'buy' || decision.action.toLowerCase() === 'long'
                 ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
@@ -36,7 +36,7 @@ defineProps<{
           <span class="flex-1 text-surface-600 dark:text-surface-300 truncate font-medium">
             {{ decision.reasoning }}
           </span>
-          <span class="text-surface-400 dark:text-surface-500 font-mono text-[10px]">
+          <span class="text-surface-400 dark:text-surface-500 font-mono text-xs">
             {{ result.duration_ms }}ms
           </span>
         </div>

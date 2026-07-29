@@ -70,7 +70,7 @@ const config = computed(() => {
       <div class="flex items-start justify-between gap-3">
         <div class="flex-1 min-w-0">
           <div
-            class="text-[11px] font-bold uppercase tracking-wider text-surface-400 dark:text-surface-500 truncate"
+            class="text-xs font-bold uppercase tracking-wider text-surface-400 dark:text-surface-500 truncate"
           >
             {{ title }}
           </div>

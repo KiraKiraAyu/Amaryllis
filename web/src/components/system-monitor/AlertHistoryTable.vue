@@ -45,7 +45,7 @@ defineProps<{
         <Column field="severity" header="Severity" style="width: 15%">
           <template #body="{ data }">
             <span 
-              class="font-medium px-2 py-0.5 rounded text-[10px] uppercase tracking-wide"
+              class="font-medium px-2 py-0.5 rounded text-xs uppercase tracking-wide"
               :class="{
                 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400': data.severity === 'error' || data.severity === 'critical',
                 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400': data.severity === 'warning',

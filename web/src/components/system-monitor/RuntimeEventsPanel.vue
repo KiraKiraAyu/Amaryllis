@@ -42,12 +42,12 @@ defineProps<{
         </div>
         <span
           v-if="event.action_taken"
-          class="text-[0.65rem] inline-block px-1.5 py-0.5 rounded w-max bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 font-medium"
+          class="text-xs inline-block px-1.5 py-0.5 rounded w-max bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 font-medium"
         >
           {{ event.action_taken }}
         </span>
         <pre
-          class="text-[10px] whitespace-pre-wrap font-mono overflow-x-auto mt-2 text-surface-600 dark:text-surface-400 bg-surface-50 dark:bg-surface-950 p-2 rounded"
+          class="text-xs whitespace-pre-wrap font-mono overflow-x-auto mt-2 text-surface-600 dark:text-surface-400 bg-surface-50 dark:bg-surface-950 p-2 rounded"
           >{{ formatMetadata(event.payload) }}</pre
         >
       </div>

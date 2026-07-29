@@ -37,7 +37,7 @@ const promptVariant = computed(() => config.value.prompt_variant ?? "balanced")
             </h2>
             <span
               v-if="strategy.is_default"
-              class="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider bg-blue-500/10 text-blue-500 border border-blue-500/20"
+              class="text-xs font-bold px-2 py-0.5 rounded-full uppercase tracking-wider bg-blue-500/10 text-blue-500 border border-blue-500/20"
             >
               Default
             </span>
@@ -82,7 +82,7 @@ const promptVariant = computed(() => config.value.prompt_variant ?? "balanced")
             <span class="pi pi-compass text-base"></span>
           </div>
           <div class="flex flex-col">
-            <span class="text-[10px] text-surface-400 dark:text-surface-500 font-bold uppercase tracking-wider">Prompt Variant</span>
+            <span class="text-xs text-surface-400 dark:text-surface-500 font-bold uppercase tracking-wider">Prompt Variant</span>
             <span class="text-sm font-bold text-surface-900 dark:text-white capitalize">{{ promptVariant }}</span>
           </div>
         </div>
@@ -94,7 +94,7 @@ const promptVariant = computed(() => config.value.prompt_variant ?? "balanced")
             <span class="pi pi-list text-base"></span>
           </div>
           <div class="flex flex-col">
-            <span class="text-[10px] text-surface-400 dark:text-surface-500 font-bold uppercase tracking-wider">Max Positions</span>
+            <span class="text-xs text-surface-400 dark:text-surface-500 font-bold uppercase tracking-wider">Max Positions</span>
             <span class="text-sm font-bold text-surface-900 dark:text-white font-mono">{{ maxPositions }}</span>
           </div>
         </div>

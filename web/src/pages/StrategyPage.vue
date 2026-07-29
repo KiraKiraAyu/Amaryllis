@@ -43,7 +43,7 @@ const {
       </template>
     </PageHeader>
 
-    <div class="relative w-full overflow-hidden min-h-[500px]">
+    <div class="relative w-full overflow-hidden min-h-125">
       <Transition name="full-page-slide" mode="out-in">
         <!-- View 1: Strategy List Screen (Full Screen Grid) -->
         <div v-if="!selected && !isEditing" class="w-full" key="list-view">
@@ -77,7 +77,7 @@ const {
             @test="runTest"
             @preview="previewPrompt"
           />
-          
+
           <StrategyPromptPreview
             v-if="previewPromptText"
             :preview="previewPromptText"

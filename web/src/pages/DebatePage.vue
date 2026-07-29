@@ -45,7 +45,7 @@ const {
 
       <div class="lg:col-span-2">
         <div v-if="!activeDebate" class="flex items-center justify-center h-64">
-          <p class="text-sm text-[--color-text-muted]">
+          <p class="text-sm text-text-muted">
             Select a debate session to view
           </p>
         </div>

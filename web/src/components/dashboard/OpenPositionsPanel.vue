@@ -68,7 +68,7 @@ function signed(value: number) {
           <Column field="side" header="Side">
             <template #body="{ data }">
               <span
-                class="font-bold uppercase text-[10px] px-2 py-0.5 rounded-md"
+                class="font-bold uppercase text-xs px-2 py-0.5 rounded-md"
                 :class="
                   data.side.toLowerCase() === 'buy' || data.side.toLowerCase() === 'long'
                     ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'

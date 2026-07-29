@@ -58,7 +58,7 @@ function returnPct(run: BacktestRun) {
           <Column field="state" header="State">
             <template #body="{ data }">
               <span
-                class="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md"
+                class="text-xs font-black uppercase tracking-wider px-2 py-0.5 rounded-md"
                 :class="
                   data.state === 'running'
                     ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 animate-pulse'

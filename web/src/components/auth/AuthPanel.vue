@@ -199,7 +199,7 @@ const backgroundStyle = computed(() => {
             class="flex h-full w-1/2 flex-col items-center justify-center px-10 text-center"
           >
             <div class="flex flex-col items-center gap-2 mb-8">
-              <span class="text-[10px] font-extrabold tracking-widest uppercase text-reisa-lilac-600/70 dark:text-white/50">Welcome Back</span>
+              <span class="text-xs font-extrabold tracking-widest uppercase text-reisa-lilac-600/70 dark:text-white/50">Welcome Back</span>
               <h2 class="text-3xl font-extrabold tracking-tight text-reisa-lilac-950 dark:text-white leading-tight">
                 Already have<br />an account?
               </h2>
@@ -217,7 +217,7 @@ const backgroundStyle = computed(() => {
             class="flex h-full w-1/2 flex-col items-center justify-center px-10 text-center"
           >
             <div class="flex flex-col items-center gap-2 mb-8">
-              <span class="text-[10px] font-extrabold tracking-widest uppercase text-reisa-lilac-600/70 dark:text-white/50">Start Trading</span>
+              <span class="text-xs font-extrabold tracking-widest uppercase text-reisa-lilac-600/70 dark:text-white/50">Start Trading</span>
               <h2 class="text-3xl font-extrabold tracking-tight text-reisa-lilac-950 dark:text-white leading-tight">
                 New to<br />QuantAura?
               </h2>

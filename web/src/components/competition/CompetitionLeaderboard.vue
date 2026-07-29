@@ -77,7 +77,7 @@ const emit = defineEmits<{
               <p class="font-semibold text-surface-900 dark:text-surface-100">
                 {{ data.trader_name || data.trader_id.slice(0, 16) }}
               </p>
-              <p class="text-[10px] text-surface-500 font-medium tracking-wide">
+              <p class="text-xs text-surface-500 font-medium tracking-wide">
                 {{ data.exchange.toUpperCase() }}
               </p>
             </div>
@@ -129,7 +129,7 @@ const emit = defineEmits<{
       <Column header="Status" align="right" style="width: 5%">
         <template #body="{ data }">
           <span
-            class="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded"
+            class="text-xs font-bold uppercase tracking-wide px-1.5 py-0.5 rounded"
             :class="data.is_running ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-surface-100 text-surface-600 dark:bg-surface-800 dark:text-surface-400'"
           >
             {{ data.is_running ? "Live" : "Stopped" }}

@@ -33,10 +33,10 @@ const emit = defineEmits<{
         <div class="flex items-center justify-between h-full w-full gap-6">
           
           <!-- Column 1: Name, Description, and Active Status -->
-          <div class="flex-1 min-w-[200px] flex flex-col justify-between h-full py-0.5">
+          <div class="flex-1 min-w-50 flex flex-col justify-between h-full py-0.5">
             <div>
               <div class="flex items-center gap-2 mb-1">
-                <span class="font-bold text-sm text-surface-900 dark:text-white truncate max-w-[220px]">
+                <span class="font-bold text-sm text-surface-900 dark:text-white truncate max-w-55">
                   {{ strategy.name }}
                 </span>
 
@@ -45,13 +45,13 @@ const emit = defineEmits<{
                 {{ strategy.description || "No description provided." }}
               </p>
             </div>
-            <p class="text-[9px] text-surface-400 dark:text-surface-500 font-mono">
+            <p class="text-xs text-surface-400 dark:text-surface-500 font-mono">
               Updated {{ formatDate(strategy.updated_at) }}
             </p>
           </div>
 
           <!-- Column 2: Parameters (Max Positions, Prompt Variant) -->
-          <div class="w-[180px] border-l border-surface-200 dark:border-surface-800 pl-6 flex flex-col justify-center gap-2 h-full">
+          <div class="w-45 border-l border-surface-200 dark:border-surface-800 pl-6 flex flex-col justify-center gap-2 h-full">
             <div class="flex items-center justify-between text-xs">
               <span class="text-surface-400 dark:text-surface-500">Max Positions:</span>
               <span class="font-bold font-mono text-surface-900 dark:text-white">
@@ -67,10 +67,10 @@ const emit = defineEmits<{
           </div>
 
           <!-- Column 3: Trading Targets (Symbols, Leverage, Cost settings) -->
-          <div class="flex-1 min-w-[300px] border-l border-surface-200 dark:border-surface-800 pl-6 flex flex-col justify-center gap-2 h-full">
-            <span class="text-[10px] font-bold text-surface-400 dark:text-surface-500 uppercase tracking-wider">Trading Targets</span>
+          <div class="flex-1 min-w-75 border-l border-surface-200 dark:border-surface-800 pl-6 flex flex-col justify-center gap-2 h-full">
+            <span class="text-xs font-bold text-surface-400 dark:text-surface-500 uppercase tracking-wider">Trading Targets</span>
             
-            <div class="flex flex-wrap gap-1.5 max-h-[64px] overflow-y-auto pr-1">
+            <div class="flex flex-wrap gap-1.5 max-h-16 overflow-y-auto pr-1">
               <span v-if="!strategy.config?.symbols || strategy.config.symbols.length === 0" class="text-xs text-surface-400 dark:text-surface-500 italic py-1">
                 No symbols configured
               </span>
@@ -78,7 +78,7 @@ const emit = defineEmits<{
                 v-else
                 v-for="sym in strategy.config?.symbols"
                 :key="sym.symbol"
-                class="flex items-center gap-1 bg-surface-50 dark:bg-surface-950 border border-surface-200 dark:border-surface-800 px-2 py-0.5 rounded-md text-[10px] font-mono"
+                class="flex items-center gap-1 bg-surface-50 dark:bg-surface-950 border border-surface-200 dark:border-surface-800 px-2 py-0.5 rounded-md text-xs font-mono"
               >
                 <span class="font-bold text-surface-900 dark:text-white">{{ sym.symbol }}</span>
                 <span class="text-surface-400 dark:text-surface-500">({{ sym.leverage }}x)</span>

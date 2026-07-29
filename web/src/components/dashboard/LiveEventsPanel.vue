@@ -27,14 +27,14 @@ function eventIcon(type: string) {
     <div class="flex flex-col gap-2 max-h-55 overflow-auto">
       <div
         v-if="events.length === 0"
-        class="text-center py-6 text-sm text-[--color-text-muted]"
+        class="text-center py-6 text-sm text-text-muted"
       >
         Waiting for live events...
       </div>
       <div
         v-for="(event, index) in events"
         :key="index"
-        class="flex items-start gap-3 py-2 px-3 rounded-lg text-xs bg-[--color-surface-elevated]"
+        class="flex items-start gap-3 py-2 px-3 rounded-lg text-xs bg-surface-elevated"
       >
         <span class="shrink-0 mt-0.5">{{ eventIcon(event.type) }}</span>
         <div class="flex-1 min-w-0">

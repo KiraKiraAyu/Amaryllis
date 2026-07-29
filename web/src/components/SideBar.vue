@@ -51,11 +51,11 @@ const navItems = [
           class="w-2 h-2 rounded-full shrink-0 transition-colors"
           :class="
             realtime.isConnected
-              ? 'bg-[--color-success] animate-pulse'
-              : 'bg-[--color-text-muted]'
+              ? 'bg-success animate-pulse'
+              : 'bg-text-muted'
           "
         ></span>
-        <span class="text-xs text-[--color-text-muted]">
+        <span class="text-xs text-text-muted">
           {{ realtime.isConnected ? "Live" : "Offline" }}
         </span>
       </div>
@@ -70,7 +70,7 @@ const navItems = [
         </span>
         <BaseButton
           @click="authStore.logout()"
-          class="text-xs transition-colors hover:text-[--color-error]"
+          class="text-xs transition-colors hover:text-error"
           title="Sign out"
         >
           <Icon

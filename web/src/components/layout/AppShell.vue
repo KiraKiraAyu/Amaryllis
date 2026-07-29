@@ -47,7 +47,7 @@ onMounted(() => {
   <div class="h-screen overflow-hidden p-3 md:p-5 pb-22 md:pb-5 transition-colors duration-300 bg-surface-0 dark:bg-surface-950 flex flex-col">
     <AppSidebar :is-dark="isDark" @toggle-theme="toggleDarkMode" />
 
-    <div class="lg:pl-[18.5rem] flex-1 flex flex-col min-h-0">
+    <div class="lg:pl-74 flex-1 flex flex-col min-h-0">
       <main class="py-3 md:py-6 flex-1 flex flex-col min-h-0 overflow-y-auto">
         <RouterView />
       </main>
@@ -61,7 +61,7 @@ onMounted(() => {
         v-for="item in nav"
         :key="item.to"
         :to="item.to"
-        class="flex flex-col items-center gap-1.5 text-[9px] font-semibold text-surface-500 dark:text-surface-400 py-1 transition-all"
+        class="flex flex-col items-center gap-1.5 text-xs font-semibold text-surface-500 dark:text-surface-400 py-1 transition-all"
         :class="{ 'text-primary scale-105 font-bold': route.path === item.to }"
       >
         <span :class="item.icon" class="text-base"></span>
