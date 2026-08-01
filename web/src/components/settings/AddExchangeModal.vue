@@ -37,11 +37,27 @@ const exchangeOptions = computed(() =>
 const requiresPassphrase = computed(() =>
   ["okx", "bitget"].includes(newEx.value.exchange_type),
 )
-const isHyperliquid = computed(
-  () => newEx.value.exchange_type === "hyperliquid",
+const isWalletBased = computed(() =>
+  ["hyperliquid", "aster"].includes(newEx.value.exchange_type),
 )
-const usesApiCredentials = computed(() => !isHyperliquid.value)
-const supportsTestnet = computed(() => newEx.value.exchange_type !== "aster")
+const usesApiCredentials = computed(() => !isWalletBased.value)
+
+const walletLabels = computed(() => {
+  if (newEx.value.exchange_type === "aster") {
+    return {
+      address: "Main Wallet Address",
+      addressPlaceholder: "0x… connected wallet (user)",
+      key: "API Wallet Private Key",
+      keyPlaceholder: "0x… from Authorize new API wallet",
+    }
+  }
+  return {
+    address: "Wallet Address",
+    addressPlaceholder: "0x…",
+    key: "Private Key",
+    keyPlaceholder: "private key…",
+  }
+})
 
 async function addExchange() {
   addingEx.value = true
@@ -133,26 +149,26 @@ watch(
         />
       </div>
 
-      <div v-if="isHyperliquid" class="flex flex-col gap-2">
-        <label class="text-sm font-semibold text-surface-700 dark:text-surface-300">Wallet Address</label>
+      <div v-if="isWalletBased" class="flex flex-col gap-2">
+        <label class="text-sm font-semibold text-surface-700 dark:text-surface-300">{{ walletLabels.address }}</label>
         <InputText
           v-model="newEx.hyperliquid_wallet_addr"
-          placeholder="0x…"
+          :placeholder="walletLabels.addressPlaceholder"
         />
       </div>
 
-      <div v-if="isHyperliquid" class="flex flex-col gap-2">
-        <label class="text-sm font-semibold text-surface-700 dark:text-surface-300">Private Key</label>
+      <div v-if="isWalletBased" class="flex flex-col gap-2">
+        <label class="text-sm font-semibold text-surface-700 dark:text-surface-300">{{ walletLabels.key }}</label>
         <Password
           v-model="newEx.secret_key"
-          placeholder="private key…"
+          :placeholder="walletLabels.keyPlaceholder"
           toggleMask
           :feedback="false"
           fluid
         />
       </div>
 
-      <div v-if="supportsTestnet" class="flex items-center gap-2 mt-2">
+      <div class="flex items-center gap-2 mt-2">
         <Checkbox v-model="newEx.testnet" inputId="testnet" :binary="true" />
         <label for="testnet" class="text-sm cursor-pointer text-surface-700 dark:text-surface-300">Use testnet</label>
       </div>

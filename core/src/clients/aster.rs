@@ -1,10 +1,10 @@
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use async_trait::async_trait;
-use hmac::{Hmac, Mac};
-use reqwest::{Client, Method, StatusCode};
+use k256::ecdsa::SigningKey;
+use reqwest::{Client, Method};
 use serde::Deserialize;
-use sha2::Sha256;
+use sha3::{Digest, Keccak256};
 use uuid::Uuid;
 
 use crate::{
@@ -20,67 +20,58 @@ use crate::{
     error::AppError,
 };
 
-type HmacSha256 = Hmac<Sha256>;
+const ASTER_API_VERSION: &str = "/fapi/v3";
+const ASTER_PUBLIC_VERSION: &str = "/fapi/v1";
 
 #[derive(Debug, Clone)]
-pub struct BinanceFuturesAdapter {
+pub struct AsterAdapter {
     client: Client,
-    exchange_type: &'static str,
-    api_key: String,
-    secret_key: String,
+    user: String,
+    signer: String,
+    private_key: String,
     base_url: String,
     ws_base_url: String,
 }
 
-impl BinanceFuturesAdapter {
+impl AsterAdapter {
     pub fn new(credentials: ExchangeCredentials) -> Result<Self, AppError> {
-        Self::new_with_config(
-            "binance",
-            credentials,
-            "https://fapi.binance.com",
-            "https://testnet.binancefuture.com",
-            "wss://fstream.binance.com",
-            "wss://stream.binancefuture.com",
-        )
-    }
-
-    fn new_with_config(
-        exchange_type: &'static str,
-        credentials: ExchangeCredentials,
-        live_base_url: &str,
-        testnet_base_url: &str,
-        live_ws_base_url: &str,
-        testnet_ws_base_url: &str,
-    ) -> Result<Self, AppError> {
-        if credentials.api_key.trim().is_empty() {
-            return Err(AppError::InvalidExchangeConfig(format!(
-                "{exchange_type} api_key is required"
-            )));
-        }
-        if credentials.secret_key.trim().is_empty() {
-            return Err(AppError::InvalidExchangeConfig(format!(
-                "{exchange_type} secret_key is required"
-            )));
+        let user = credentials
+            .wallet_addr
+            .as_deref()
+            .unwrap_or("")
+            .trim()
+            .to_string();
+        if user.is_empty() {
+            return Err(AppError::InvalidExchangeConfig(
+                "aster main wallet address is required".to_string(),
+            ));
         }
 
-        let base_url = if credentials.testnet {
-            testnet_base_url.to_string()
+        let private_key = credentials.secret_key.trim().to_string();
+        if private_key.is_empty() {
+            return Err(AppError::InvalidExchangeConfig(
+                "aster api wallet private key is required".to_string(),
+            ));
+        }
+
+        let signer = derive_eth_address(&private_key)?;
+
+        let (base_url, ws_base_url) = if credentials.testnet {
+            (
+                "https://fapi.asterdex-testnet.com",
+                "wss://fstream5.asterdex-testnet.com",
+            )
         } else {
-            live_base_url.to_string()
-        };
-        let ws_base_url = if credentials.testnet {
-            testnet_ws_base_url.to_string()
-        } else {
-            live_ws_base_url.to_string()
+            ("https://fapi.asterdex.com", "wss://fstream.asterdex.com")
         };
 
         Ok(Self {
             client: Client::builder().build().map_err(AppError::ExchangeHttp)?,
-            exchange_type,
-            api_key: credentials.api_key,
-            secret_key: credentials.secret_key,
-            base_url,
-            ws_base_url,
+            user: normalize_address(&user),
+            signer,
+            private_key,
+            base_url: base_url.to_string(),
+            ws_base_url: ws_base_url.to_string(),
         })
     }
 
@@ -98,7 +89,30 @@ impl BinanceFuturesAdapter {
 
         let resp = send_text(
             self.client.get(&url),
-            OutboundRequestLog::new("exchange.binance.public", Method::GET, &url),
+            OutboundRequestLog::new("exchange.aster.public", Method::GET, &url),
+        )
+        .await
+        .map_err(AppError::ExchangeHttp)?;
+        parse_json_response(resp)
+    }
+
+    async fn signed_request<T: for<'de> Deserialize<'de>>(
+        &self,
+        method: Method,
+        path: &str,
+        mut params: Vec<(&str, String)>,
+    ) -> Result<T, AppError> {
+        params.push(("nonce", next_nonce()));
+        params.push(("user", self.user.clone()));
+        params.push(("signer", self.signer.clone()));
+
+        let query = build_query(params);
+        let signature = sign_eip712(&self.private_key, &query)?;
+        let url = format!("{}{}?{}&signature={}", self.base_url, path, query, signature);
+
+        let resp = send_text(
+            self.client.request(method.clone(), &url),
+            OutboundRequestLog::new("exchange.aster.signed", method, &url),
         )
         .await
         .map_err(AppError::ExchangeHttp)?;
@@ -108,112 +122,60 @@ impl BinanceFuturesAdapter {
     async fn signed_get<T: for<'de> Deserialize<'de>>(
         &self,
         path: &str,
-        mut params: Vec<(&str, String)>,
+        params: Vec<(&str, String)>,
     ) -> Result<T, AppError> {
-        self.sign_and_send(Method::GET, path, &mut params).await
+        self.signed_request(Method::GET, path, params).await
     }
 
     async fn signed_post<T: for<'de> Deserialize<'de>>(
         &self,
         path: &str,
-        mut params: Vec<(&str, String)>,
+        params: Vec<(&str, String)>,
     ) -> Result<T, AppError> {
-        self.sign_and_send(Method::POST, path, &mut params).await
+        self.signed_request(Method::POST, path, params).await
+    }
+
+    async fn signed_put<T: for<'de> Deserialize<'de>>(
+        &self,
+        path: &str,
+        params: Vec<(&str, String)>,
+    ) -> Result<T, AppError> {
+        self.signed_request(Method::PUT, path, params).await
     }
 
     async fn signed_delete<T: for<'de> Deserialize<'de>>(
         &self,
         path: &str,
-        mut params: Vec<(&str, String)>,
+        params: Vec<(&str, String)>,
     ) -> Result<T, AppError> {
-        self.sign_and_send(Method::DELETE, path, &mut params).await
+        self.signed_request(Method::DELETE, path, params).await
     }
 
-    async fn sign_and_send<T: for<'de> Deserialize<'de>>(
-        &self,
-        method: Method,
-        path: &str,
-        params: &mut Vec<(&str, String)>,
-    ) -> Result<T, AppError> {
-        params.push(("timestamp", now_millis()?.to_string()));
-        params.push(("recvWindow", "5000".to_string()));
-
-        let query = build_query(params.clone());
-        let signature = sign_hmac_sha256(&self.secret_key, &query)?;
-        let full_query = format!("{}&signature={}", query, signature);
-        let url = format!("{}{}?{}", self.base_url, path, full_query);
-
-        let req = self
-            .client
-            .request(method.clone(), &url)
-            .header("X-MBX-APIKEY", &self.api_key);
-
-        let resp = send_text(
-            req,
-            OutboundRequestLog::new("exchange.binance.signed", method, &url),
-        )
-        .await
-        .map_err(AppError::ExchangeHttp)?;
-        parse_json_response(resp)
-    }
-
-    async fn user_stream_request(
-        &self,
-        method: Method,
-        listen_key: Option<&str>,
-    ) -> Result<serde_json::Value, AppError> {
-        let url = if let Some(key) = listen_key {
-            let key = key.trim();
-            if key.is_empty() {
-                return Err(AppError::InvalidExchangeConfig(
-                    "listen_key is required".to_string(),
-                ));
-            }
-            format!(
-                "{}{}?listenKey={}",
-                self.base_url,
-                "/fapi/v1/listenKey",
-                encode_component(key)
-            )
-        } else {
-            format!("{}{}", self.base_url, "/fapi/v1/listenKey")
-        };
-
-        let resp = send_text(
-            self.client
-                .request(method.clone(), &url)
-                .header("X-MBX-APIKEY", &self.api_key),
-            OutboundRequestLog::new("exchange.binance.user_stream", method, &url),
-        )
-        .await
-        .map_err(AppError::ExchangeHttp)?;
-
-        parse_json_response(resp)
-    }
-
-    async fn dual_side_position(&self) -> Result<bool, AppError> {
-        let payload: BinancePositionModeResponse = self
-            .signed_get("/fapi/v1/positionSide/dual", vec![])
-            .await?;
-        Ok(payload.dual_side_position)
+    async fn dual_side_position(&self) -> bool {
+        let result: Result<AsterPositionModeResponse, AppError> = self
+            .signed_get(&format!("{ASTER_API_VERSION}/positionSide/dual"), vec![])
+            .await;
+        result.map(|v| v.dual_side_position).unwrap_or(false)
     }
 }
 
 #[async_trait]
-impl LiveExchangeAdapter for BinanceFuturesAdapter {
+impl LiveExchangeAdapter for AsterAdapter {
     fn exchange_type(&self) -> &'static str {
-        self.exchange_type
+        "aster"
     }
 
     async fn ping(&self) -> Result<(), AppError> {
-        let _: serde_json::Value = self.public_get("/fapi/v1/ping", vec![]).await?;
+        let _: serde_json::Value = self
+            .public_get(&format!("{ASTER_PUBLIC_VERSION}/ping"), vec![])
+            .await?;
         Ok(())
     }
 
     async fn get_price(&self, symbol: &str) -> Result<f64, AppError> {
-        let payload: BinanceTickerPrice = self
+        let payload: AsterTickerPrice = self
             .public_get(
-                "/fapi/v1/ticker/price",
+                &format!("{ASTER_PUBLIC_VERSION}/ticker/price"),
                 vec![("symbol", symbol.trim().to_uppercase())],
             )
             .await?;
@@ -234,7 +196,7 @@ impl LiveExchangeAdapter for BinanceFuturesAdapter {
             ));
         }
 
-        let hedge_mode = self.dual_side_position().await?;
+        let hedge_mode = self.dual_side_position().await;
         let mut params = vec![
             ("symbol", symbol),
             (
@@ -298,7 +260,9 @@ impl LiveExchangeAdapter for BinanceFuturesAdapter {
             ));
         }
 
-        let payload: BinanceOrderResponse = self.signed_post("/fapi/v1/order", params).await?;
+        let payload: AsterOrderResponse = self
+            .signed_post(&format!("{ASTER_API_VERSION}/order"), params)
+            .await?;
         Ok(PlaceOrderResponse {
             order_id: payload.order_id.to_string(),
             client_order_id: payload.client_order_id,
@@ -320,9 +284,9 @@ impl LiveExchangeAdapter for BinanceFuturesAdapter {
         symbol: &str,
         order_id: &str,
     ) -> Result<CancelOrderResponse, AppError> {
-        let payload: BinanceOrderResponse = self
+        let payload: AsterOrderResponse = self
             .signed_delete(
-                "/fapi/v1/order",
+                &format!("{ASTER_API_VERSION}/order"),
                 vec![
                     ("symbol", symbol.trim().to_uppercase()),
                     ("orderId", order_id.trim().to_string()),
@@ -339,8 +303,10 @@ impl LiveExchangeAdapter for BinanceFuturesAdapter {
     }
 
     async fn get_balances(&self) -> Result<Vec<ExchangeBalance>, AppError> {
-        let rows: Vec<BinanceBalanceRow> = self.signed_get("/fapi/v2/balance", vec![]).await?;
-        let out = rows
+        let rows: Vec<AsterBalanceRow> = self
+            .signed_get(&format!("{ASTER_API_VERSION}/balance"), vec![])
+            .await?;
+        Ok(rows
             .into_iter()
             .map(|v| ExchangeBalance {
                 asset: v.asset,
@@ -348,22 +314,20 @@ impl LiveExchangeAdapter for BinanceFuturesAdapter {
                 available_balance: parse_f64(&v.available_balance),
                 unrealized_pnl: parse_f64(&v.cross_un_pnl),
             })
-            .collect::<Vec<_>>();
-        Ok(out)
+            .collect())
     }
 
     async fn get_positions(&self) -> Result<Vec<ExchangePosition>, AppError> {
-        let rows: Vec<BinancePositionRiskRow> =
-            self.signed_get("/fapi/v2/positionRisk", vec![]).await?;
-
-        let out = rows
+        let rows: Vec<AsterPositionRiskRow> = self
+            .signed_get(&format!("{ASTER_API_VERSION}/positionRisk"), vec![])
+            .await?;
+        Ok(rows
             .into_iter()
             .filter_map(|v| {
                 let qty = parse_f64(&v.position_amt);
                 if qty.abs() <= f64::EPSILON {
                     return None;
                 }
-
                 Some(ExchangePosition {
                     symbol: v.symbol,
                     position_side: v.position_side,
@@ -375,9 +339,7 @@ impl LiveExchangeAdapter for BinanceFuturesAdapter {
                     liquidation_price: parse_f64(&v.liquidation_price),
                 })
             })
-            .collect::<Vec<_>>();
-
-        Ok(out)
+            .collect())
     }
 
     async fn get_open_orders(
@@ -391,8 +353,10 @@ impl LiveExchangeAdapter for BinanceFuturesAdapter {
             }
         }
 
-        let rows: Vec<BinanceOpenOrderRow> = self.signed_get("/fapi/v1/openOrders", params).await?;
-        let out = rows
+        let rows: Vec<AsterOpenOrderRow> = self
+            .signed_get(&format!("{ASTER_API_VERSION}/openOrders"), params)
+            .await?;
+        Ok(rows
             .into_iter()
             .map(|v| ExchangeOpenOrder {
                 order_id: v.order_id.to_string(),
@@ -408,9 +372,7 @@ impl LiveExchangeAdapter for BinanceFuturesAdapter {
                 executed_qty: parse_f64(&v.executed_qty),
                 update_time: v.update_time,
             })
-            .collect::<Vec<_>>();
-
-        Ok(out)
+            .collect())
     }
 
     async fn get_order(
@@ -418,16 +380,15 @@ impl LiveExchangeAdapter for BinanceFuturesAdapter {
         symbol: &str,
         order_id: &str,
     ) -> Result<ExchangeOrderDetail, AppError> {
-        let payload: BinanceOrderResponse = self
+        let payload: AsterOrderResponse = self
             .signed_get(
-                "/fapi/v1/order",
+                &format!("{ASTER_API_VERSION}/order"),
                 vec![
                     ("symbol", symbol.trim().to_uppercase()),
                     ("orderId", order_id.trim().to_string()),
                 ],
             )
             .await?;
-
         Ok(ExchangeOrderDetail {
             order_id: payload.order_id.to_string(),
             client_order_id: payload.client_order_id,
@@ -449,9 +410,9 @@ impl LiveExchangeAdapter for BinanceFuturesAdapter {
         symbol: &str,
         order_id: &str,
     ) -> Result<Vec<ExchangeTradeFill>, AppError> {
-        let rows: Vec<BinanceUserTradeRow> = self
+        let rows: Vec<AsterUserTradeRow> = self
             .signed_get(
-                "/fapi/v1/userTrades",
+                &format!("{ASTER_API_VERSION}/userTrades"),
                 vec![
                     ("symbol", symbol.trim().to_uppercase()),
                     ("orderId", order_id.trim().to_string()),
@@ -459,8 +420,7 @@ impl LiveExchangeAdapter for BinanceFuturesAdapter {
                 ],
             )
             .await?;
-
-        let fills = rows
+        Ok(rows
             .into_iter()
             .map(|v| ExchangeTradeFill {
                 trade_id: v.trade_id.to_string(),
@@ -474,9 +434,7 @@ impl LiveExchangeAdapter for BinanceFuturesAdapter {
                 realized_pnl: parse_f64(&v.realized_pnl),
                 executed_at: v.time,
             })
-            .collect::<Vec<_>>();
-
-        Ok(fills)
+            .collect())
     }
 
     async fn get_symbol_constraints(
@@ -492,7 +450,7 @@ impl LiveExchangeAdapter for BinanceFuturesAdapter {
 
         let payload: serde_json::Value = self
             .public_get(
-                "/fapi/v1/exchangeInfo",
+                &format!("{ASTER_PUBLIC_VERSION}/exchangeInfo"),
                 vec![("symbol", symbol_upper.clone())],
             )
             .await?;
@@ -506,87 +464,9 @@ impl LiveExchangeAdapter for BinanceFuturesAdapter {
 
         let first = symbols.first().ok_or_else(|| {
             AppError::InvalidExchangeConfig(format!(
-                "symbol not found in exchangeInfo: {}",
-                symbol_upper
+                "symbol not found in exchangeInfo: {symbol_upper}"
             ))
         })?;
-
-        let min_qty = first
-            .get("filters")
-            .and_then(|v| v.as_array())
-            .and_then(|filters| {
-                filters.iter().find_map(|f| {
-                    if f.get("filterType").and_then(|x| x.as_str()) == Some("LOT_SIZE") {
-                        f.get("minQty").and_then(|x| x.as_str())
-                    } else {
-                        None
-                    }
-                })
-            })
-            .map(parse_f64)
-            .unwrap_or(0.0);
-
-        let max_qty = first
-            .get("filters")
-            .and_then(|v| v.as_array())
-            .and_then(|filters| {
-                filters.iter().find_map(|f| {
-                    if f.get("filterType").and_then(|x| x.as_str()) == Some("LOT_SIZE") {
-                        f.get("maxQty").and_then(|x| x.as_str())
-                    } else {
-                        None
-                    }
-                })
-            })
-            .map(parse_f64)
-            .unwrap_or(0.0);
-
-        let step_size = first
-            .get("filters")
-            .and_then(|v| v.as_array())
-            .and_then(|filters| {
-                filters.iter().find_map(|f| {
-                    if f.get("filterType").and_then(|x| x.as_str()) == Some("LOT_SIZE") {
-                        f.get("stepSize").and_then(|x| x.as_str())
-                    } else {
-                        None
-                    }
-                })
-            })
-            .map(parse_f64)
-            .unwrap_or(0.0);
-
-        let min_notional = first
-            .get("filters")
-            .and_then(|v| v.as_array())
-            .and_then(|filters| {
-                filters.iter().find_map(|f| {
-                    if f.get("filterType").and_then(|x| x.as_str()) == Some("MIN_NOTIONAL") {
-                        f.get("notional")
-                            .and_then(|x| x.as_str())
-                            .or_else(|| f.get("minNotional").and_then(|x| x.as_str()))
-                    } else {
-                        None
-                    }
-                })
-            })
-            .map(parse_f64)
-            .unwrap_or(0.0);
-
-        let tick_size = first
-            .get("filters")
-            .and_then(|v| v.as_array())
-            .and_then(|filters| {
-                filters.iter().find_map(|f| {
-                    if f.get("filterType").and_then(|x| x.as_str()) == Some("PRICE_FILTER") {
-                        f.get("tickSize").and_then(|x| x.as_str())
-                    } else {
-                        None
-                    }
-                })
-            })
-            .map(parse_f64)
-            .unwrap_or(0.0);
 
         Ok(ExchangeSymbolConstraints {
             symbol: first
@@ -604,11 +484,12 @@ impl LiveExchangeAdapter for BinanceFuturesAdapter {
                 .and_then(|v| v.as_str())
                 .unwrap_or("USDT")
                 .to_string(),
-            min_qty,
-            max_qty,
-            step_size,
-            min_notional,
-            tick_size,
+            min_qty: filter_value(first, "LOT_SIZE", "minQty"),
+            max_qty: filter_value(first, "LOT_SIZE", "maxQty"),
+            step_size: filter_value(first, "LOT_SIZE", "stepSize"),
+            min_notional: filter_value(first, "MIN_NOTIONAL", "notional")
+                .max(filter_value(first, "MIN_NOTIONAL", "minNotional")),
+            tick_size: filter_value(first, "PRICE_FILTER", "tickSize"),
         })
     }
 
@@ -632,7 +513,7 @@ impl LiveExchangeAdapter for BinanceFuturesAdapter {
 
         let margin_result: Result<serde_json::Value, AppError> = self
             .signed_post(
-                "/fapi/v1/marginType",
+                &format!("{ASTER_API_VERSION}/marginType"),
                 vec![
                     ("symbol", symbol.clone()),
                     ("marginType", margin_type.to_string()),
@@ -641,13 +522,13 @@ impl LiveExchangeAdapter for BinanceFuturesAdapter {
             .await;
         match margin_result {
             Ok(_) => {}
-            Err(err) if is_binance_margin_type_noop(&err) => {}
+            Err(err) if is_margin_type_noop(&err) => {}
             Err(err) => return Err(err),
         }
 
         let _: serde_json::Value = self
             .signed_post(
-                "/fapi/v1/leverage",
+                &format!("{ASTER_API_VERSION}/leverage"),
                 vec![("symbol", symbol), ("leverage", leverage.to_string())],
             )
             .await?;
@@ -655,7 +536,9 @@ impl LiveExchangeAdapter for BinanceFuturesAdapter {
     }
 
     async fn start_user_stream(&self) -> Result<String, AppError> {
-        let payload = self.user_stream_request(Method::POST, None).await?;
+        let payload: serde_json::Value = self
+            .signed_post(&format!("{ASTER_API_VERSION}/listenKey"), vec![])
+            .await?;
         let listen_key = payload
             .get("listenKey")
             .and_then(|v| v.as_str())
@@ -664,20 +547,25 @@ impl LiveExchangeAdapter for BinanceFuturesAdapter {
                     "missing listenKey in user stream response".to_string(),
                 )
             })?;
-
         Ok(listen_key.to_string())
     }
 
     async fn keepalive_user_stream(&self, listen_key: &str) -> Result<(), AppError> {
-        let _ = self
-            .user_stream_request(Method::PUT, Some(listen_key))
+        let _: serde_json::Value = self
+            .signed_put(
+                &format!("{ASTER_API_VERSION}/listenKey"),
+                vec![("listenKey", listen_key.trim().to_string())],
+            )
             .await?;
         Ok(())
     }
 
     async fn close_user_stream(&self, listen_key: &str) -> Result<(), AppError> {
-        let _ = self
-            .user_stream_request(Method::DELETE, Some(listen_key))
+        let _: serde_json::Value = self
+            .signed_delete(
+                &format!("{ASTER_API_VERSION}/listenKey"),
+                vec![("listenKey", listen_key.trim().to_string())],
+            )
             .await?;
         Ok(())
     }
@@ -689,13 +577,12 @@ impl LiveExchangeAdapter for BinanceFuturesAdapter {
                 "listen_key is required".to_string(),
             ));
         }
-
         Ok(format!("{}/ws/{}", self.ws_base_url, key))
     }
 }
 
 #[derive(Debug, Deserialize)]
-struct BinanceApiErrorPayload {
+struct AsterApiErrorPayload {
     #[serde(default)]
     code: i64,
     #[serde(default)]
@@ -703,14 +590,14 @@ struct BinanceApiErrorPayload {
 }
 
 #[derive(Debug, Deserialize)]
-struct BinanceTickerPrice {
+struct AsterTickerPrice {
     #[allow(dead_code)]
     symbol: String,
     price: String,
 }
 
 #[derive(Debug, Deserialize)]
-struct BinanceOrderResponse {
+struct AsterOrderResponse {
     #[serde(rename = "orderId")]
     order_id: i64,
     #[serde(rename = "clientOrderId")]
@@ -734,7 +621,7 @@ struct BinanceOrderResponse {
 }
 
 #[derive(Debug, Deserialize)]
-struct BinanceOpenOrderRow {
+struct AsterOpenOrderRow {
     #[serde(rename = "orderId")]
     order_id: i64,
     #[serde(rename = "clientOrderId")]
@@ -758,7 +645,7 @@ struct BinanceOpenOrderRow {
 }
 
 #[derive(Debug, Deserialize)]
-struct BinanceUserTradeRow {
+struct AsterUserTradeRow {
     #[serde(rename = "id")]
     trade_id: i64,
     #[serde(rename = "orderId")]
@@ -776,7 +663,7 @@ struct BinanceUserTradeRow {
 }
 
 #[derive(Debug, Deserialize)]
-struct BinanceBalanceRow {
+struct AsterBalanceRow {
     asset: String,
     balance: String,
     #[serde(rename = "availableBalance")]
@@ -786,7 +673,7 @@ struct BinanceBalanceRow {
 }
 
 #[derive(Debug, Deserialize)]
-struct BinancePositionRiskRow {
+struct AsterPositionRiskRow {
     symbol: String,
     #[serde(rename = "positionAmt")]
     position_amt: String,
@@ -804,54 +691,64 @@ struct BinancePositionRiskRow {
 }
 
 #[derive(Debug, Deserialize)]
-struct BinancePositionModeResponse {
+struct AsterPositionModeResponse {
     #[serde(rename = "dualSidePosition", default)]
     dual_side_position: bool,
 }
 
-fn parse_json_response<T: for<'de> Deserialize<'de>>(
-    resp: OutboundResponse,
-) -> Result<T, AppError> {
+fn parse_json_response<T: for<'de> Deserialize<'de>>(resp: OutboundResponse) -> Result<T, AppError> {
     let status = resp.status;
     let text = resp.body;
 
     if !status.is_success() {
-        if let Ok(err_payload) = serde_json::from_str::<BinanceApiErrorPayload>(&text) {
+        if let Ok(err_payload) = serde_json::from_str::<AsterApiErrorPayload>(&text) {
             return Err(AppError::ExchangeApi {
                 status: status.as_u16(),
                 code: err_payload.code,
                 message: err_payload.msg,
             });
         }
-
         return Err(AppError::ExchangeApi {
             status: status.as_u16(),
-            code: status_to_code(status),
+            code: i64::from(status.as_u16()),
             message: text,
         });
     }
 
-    let val = serde_json::from_str::<T>(&text).map_err(AppError::ExchangeJson)?;
-    Ok(val)
+    serde_json::from_str::<T>(&text).map_err(AppError::ExchangeJson)
 }
 
-fn status_to_code(status: StatusCode) -> i64 {
-    i64::from(status.as_u16())
+fn filter_value(symbols: &serde_json::Value, filter_type: &str, field: &str) -> f64 {
+    symbols
+        .get("filters")
+        .and_then(|v| v.as_array())
+        .and_then(|filters| {
+            filters.iter().find_map(|f| {
+                if f.get("filterType").and_then(|x| x.as_str()) == Some(filter_type) {
+                    f.get(field).and_then(|x| x.as_str())
+                } else {
+                    None
+                }
+            })
+        })
+        .map(parse_f64)
+        .unwrap_or(0.0)
 }
 
-fn now_millis() -> Result<u128, AppError> {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|e| AppError::ExchangeTime(e.to_string()))?;
-    Ok(now.as_millis())
+fn is_margin_type_noop(err: &AppError) -> bool {
+    matches!(err, AppError::ExchangeApi { code: -4046, .. })
+        || matches!(
+            err,
+            AppError::ExchangeApi { message, .. }
+                if message.to_ascii_lowercase().contains("no need to change margin type")
+        )
 }
 
-fn sign_hmac_sha256(secret: &str, payload: &str) -> Result<String, AppError> {
-    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
-        .map_err(|e| AppError::ExchangeCrypto(e.to_string()))?;
-    mac.update(payload.as_bytes());
-    let bytes = mac.finalize().into_bytes();
-    Ok(hex::encode(bytes))
+fn inferred_position_side_for_order(side: ExchangeSide, reduce_only: bool) -> PositionSide {
+    match (side, reduce_only) {
+        (ExchangeSide::Sell, false) | (ExchangeSide::Buy, true) => PositionSide::Short,
+        _ => PositionSide::Long,
+    }
 }
 
 fn build_query(params: Vec<(&str, String)>) -> String {
@@ -867,7 +764,7 @@ fn encode_component(s: &str) -> String {
     for b in s.bytes() {
         match b {
             b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                out.push(char::from(b))
+                out.push(char::from(b));
             }
             _ => {
                 out.push('%');
@@ -886,25 +783,143 @@ fn format_decimal(v: f64) -> String {
     if s.ends_with('.') {
         s.pop();
     }
-    if s.is_empty() { "0".to_string() } else { s }
+    if s.is_empty() {
+        "0".to_string()
+    } else {
+        s
+    }
 }
 
 fn parse_f64(v: &str) -> f64 {
     v.parse::<f64>().unwrap_or(0.0)
 }
 
-fn inferred_position_side_for_order(side: ExchangeSide, reduce_only: bool) -> PositionSide {
-    match (side, reduce_only) {
-        (ExchangeSide::Sell, false) | (ExchangeSide::Buy, true) => PositionSide::Short,
-        _ => PositionSide::Long,
-    }
+fn normalize_address(address: &str) -> String {
+    format!(
+        "0x{}",
+        address.trim().trim_start_matches("0x").to_ascii_lowercase()
+    )
 }
 
-fn is_binance_margin_type_noop(err: &AppError) -> bool {
-    matches!(err, AppError::ExchangeApi { code: -4046, .. })
-        || matches!(
-            err,
-            AppError::ExchangeApi { message, .. }
-                if message.to_ascii_lowercase().contains("no need to change margin type")
-        )
+fn next_nonce() -> String {
+    static LAST: AtomicU64 = AtomicU64::new(0);
+    let now_micros = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_micros() as u64)
+        .unwrap_or(0);
+    let prev = LAST.load(Ordering::Relaxed);
+    let next = now_micros.max(prev.saturating_add(1));
+    LAST.store(next, Ordering::Relaxed);
+    next.to_string()
+}
+
+fn sign_eip712(private_key: &str, message: &str) -> Result<String, AppError> {
+    let digest = eip712_message_digest(message);
+    let pk_bytes = hex::decode(private_key.trim().trim_start_matches("0x"))
+        .map_err(|e| AppError::ExchangeCrypto(e.to_string()))?;
+    let signing_key = SigningKey::from_slice(&pk_bytes)
+        .map_err(|e| AppError::ExchangeCrypto(e.to_string()))?;
+    let (signature, recovery_id) = signing_key
+        .sign_prehash_recoverable(&digest)
+        .map_err(|e| AppError::ExchangeCrypto(e.to_string()))?;
+
+    let sig_bytes = signature.to_bytes();
+    let v = recovery_id.to_byte() + 27;
+    let mut out = Vec::with_capacity(65);
+    out.extend_from_slice(&sig_bytes[..]);
+    out.push(v);
+    Ok(format!("0x{}", hex::encode(&out)))
+}
+
+fn eip712_message_digest(message: &str) -> [u8; 32] {
+    let domain_separator = aster_domain_separator();
+    let message_typehash = keccak256(b"Message(string msg)");
+    let message_hash = keccak256(message.as_bytes());
+
+    let mut struct_hash = Vec::with_capacity(64);
+    struct_hash.extend_from_slice(&message_typehash);
+    struct_hash.extend_from_slice(&message_hash);
+    let struct_hash = keccak256(&struct_hash);
+
+    let mut digest = Vec::with_capacity(66);
+    digest.extend_from_slice(b"\x19\x01");
+    digest.extend_from_slice(&domain_separator);
+    digest.extend_from_slice(&struct_hash);
+    keccak256(&digest)
+}
+
+fn aster_domain_separator() -> [u8; 32] {
+    let domain_typehash = keccak256(
+        b"EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)",
+    );
+    let name_hash = keccak256(b"AsterSignTransaction");
+    let version_hash = keccak256(b"1");
+    let chain_id = to_uint256(1666);
+    let verifying_contract = [0_u8; 32];
+
+    let mut bytes = Vec::with_capacity(160);
+    bytes.extend_from_slice(&domain_typehash);
+    bytes.extend_from_slice(&name_hash);
+    bytes.extend_from_slice(&version_hash);
+    bytes.extend_from_slice(&chain_id);
+    bytes.extend_from_slice(&verifying_contract);
+    keccak256(&bytes)
+}
+
+fn to_uint256(value: u64) -> [u8; 32] {
+    let mut out = [0_u8; 32];
+    out[24..].copy_from_slice(&value.to_be_bytes());
+    out
+}
+
+fn derive_eth_address(private_key: &str) -> Result<String, AppError> {
+    let pk_bytes = hex::decode(private_key.trim().trim_start_matches("0x"))
+        .map_err(|e| AppError::ExchangeCrypto(e.to_string()))?;
+    let signing_key = SigningKey::from_slice(&pk_bytes)
+        .map_err(|e| AppError::ExchangeCrypto(e.to_string()))?;
+    let verifying_key = signing_key.verifying_key();
+    let encoded = verifying_key.to_encoded_point(false);
+    let bytes: &[u8] = AsRef::<[u8]>::as_ref(&encoded);
+    let hash = keccak256(&bytes[1..]);
+    Ok(format!("0x{}", hex::encode(&hash[12..])))
+}
+
+fn keccak256(input: &[u8]) -> [u8; 32] {
+    let mut hasher = Keccak256::new();
+    hasher.update(input);
+    hasher.finalize().into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn aster_signs_known_eip712_message() {
+        let private_key =
+            "4fd0a42218f3eae43a6ce26d22544e986139a01e5b34a62db53757ffca81bae1";
+        let signature =
+            sign_eip712(private_key, "nonce=1748310859508867&user=0x63dd5acc6b1aa0f563956c0e534dd30b6dcf7c4e&signer=0x21cf8ae13bb72632562c6ff438652ba1a151bb0")
+                .expect("signature");
+        assert!(signature.starts_with("0x"));
+        assert_eq!(signature.len(), 2 + 130);
+    }
+
+    #[test]
+    fn aster_derives_signer_address_from_private_key() {
+        let private_key =
+            "4fd0a42218f3eae43a6ce26d22544e986139a01e5b34a62db53757ffca81bae1";
+        let address = derive_eth_address(private_key).expect("address");
+        assert_eq!(
+            address,
+            "0x21cf8ae13bb72632562c6fff438652ba1a151bb0"
+        );
+    }
+
+    #[test]
+    fn aster_nonce_is_monotonic() {
+        let a = next_nonce().parse::<u64>().unwrap();
+        let b = next_nonce().parse::<u64>().unwrap();
+        assert!(b > a);
+    }
 }

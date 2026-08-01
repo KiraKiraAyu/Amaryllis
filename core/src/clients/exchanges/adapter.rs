@@ -2,7 +2,7 @@ use async_trait::async_trait;
 
 use crate::{
     clients::{
-        binance::BinanceFuturesAdapter, bitget::BitgetFuturesAdapter,
+        aster::AsterAdapter, binance::BinanceFuturesAdapter, bitget::BitgetFuturesAdapter,
         hyperliquid::HyperliquidAdapter, okx::OkxFuturesAdapter,
     },
     error::AppError,
@@ -94,7 +94,7 @@ pub fn create_exchange_adapter(
 ) -> Result<Box<dyn LiveExchangeAdapter>, AppError> {
     match exchange_type.to_ascii_lowercase().as_str() {
         "binance" => Ok(Box::new(BinanceFuturesAdapter::new(credentials)?)),
-        "aster" => Ok(Box::new(BinanceFuturesAdapter::new_aster(credentials)?)),
+        "aster" => Ok(Box::new(AsterAdapter::new(credentials)?)),
         "okx" => Ok(Box::new(OkxFuturesAdapter::new(credentials)?)),
         "bitget" => Ok(Box::new(BitgetFuturesAdapter::new(credentials)?)),
         "hyperliquid" => Ok(Box::new(HyperliquidAdapter::new(credentials)?)),

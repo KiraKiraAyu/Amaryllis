@@ -205,7 +205,7 @@ pub fn exchange_credentials_missing(
     wallet_addr: &str,
 ) -> bool {
     match exchange_type.trim().to_ascii_lowercase().as_str() {
-        "hyperliquid" => wallet_addr.trim().is_empty() || secret_key.trim().is_empty(),
+        "hyperliquid" | "aster" => wallet_addr.trim().is_empty() || secret_key.trim().is_empty(),
         "okx" | "bitget" => {
             api_key.trim().is_empty()
                 || secret_key.trim().is_empty()
@@ -399,8 +399,11 @@ mod tests {
         assert!(exchange_credentials_missing(
             "binance", "", "secret", "", ""
         ));
+        assert!(exchange_credentials_missing(
+            "aster", "", "private-key", "", ""
+        ));
         assert!(!exchange_credentials_missing(
-            "aster", "key", "secret", "", ""
+            "aster", "", "private-key", "", "0xabc"
         ));
     }
 }

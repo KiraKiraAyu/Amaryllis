@@ -52,11 +52,6 @@ impl ExchangeConfigService {
         if !is_supported_exchange_type(&exchange_type) {
             return Err(AppError::BadRequest("Invalid exchange type".into()));
         }
-        if exchange_type == "aster" && request.testnet {
-            return Err(AppError::BadRequest(
-                "Aster testnet is not configured".into(),
-            ));
-        }
 
         let account_name = if request.account_name.trim().is_empty() {
             "Default".to_string()
