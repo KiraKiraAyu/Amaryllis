@@ -103,13 +103,6 @@ impl StrategyService {
             .map_err(|_| strategy_error(AppErrorKind::Internal, "Failed to update strategy"))?
             .ok_or_else(|| strategy_error(AppErrorKind::NotFound, "Strategy not found"))?;
 
-        if existing.is_default {
-            return Err(strategy_error(
-                AppErrorKind::Forbidden,
-                "Cannot modify system default strategy",
-            ));
-        }
-
         let name = if request.name.trim().is_empty() {
             existing.name
         } else {
@@ -148,24 +141,15 @@ impl StrategyService {
         &self,
         id: String,
     ) -> Result<StrategyMessagePayload> {
-        let row = self
+        let affected = self
             .strategy_repo
-            .get_owned(&id)
-            .await
-            .map_err(|_| strategy_error(AppErrorKind::Internal, "Failed to delete strategy"))?
-            .ok_or_else(|| strategy_error(AppErrorKind::NotFound, "Strategy not found"))?;
-
-        if row.is_default {
-            return Err(strategy_error(
-                AppErrorKind::Forbidden,
-                "Cannot delete system default strategy",
-            ));
-        }
-
-        self.strategy_repo
             .delete_owned(&id)
             .await
             .map_err(|_| strategy_error(AppErrorKind::Internal, "Failed to delete strategy"))?;
+
+        if affected == 0 {
+            return Err(strategy_error(AppErrorKind::NotFound, "Strategy not found"));
+        }
 
         Ok(StrategyMessagePayload {
             message: "Strategy deleted successfully",
@@ -502,7 +486,6 @@ fn strategy_payload(row: StrategyRecord) -> StrategyPayload {
         description: row.description,
         author_email: String::new(),
         is_active: row.is_active,
-        is_default: row.is_default,
         config: parse_json_value(&row.config),
         created_at: ts_to_rfc3339(row.created_at),
         updated_at: ts_to_rfc3339(row.updated_at),

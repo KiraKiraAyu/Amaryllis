@@ -51,7 +51,6 @@ pub struct StrategyPayload {
     pub description: String,
     pub author_email: String,
     pub is_active: bool,
-    pub is_default: bool,
     pub config: Value,
     pub created_at: String,
     pub updated_at: String,

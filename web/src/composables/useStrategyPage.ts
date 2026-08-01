@@ -56,7 +56,6 @@ export function useStrategyPage() {
       description: "",
       author_email: "",
       is_active: false,
-      is_default: false,
       created_at: "",
       updated_at: "",
       config: {

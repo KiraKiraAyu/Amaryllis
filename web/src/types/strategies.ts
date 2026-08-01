@@ -145,7 +145,6 @@ export interface StrategyPayload {
   description: string
   author_email: string
   is_active: boolean
-  is_default: boolean
   config: StrategyConfigPayload
   created_at: string
   updated_at: string

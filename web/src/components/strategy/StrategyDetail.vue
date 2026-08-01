@@ -35,12 +35,6 @@ const promptVariant = computed(() => config.value.prompt_variant ?? "balanced")
             <h2 class="font-bold text-xl text-surface-900 dark:text-white truncate">
               {{ strategy.name }}
             </h2>
-            <span
-              v-if="strategy.is_default"
-              class="text-xs font-bold px-2 py-0.5 rounded-full uppercase tracking-wider bg-blue-500/10 text-blue-500 border border-blue-500/20"
-            >
-              Default
-            </span>
           </div>
           <p class="text-sm text-surface-500 dark:text-surface-400">
             {{ strategy.description || 'No description provided.' }}
@@ -53,7 +47,6 @@ const promptVariant = computed(() => config.value.prompt_variant ?? "balanced")
             label="Edit"
             severity="secondary"
             @click="emit('edit')"
-            :disabled="strategy.is_default"
             class="rounded-xl h-10 cursor-pointer"
           />
           <Button
@@ -69,7 +62,6 @@ const promptVariant = computed(() => config.value.prompt_variant ?? "balanced")
             label="Delete"
             severity="danger"
             @click="emit('delete')"
-            :disabled="strategy.is_default"
             class="rounded-xl h-10 cursor-pointer bg-rose-500! border-rose-500! text-white!"
           />
         </div>

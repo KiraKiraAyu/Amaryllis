@@ -1,6 +1,6 @@
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait, QueryFilter,
-    QueryOrder, Set, prelude::Expr,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Set,
+    prelude::Expr,
 };
 
 use crate::{
@@ -20,7 +20,6 @@ pub struct StrategyRecord {
     pub name: String,
     pub description: String,
     pub is_active: bool,
-    pub is_default: bool,
     pub config: String,
     pub created_at: i64,
     pub updated_at: i64,
@@ -52,12 +51,9 @@ impl StrategyRepo {
     pub async fn list_for_user_with_defaults(
         &self,
     ) -> Result<Vec<StrategyRecord>, DbErr> {
+        // Strategies are global (no per-user ownership column), so the list
+        // includes every record, newest first.
         strategies::Entity::find()
-            .filter(
-                Condition::any()
-                    .add(strategies::Column::IsDefault.eq(1)),
-            )
-            .order_by_desc(strategies::Column::IsDefault)
             .order_by_desc(strategies::Column::CreatedAt)
             .all(&self.db)
             .await
@@ -69,10 +65,6 @@ impl StrategyRepo {
         id: &str,
     ) -> Result<Option<StrategyRecord>, DbErr> {
         strategies::Entity::find_by_id(id.trim().to_string())
-            .filter(
-                Condition::any()
-                    .add(strategies::Column::IsDefault.eq(1)),
-            )
             .one(&self.db)
             .await
             .map(|row| row.map(map_strategy_row))
@@ -93,10 +85,6 @@ impl StrategyRepo {
         id: &str,
     ) -> Result<Option<StrategyRecord>, DbErr> {
         strategies::Entity::find_by_id(id.trim().to_string())
-            .filter(
-                Condition::any()
-                    .add(strategies::Column::IsDefault.eq(1)),
-            )
             .one(&self.db)
             .await
             .map(|row| row.map(map_strategy_row))
@@ -108,7 +96,6 @@ impl StrategyRepo {
             name: Set(input.name),
             description: Set(input.description),
             is_active: Set(0),
-            is_default: Set(0),
             config: Set(input.config),
             created_at: Set(ts_to_dt(input.created_at)),
             updated_at: Set(ts_to_dt(input.updated_at)),
@@ -200,7 +187,6 @@ fn map_strategy_row(row: strategies::Model) -> StrategyRecord {
         name: row.name,
         description: row.description,
         is_active: row.is_active != 0,
-        is_default: row.is_default != 0,
         config: row.config,
         created_at: dt_to_ts(row.created_at),
         updated_at: dt_to_ts(row.updated_at),

@@ -13,7 +13,6 @@ pub struct Model {
     #[sea_orm(column_type = "Text")]
     pub description: String,
     pub is_active: i32,
-    pub is_default: i32,
     #[sea_orm(column_type = "Text")]
     pub config: String,
     pub created_at: DateTimeWithTimeZone,

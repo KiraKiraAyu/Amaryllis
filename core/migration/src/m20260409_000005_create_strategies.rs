@@ -31,12 +31,6 @@ impl MigrationTrait for Migration {
                             .default(0),
                     )
                     .col(
-                        ColumnDef::new(Strategies::IsDefault)
-                            .integer()
-                            .not_null()
-                            .default(0),
-                    )
-                    .col(
                         ColumnDef::new(Strategies::Config)
                             .string()
                             .not_null()
@@ -78,7 +72,6 @@ enum Strategies {
     Name,
     Description,
     IsActive,
-    IsDefault,
     Config,
     CreatedAt,
     UpdatedAt,
