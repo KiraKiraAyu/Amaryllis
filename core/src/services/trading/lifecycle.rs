@@ -292,7 +292,10 @@ pub async fn start_trader(
         Err(AppError::AlreadyRunning(_)) => Ok(TraderMessagePayload {
             message: "Trader already running",
         }),
-        Err(_) => Err(app_error(AppErrorKind::Internal, "Failed to start trader")),
+        Err(err) => {
+            tracing::error!("Failed to start trader={id}: {err}");
+            Err(AppError::Internal(format!("Failed to start trader: {err}")))
+        }
     }
 }
 
@@ -314,7 +317,10 @@ pub async fn stop_trader(
             AppErrorKind::NotFound,
             "Trader does not exist or no permission",
         )),
-        Err(_) => Err(app_error(AppErrorKind::Internal, "Failed to stop trader")),
+        Err(err) => {
+            tracing::error!("Failed to stop trader={id}: {err}");
+            Err(AppError::Internal(format!("Failed to stop trader: {err}")))
+        }
     }
 }
 
