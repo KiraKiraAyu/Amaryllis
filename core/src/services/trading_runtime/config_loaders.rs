@@ -2,16 +2,15 @@ use super::service::*;
 
 pub async fn load_trader_runtime_config(
     state: &SharedState,
-    user_id: &str,
     trader_id: &str,
 ) -> Result<Option<TraderRuntimeConfig>, AppError> {
-    let Some(row) = state.trading_repo.get_trader(user_id, trader_id).await? else {
+    let Some(row) = state.trading_repo.get_trader(trader_id).await? else {
         return Ok(None);
     };
 
     let resolved_model = match state
         .llm_service
-        .resolve_for_user(&row.user_id, Some(&row.ai_model_id))
+        .resolve_for_user(Some(&row.ai_model_id))
         .await
     {
         Ok(model) => model,
@@ -80,7 +79,6 @@ pub async fn load_trader_runtime_config(
 
     Ok(Some(TraderRuntimeConfig {
         trader_id: row.id,
-        user_id: row.user_id,
         name: row.name,
         ai_model_id: resolved_model.id,
         ai_model_name: resolved_model.model_id,
@@ -104,12 +102,11 @@ pub async fn load_trader_runtime_config(
 pub async fn set_trader_running(
     state: &SharedState,
     trader_id: &str,
-    user_id: &str,
     running: bool,
 ) -> Result<(), AppError> {
     state
         .trading_repo
-        .set_trader_running(user_id, trader_id, running, now_i64())
+        .set_trader_running(trader_id, running, now_i64())
         .await?;
     Ok(())
 }
@@ -126,7 +123,7 @@ pub async fn load_runtime_execution_context(
 > {
     let Some(row) = state
         .exchange_repo
-        .find_runtime_config(&cfg.exchange_id, &cfg.user_id)
+        .find_runtime_config(&cfg.exchange_id)
         .await?
     else {
         return Ok((

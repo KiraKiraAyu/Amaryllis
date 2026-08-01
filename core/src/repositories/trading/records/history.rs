@@ -2,7 +2,6 @@
 pub struct InsertTraderDecisionRecord {
     pub id: String,
     pub trader_id: String,
-    pub user_id: String,
     pub symbol: String,
     pub timeframe: String,
     pub decision: String,
@@ -28,7 +27,6 @@ pub struct TraderDecisionRecord {
 pub struct InsertTraderTradeRecord {
     pub id: String,
     pub trader_id: String,
-    pub user_id: String,
     pub symbol: String,
     pub side: String,
     pub entry_price: f64,

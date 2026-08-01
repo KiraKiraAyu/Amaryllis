@@ -153,7 +153,6 @@ export interface RuntimeEventTypesQuery {
 
 export interface TraderPayload {
   id: string
-  user_id: string
   name: string
   ai_model_id: string
   exchange_id: string
@@ -228,7 +227,6 @@ export interface GridRiskInfoPayload {
 
 export interface RuntimeEnginePayload {
   trader_id: string
-  user_id: string
   exchange_id: string
   ai_model_id: string
   started_at: number

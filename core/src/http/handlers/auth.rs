@@ -1,68 +1,64 @@
 use axum::{Json, extract::State};
-use axum_extra::{
-    TypedHeader,
-    headers::{Authorization, authorization::Bearer},
-};
 
 use crate::{
     contracts::auth::{
-        ChangePasswordRequest, CurrentUserPayload, LoginRequest, MessagePayload, RegisterRequest,
-        TokenPayload,
+        AuthStatusPayload, MessagePayload, SetupConfirmRequest, SetupStartPayload, TokenPayload,
+        VerifyRequest,
     },
     error::Result,
-    http::{extractors::AuthUser, response::ApiResponse},
+    http::response::ApiResponse,
     state::AppState,
 };
 
-pub async fn register(
+pub async fn status(
     State(app): State<AppState>,
-    Json(request): Json<RegisterRequest>,
+) -> Result<Json<ApiResponse<AuthStatusPayload>>> {
+    let payload = app.services.auth_service.status().await?;
+    Ok(Json(ApiResponse::success(Some(payload), None)))
+}
+
+pub async fn verify(
+    State(app): State<AppState>,
+    Json(request): Json<VerifyRequest>,
+) -> Result<Json<ApiResponse<TokenPayload>>> {
+    let payload = app.services.auth_service.verify(&request.code).await?;
+    Ok(Json(ApiResponse::success(Some(payload), None)))
+}
+
+pub async fn setup_start(
+    State(app): State<AppState>,
+) -> Result<Json<ApiResponse<SetupStartPayload>>> {
+    let payload = app.services.auth_service.setup_start().await?;
+    Ok(Json(ApiResponse::success(Some(payload), None)))
+}
+
+pub async fn setup_confirm(
+    State(app): State<AppState>,
+    Json(request): Json<SetupConfirmRequest>,
 ) -> Result<Json<ApiResponse<TokenPayload>>> {
     let payload = app
         .services
         .auth_service
-        .register(&request.email, &request.password)
+        .setup_confirm(&request.code)
         .await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 
-pub async fn login(
+pub async fn reset_start(
     State(app): State<AppState>,
-    Json(request): Json<LoginRequest>,
-) -> Result<Json<ApiResponse<TokenPayload>>> {
-    let payload = app
-        .services
-        .auth_service
-        .login(&request.email, &request.password)
-        .await?;
+) -> Result<Json<ApiResponse<SetupStartPayload>>> {
+    let payload = app.services.auth_service.reset_start().await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 
-pub async fn logout(
+pub async fn reset_confirm(
     State(app): State<AppState>,
-    TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,
-) -> Result<Json<ApiResponse<MessagePayload>>> {
-    let payload = app.services.auth_service.logout(bearer.token())?;
-    Ok(Json(ApiResponse::success(Some(payload), None)))
-}
-
-pub async fn me(
-    State(app): State<AppState>,
-    user: AuthUser,
-) -> Result<Json<ApiResponse<CurrentUserPayload>>> {
-    let payload = app.services.auth_service.current_user(&user.sub).await?;
-    Ok(Json(ApiResponse::success(Some(payload), None)))
-}
-
-pub async fn change_password(
-    State(app): State<AppState>,
-    user: AuthUser,
-    Json(request): Json<ChangePasswordRequest>,
+    Json(request): Json<SetupConfirmRequest>,
 ) -> Result<Json<ApiResponse<MessagePayload>>> {
     let payload = app
         .services
         .auth_service
-        .change_password(&user.sub, &request.current_password, &request.new_password)
+        .reset_confirm(&request.code)
         .await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }

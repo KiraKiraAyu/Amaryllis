@@ -1,7 +1,6 @@
 #[derive(Debug, Clone)]
 pub struct TraderRecord {
     pub id: String,
-    pub user_id: String,
     pub name: String,
     pub ai_model_id: String,
     pub exchange_id: String,
@@ -27,7 +26,6 @@ pub struct TraderRecord {
 pub struct CreateTraderRecord {
     pub id: String,
     pub snapshot_id: String,
-    pub user_id: String,
     pub name: String,
     pub ai_model_id: String,
     pub exchange_id: String,

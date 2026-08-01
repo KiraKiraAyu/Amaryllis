@@ -20,7 +20,6 @@ pub struct DebateRepo {
 #[derive(Debug, Clone)]
 pub struct CreateDebateRecord {
     pub id: String,
-    pub user_id: String,
     pub name: String,
     pub symbol: String,
     pub status: String,
@@ -48,17 +47,15 @@ impl DebateRepo {
         Self { db }
     }
 
-    pub async fn get(&self, user_id: &str, debate_id: &str) -> Result<Option<Value>, DbErr> {
+    pub async fn get(&self, debate_id: &str) -> Result<Option<Value>, DbErr> {
         debates::Entity::find_by_id(debate_id.trim().to_string())
-            .filter(debates::Column::UserId.eq(user_id.trim()))
             .one(&self.db)
             .await
             .map(|row| row.map(debate_to_json))
     }
 
-    pub async fn list(&self, user_id: &str, limit: i64) -> Result<Vec<Value>, DbErr> {
+    pub async fn list(&self, limit: i64) -> Result<Vec<Value>, DbErr> {
         debates::Entity::find()
-            .filter(debates::Column::UserId.eq(user_id.trim()))
             .order_by_desc(debates::Column::CreatedAt)
             .limit(limit.max(0) as u64)
             .all(&self.db)
@@ -69,7 +66,6 @@ impl DebateRepo {
     pub async fn create(&self, input: CreateDebateRecord) -> Result<(), DbErr> {
         debates::ActiveModel {
             id: Set(input.id),
-            user_id: Set(input.user_id),
             name: Set(input.name),
             symbol: Set(input.symbol),
             status: Set(input.status),
@@ -88,10 +84,9 @@ impl DebateRepo {
         .map(|_| ())
     }
 
-    pub async fn delete(&self, user_id: &str, debate_id: &str) -> Result<u64, DbErr> {
+    pub async fn delete(&self, debate_id: &str) -> Result<u64, DbErr> {
         let deleted = debates::Entity::delete_many()
             .filter(debates::Column::Id.eq(debate_id.trim()))
-            .filter(debates::Column::UserId.eq(user_id.trim()))
             .exec(&self.db)
             .await?;
 
@@ -164,8 +159,8 @@ impl DebateRepo {
             .map(|_| ())
     }
 
-    pub async fn list_messages(&self, user_id: &str, debate_id: &str) -> Result<Vec<Value>, DbErr> {
-        if !self.belongs_to_user(user_id, debate_id).await? {
+    pub async fn list_messages(&self, debate_id: &str) -> Result<Vec<Value>, DbErr> {
+        if !self.debate_exists(debate_id).await? {
             return Ok(vec![]);
         }
 
@@ -178,8 +173,8 @@ impl DebateRepo {
             .map(|rows| rows.into_iter().map(debate_message_to_json).collect())
     }
 
-    pub async fn votes(&self, user_id: &str, debate_id: &str) -> Result<Value, DbErr> {
-        if !self.belongs_to_user(user_id, debate_id).await? {
+    pub async fn votes(&self, debate_id: &str) -> Result<Value, DbErr> {
+        if !self.debate_exists(debate_id).await? {
             return Ok(json!([]));
         }
 
@@ -244,9 +239,8 @@ impl DebateRepo {
         Ok(tally)
     }
 
-    async fn belongs_to_user(&self, user_id: &str, debate_id: &str) -> Result<bool, DbErr> {
+    async fn debate_exists(&self, debate_id: &str) -> Result<bool, DbErr> {
         debates::Entity::find_by_id(debate_id.trim().to_string())
-            .filter(debates::Column::UserId.eq(user_id.trim()))
             .one(&self.db)
             .await
             .map(|row| row.is_some())

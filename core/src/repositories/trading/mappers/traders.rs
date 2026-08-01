@@ -5,7 +5,6 @@ use super::super::{records::traders::TraderRecord, values::decimal_to_f64};
 pub(in crate::repositories::trading) fn map_trader(row: entity::traders::Model) -> TraderRecord {
     TraderRecord {
         id: row.id,
-        user_id: row.user_id,
         name: row.name,
         ai_model_id: row.ai_model_id,
         exchange_id: row.exchange_id,

@@ -17,7 +17,6 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(Debates::UserId).string().not_null())
                     .col(
                         ColumnDef::new(Debates::Name)
                             .string()
@@ -90,18 +89,6 @@ impl MigrationTrait for Migration {
                     )
                     .to_owned(),
             )
-            .await?;
-
-        manager
-            .create_index(
-                Index::create()
-                    .if_not_exists()
-                    .name("idx_debates_user_created")
-                    .table(Debates::Table)
-                    .col(Debates::UserId)
-                    .col((Debates::CreatedAt, IndexOrder::Desc))
-                    .to_owned(),
-            )
             .await
     }
 
@@ -116,7 +103,6 @@ impl MigrationTrait for Migration {
 enum Debates {
     Table,
     Id,
-    UserId,
     Name,
     Symbol,
     Status,

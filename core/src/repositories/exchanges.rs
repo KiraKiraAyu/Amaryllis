@@ -49,7 +49,6 @@ pub struct CreateExchangeAccount {
     pub id: String,
     pub exchange_type: String,
     pub account_name: String,
-    pub user_id: String,
     pub name: String,
     pub exchange_kind: String,
     pub enabled: bool,
@@ -80,10 +79,8 @@ impl ExchangeRepo {
 
     pub async fn list_for_user(
         &self,
-        user_id: &str,
     ) -> Result<Vec<ExchangeConfigRecord>, crate::database::DbErr> {
         exchanges::Entity::find()
-            .filter(exchanges::Column::UserId.eq(user_id.trim()))
             .order_by_asc(exchanges::Column::ExchangeType)
             .order_by_asc(exchanges::Column::AccountName)
             .all(&self.db)
@@ -112,7 +109,6 @@ impl ExchangeRepo {
             id: Set(account.id),
             exchange_type: Set(account.exchange_type),
             account_name: Set(account.account_name),
-            user_id: Set(account.user_id),
             name: Set(account.name),
             r#type: Set(account.exchange_kind),
             enabled: Set(if account.enabled { 1 } else { 0 }),
@@ -133,10 +129,8 @@ impl ExchangeRepo {
     pub async fn find_secrets(
         &self,
         exchange_id: &str,
-        user_id: &str,
     ) -> Result<Option<ExchangeSecretRecord>, crate::database::DbErr> {
         exchanges::Entity::find_by_id(exchange_id.trim().to_string())
-            .filter(exchanges::Column::UserId.eq(user_id.trim()))
             .one(&self.db)
             .await
             .map(|row| {
@@ -151,10 +145,8 @@ impl ExchangeRepo {
     pub async fn find_runtime_config(
         &self,
         exchange_id: &str,
-        user_id: &str,
     ) -> Result<Option<ExchangeRuntimeRecord>, crate::database::DbErr> {
         exchanges::Entity::find_by_id(exchange_id.trim().to_string())
-            .filter(exchanges::Column::UserId.eq(user_id.trim()))
             .one(&self.db)
             .await
             .map(|row| {
@@ -173,7 +165,6 @@ impl ExchangeRepo {
     pub async fn update(
         &self,
         exchange_id: &str,
-        user_id: &str,
         update: UpdateExchangeAccount,
     ) -> Result<(), crate::database::DbErr> {
         exchanges::Entity::update_many()
@@ -200,7 +191,6 @@ impl ExchangeRepo {
                 Expr::value(ts_to_dt(update.updated_at)),
             )
             .filter(exchanges::Column::Id.eq(exchange_id.trim()))
-            .filter(exchanges::Column::UserId.eq(user_id.trim()))
             .exec(&self.db)
             .await?;
 
@@ -209,11 +199,9 @@ impl ExchangeRepo {
 
     pub async fn find_trader_usage(
         &self,
-        user_id: &str,
         exchange_id: &str,
     ) -> Result<Option<TraderUsageRecord>, crate::database::DbErr> {
         traders::Entity::find()
-            .filter(traders::Column::UserId.eq(user_id.trim()))
             .filter(traders::Column::ExchangeId.eq(exchange_id.trim()))
             .one(&self.db)
             .await
@@ -228,11 +216,9 @@ impl ExchangeRepo {
     pub async fn delete(
         &self,
         exchange_id: &str,
-        user_id: &str,
     ) -> Result<u64, crate::database::DbErr> {
         let result = exchanges::Entity::delete_many()
             .filter(exchanges::Column::Id.eq(exchange_id.trim()))
-            .filter(exchanges::Column::UserId.eq(user_id.trim()))
             .exec(&self.db)
             .await?;
 

@@ -17,7 +17,6 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(BacktestRuns::UserId).string().not_null())
                     .col(
                         ColumnDef::new(BacktestRuns::Label)
                             .string()
@@ -66,18 +65,6 @@ impl MigrationTrait for Migration {
                     )
                     .to_owned(),
             )
-            .await?;
-
-        manager
-            .create_index(
-                Index::create()
-                    .if_not_exists()
-                    .name("idx_backtest_runs_user_updated")
-                    .table(BacktestRuns::Table)
-                    .col(BacktestRuns::UserId)
-                    .col((BacktestRuns::UpdatedAt, IndexOrder::Desc))
-                    .to_owned(),
-            )
             .await
     }
 
@@ -97,7 +84,6 @@ impl MigrationTrait for Migration {
 enum BacktestRuns {
     Table,
     RunId,
-    UserId,
     Label,
     LastError,
     Version,

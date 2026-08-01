@@ -4,10 +4,9 @@ use reqwest::Method;
 
 pub async fn runtime_alerts(
     app: &SharedState,
-    user_id: &str,
     q: RuntimeAlertsQuery,
 ) -> AppResult<RuntimeAlertsPayload> {
-    let trader_id = match resolve_trader_id(app, user_id, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, q.trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
@@ -36,7 +35,6 @@ pub async fn runtime_alerts(
     let replace_succeeded = count_runtime_events(
         app,
         &trader_id,
-        user_id,
         Some(EVENT_CANCEL_REPLACE_SUCCEEDED),
         None,
         from_ts,
@@ -45,7 +43,6 @@ pub async fn runtime_alerts(
     let replace_throttled = count_runtime_events(
         app,
         &trader_id,
-        user_id,
         Some(EVENT_CANCEL_REPLACE_THROTTLED),
         None,
         from_ts,
@@ -54,7 +51,6 @@ pub async fn runtime_alerts(
     let open_market_fallback = count_runtime_events(
         app,
         &trader_id,
-        user_id,
         Some(EVENT_LIVE_OPEN_USED_MARKET_FALLBACK),
         None,
         from_ts,
@@ -63,7 +59,6 @@ pub async fn runtime_alerts(
     let open_submitted = count_runtime_events(
         app,
         &trader_id,
-        user_id,
         Some(EVENT_LIVE_ORDER_SUBMITTED),
         Some("submit-open"),
         from_ts,
@@ -72,7 +67,6 @@ pub async fn runtime_alerts(
     let stale_reconcile_terminal = count_runtime_events(
         app,
         &trader_id,
-        user_id,
         Some(EVENT_STALE_INTENT_RECONCILE_TERMINAL),
         None,
         from_ts,
@@ -81,7 +75,6 @@ pub async fn runtime_alerts(
     let stale_reconcile_pending = count_runtime_events(
         app,
         &trader_id,
-        user_id,
         Some(EVENT_STALE_INTENT_RECONCILE_PENDING),
         None,
         from_ts,
@@ -127,7 +120,7 @@ pub async fn runtime_alerts(
 
     let controls_row = app
         .trading_repo
-        .runtime_alert_controls(user_id, &trader_id)
+        .runtime_alert_controls(&trader_id)
         .await
         .ok()
         .flatten();
@@ -140,7 +133,7 @@ pub async fn runtime_alerts(
     {
         let _ = app
             .trading_repo
-            .unmute_expired_runtime_alerts(user_id, &trader_id, now)
+            .unmute_expired_runtime_alerts(&trader_id, now)
             .await;
         controls_record.is_muted = false;
         controls_record.muted_until = 0;
@@ -163,7 +156,6 @@ pub async fn runtime_alerts(
     let recent_same_count = app
         .trading_repo
         .recent_runtime_alert_history_count(
-            user_id,
             &trader_id,
             any_breached,
             severity,
@@ -180,7 +172,6 @@ pub async fn runtime_alerts(
             .insert_runtime_alert_history(InsertRuntimeAlertHistoryRecord {
                 id: new_alert_history_id.clone(),
                 trader_id: trader_id.clone(),
-                user_id: user_id.to_string(),
                 window_hours,
                 thresholds_json: serde_json::to_string(&thresholds_pct)
                     .unwrap_or_else(|_| "{}".to_string()),
@@ -200,7 +191,6 @@ pub async fn runtime_alerts(
     let webhook_payload = json!({
         "event": "runtime_alert_evaluated",
         "trader_id": trader_id.clone(),
-        "user_id": user_id,
         "window_hours": window_hours,
         "from_ts": from_ts,
         "persist_min_interval_secs": persist_min_interval_secs,
@@ -229,7 +219,6 @@ pub async fn runtime_alerts(
         notify_runtime_alert_webhook_best_effort(
             app,
             &trader_id,
-            user_id,
             &alert_history_id,
             &webhook_payload,
         )
@@ -278,10 +267,9 @@ pub async fn runtime_alerts(
 
 pub async fn runtime_alert_history(
     app: &SharedState,
-    user_id: &str,
     q: RuntimeAlertHistoryQuery,
 ) -> AppResult<RuntimeAlertHistoryPayload> {
-    let trader_id = match resolve_trader_id(app, user_id, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, q.trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
@@ -305,7 +293,6 @@ pub async fn runtime_alert_history(
     let result = app
         .trading_repo
         .runtime_alert_history(
-            user_id,
             &trader_id,
             from_ts,
             breached,
@@ -343,10 +330,9 @@ pub async fn runtime_alert_history(
 
 pub async fn runtime_alert_deliveries(
     app: &SharedState,
-    user_id: &str,
     q: RuntimeAlertDeliveriesQuery,
 ) -> AppResult<RuntimeAlertDeliveriesPayload> {
-    let trader_id = match resolve_trader_id(app, user_id, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, q.trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
@@ -374,7 +360,6 @@ pub async fn runtime_alert_deliveries(
     let result = app
         .trading_repo
         .runtime_alert_deliveries(
-            user_id,
             &trader_id,
             from_ts,
             success,
@@ -412,17 +397,16 @@ pub async fn runtime_alert_deliveries(
 
 pub async fn runtime_alert_controls(
     app: &SharedState,
-    user_id: &str,
     q: RuntimeAlertControlsQuery,
 ) -> AppResult<RuntimeAlertControlsPayload> {
-    let trader_id = match resolve_trader_id(app, user_id, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, q.trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
 
     match app
         .trading_repo
-        .runtime_alert_controls(user_id, &trader_id)
+        .runtime_alert_controls(&trader_id)
         .await
     {
         Ok(Some(record)) => Ok(controls_payload(record)),
@@ -436,10 +420,9 @@ pub async fn runtime_alert_controls(
 
 pub async fn mute_runtime_alerts(
     app: &SharedState,
-    user_id: &str,
     req: RuntimeAlertMuteRequest,
 ) -> AppResult<RuntimeAlertMutePayload> {
-    let trader_id = match resolve_trader_id(app, user_id, req.trader_id).await {
+    let trader_id = match resolve_trader_id(app, req.trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
@@ -453,7 +436,7 @@ pub async fn mute_runtime_alerts(
 
     let result = app
         .trading_repo
-        .set_runtime_alert_mute(user_id, &trader_id, Some(mute_until), reason.clone(), now)
+        .set_runtime_alert_mute(&trader_id, Some(mute_until), reason.clone(), now)
         .await;
 
     match result {
@@ -473,10 +456,9 @@ pub async fn mute_runtime_alerts(
 
 pub async fn unmute_runtime_alerts(
     app: &SharedState,
-    user_id: &str,
     req: RuntimeAlertControlTargetRequest,
 ) -> AppResult<RuntimeAlertMutePayload> {
-    let trader_id = match resolve_trader_id(app, user_id, req.trader_id).await {
+    let trader_id = match resolve_trader_id(app, req.trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
@@ -484,7 +466,7 @@ pub async fn unmute_runtime_alerts(
     let now = now_ts();
     let result = app
         .trading_repo
-        .set_runtime_alert_mute(user_id, &trader_id, None, String::new(), now)
+        .set_runtime_alert_mute(&trader_id, None, String::new(), now)
         .await;
 
     match result {
@@ -504,10 +486,9 @@ pub async fn unmute_runtime_alerts(
 
 pub async fn ack_runtime_alerts(
     app: &SharedState,
-    user_id: &str,
     req: RuntimeAlertAckRequest,
 ) -> AppResult<RuntimeAlertAckPayload> {
-    let trader_id = match resolve_trader_id(app, user_id, req.trader_id).await {
+    let trader_id = match resolve_trader_id(app, req.trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
@@ -517,7 +498,7 @@ pub async fn ack_runtime_alerts(
 
     let result = app
         .trading_repo
-        .ack_runtime_alerts(user_id, &trader_id, note.clone(), now)
+        .ack_runtime_alerts(&trader_id, note.clone(), now)
         .await;
 
     match result {
@@ -525,7 +506,7 @@ pub async fn ack_runtime_alerts(
             message: "Runtime alerts acknowledged",
             trader_id,
             acked_at: now,
-            acked_by: user_id.to_string(),
+            acked_by: String::new(),
             ack_note: note,
         }),
         Err(_) => Err(app_error(
@@ -538,7 +519,6 @@ pub async fn ack_runtime_alerts(
 pub async fn notify_runtime_alert_webhook_best_effort(
     app: &SharedState,
     trader_id: &str,
-    user_id: &str,
     alert_history_id: &str,
     payload: &Value,
 ) -> RuntimeAlertNotificationPayload {
@@ -700,7 +680,6 @@ pub async fn notify_runtime_alert_webhook_best_effort(
             .insert_runtime_alert_delivery(InsertRuntimeAlertDeliveryRecord {
                 id: Uuid::now_v7().to_string(),
                 trader_id: trader_id.to_string(),
-                user_id: user_id.to_string(),
                 alert_history_id: alert_history_id.to_string(),
                 destination: "webhook".to_string(),
                 endpoint: webhook_url.clone(),

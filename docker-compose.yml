@@ -9,8 +9,6 @@ services:
       - "8000:8000"
     volumes:
       - quantaura-data:/app/data
-      - ./core/private.pem:/app/private.pem:ro
-      - ./core/public.pem:/app/public.pem:ro
     restart: always
 
   frontend:

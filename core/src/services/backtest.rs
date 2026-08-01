@@ -43,7 +43,6 @@ const DEFAULT_SLIPPAGE_BPS: f64 = 2.0;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct BacktestConfig {
     pub run_id: String,
-    pub user_id: String,
     pub symbols: Vec<String>,
     /// Unix timestamp seconds (start of historical range)
     pub start_ts: i64,
@@ -110,12 +109,11 @@ impl BacktestService {
 
     pub async fn start(
         &self,
-        user_id: &str,
         req: BacktestStartRequest,
     ) -> AppResult<BacktestRunActionPayload> {
         let resolved_model = self
             .llm_service
-            .resolve_for_user(user_id, req.ai_model_id.as_deref())
+            .resolve_for_user(req.ai_model_id.as_deref())
             .await?;
 
         let run_id = req
@@ -125,7 +123,6 @@ impl BacktestService {
         let now_sec = now_ts();
         let cfg = BacktestConfig {
             run_id: run_id.clone(),
-            user_id: user_id.to_string(),
             symbols: req.symbols.unwrap_or_else(|| vec!["BTCUSDT".to_string()]),
             start_ts: req.start_ts.unwrap_or(now_sec - 7 * 24 * 3600),
             end_ts: req.end_ts.unwrap_or(now_sec),
@@ -173,10 +170,9 @@ impl BacktestService {
 
     pub fn stop(
         &self,
-        user_id: &str,
         req: BacktestRunIdRequest,
     ) -> AppResult<BacktestRunActionPayload> {
-        stop_backtest(&req.run_id, user_id).map_err(|err| AppError::BadRequest(err.into()))?;
+        stop_backtest(&req.run_id).map_err(|err| AppError::BadRequest(err.into()))?;
 
         Ok(BacktestRunActionPayload {
             run_id: req.run_id,
@@ -186,12 +182,11 @@ impl BacktestService {
 
     pub async fn label(
         &self,
-        user_id: &str,
         req: BacktestLabelRequest,
     ) -> AppResult<BacktestMessagePayload> {
         let rows_affected = self
             .backtest_repo
-            .update_label(user_id, &req.run_id, req.label, now_ts())
+            .update_label(&req.run_id, req.label, now_ts())
             .await
             .map_err(|err| AppError::Internal(format!("Failed to update run label: {err}")))?;
 
@@ -206,14 +201,13 @@ impl BacktestService {
 
     pub async fn delete(
         &self,
-        user_id: &str,
         req: BacktestRunIdRequest,
     ) -> AppResult<BacktestMessagePayload> {
-        let _ = stop_backtest(&req.run_id, user_id);
+        let _ = stop_backtest(&req.run_id);
 
         let rows_affected = self
             .backtest_repo
-            .delete_run(user_id, &req.run_id)
+            .delete_run(&req.run_id)
             .await
             .map_err(|err| AppError::Internal(format!("Failed to delete run: {err}")))?;
 
@@ -228,32 +222,30 @@ impl BacktestService {
 
     pub async fn status(
         &self,
-        user_id: &str,
         q: BacktestQueryParams,
     ) -> AppResult<BacktestStatusPayload> {
         let run_id = required_run_id(q.run_id)?;
-        let status = query_run_status(&self.backtest_repo, &run_id, user_id)
+        let status = query_run_status(&self.backtest_repo, &run_id)
             .await
             .ok_or_else(|| AppError::NotFound("Run not found".into()))?;
 
         Ok(BacktestStatusPayload { status })
     }
 
-    pub async fn runs(&self, user_id: &str, q: BacktestQueryParams) -> BacktestRunsPayload {
+    pub async fn runs(&self, q: BacktestQueryParams) -> BacktestRunsPayload {
         let limit = q.limit.unwrap_or(50).clamp(1, 200);
-        let runs = list_runs(&self.backtest_repo, user_id, limit).await;
+        let runs = list_runs(&self.backtest_repo, limit).await;
         let count = runs.len();
         BacktestRunsPayload { runs, count }
     }
 
     pub async fn equity(
         &self,
-        user_id: &str,
         q: BacktestQueryParams,
     ) -> AppResult<BacktestEquityPayload> {
         let run_id = required_run_id(q.run_id)?;
         let limit = q.limit.unwrap_or(5000).clamp(1, 10_000);
-        let points = query_equity_points(&self.backtest_repo, &run_id, user_id, limit).await;
+        let points = query_equity_points(&self.backtest_repo, &run_id, limit).await;
 
         Ok(BacktestEquityPayload {
             count: points.len(),
@@ -263,12 +255,11 @@ impl BacktestService {
 
     pub async fn trades(
         &self,
-        user_id: &str,
         q: BacktestQueryParams,
     ) -> AppResult<BacktestTradesPayload> {
         let run_id = required_run_id(q.run_id)?;
         let limit = q.limit.unwrap_or(1000).clamp(1, 5000);
-        let trades = query_trades(&self.backtest_repo, &run_id, user_id, limit).await;
+        let trades = query_trades(&self.backtest_repo, &run_id, limit).await;
 
         Ok(BacktestTradesPayload {
             count: trades.len(),
@@ -278,45 +269,41 @@ impl BacktestService {
 
     pub async fn metrics(
         &self,
-        user_id: &str,
         q: BacktestQueryParams,
     ) -> AppResult<BacktestMetricsPayload> {
         let run_id = required_run_id(q.run_id)?;
-        let metrics = compute_metrics(&self.backtest_repo, &run_id, user_id).await;
+        let metrics = compute_metrics(&self.backtest_repo, &run_id).await;
         Ok(BacktestMetricsPayload { metrics })
     }
 
     pub async fn trace(
         &self,
-        user_id: &str,
         q: BacktestQueryParams,
     ) -> AppResult<BacktestTracePayload> {
         let run_id = required_run_id(q.run_id)?;
         let limit = q.limit.unwrap_or(50).clamp(1, 200);
-        let trace = query_decisions(&self.backtest_repo, &run_id, user_id, limit).await;
+        let trace = query_decisions(&self.backtest_repo, &run_id, limit).await;
         Ok(BacktestTracePayload { trace })
     }
 
     pub async fn decisions(
         &self,
-        user_id: &str,
         q: BacktestQueryParams,
     ) -> AppResult<BacktestDecisionsPayload> {
         let run_id = required_run_id(q.run_id)?;
         let limit = q.limit.unwrap_or(1000).clamp(1, 5000);
-        let decisions = query_decisions(&self.backtest_repo, &run_id, user_id, limit).await;
+        let decisions = query_decisions(&self.backtest_repo, &run_id, limit).await;
         let count = decisions.len();
         Ok(BacktestDecisionsPayload { decisions, count })
     }
 
     pub async fn export(
         &self,
-        user_id: &str,
         q: BacktestQueryParams,
     ) -> AppResult<BacktestExportPayload> {
         let run_id = required_run_id(q.run_id)?;
-        let trades = query_trades(&self.backtest_repo, &run_id, user_id, 10_000).await;
-        let equity = query_equity_points(&self.backtest_repo, &run_id, user_id, 10_000).await;
+        let trades = query_trades(&self.backtest_repo, &run_id, 10_000).await;
+        let equity = query_equity_points(&self.backtest_repo, &run_id, 10_000).await;
         Ok(BacktestExportPayload {
             run_id,
             trades,
@@ -571,7 +558,6 @@ impl BacktestRunner {
         // Store stop receiver
         let mut stop_rx = stop_rx;
         let run_id = self.cfg.run_id.clone();
-        let user_id = self.cfg.user_id.clone();
         let total_bars = self.klines.len();
 
         // Main step loop
@@ -605,7 +591,6 @@ impl BacktestRunner {
                 let _ = append_equity_point(
                     &backtest_repo,
                     &run_id,
-                    &user_id,
                     bar.open_time / 1000,
                     self.account.total_equity(&prices),
                     self.account.cash,
@@ -653,7 +638,6 @@ impl BacktestRunner {
                                             &backtest_repo,
                                             &trade_id,
                                             &run_id,
-                                            &user_id,
                                             ts_sec,
                                             &sym,
                                             "open_long",
@@ -680,7 +664,6 @@ impl BacktestRunner {
                                             &backtest_repo,
                                             &trade_id,
                                             &run_id,
-                                            &user_id,
                                             ts_sec,
                                             &sym,
                                             "open_short",
@@ -710,7 +693,6 @@ impl BacktestRunner {
                                             &backtest_repo,
                                             &trade_id,
                                             &run_id,
-                                            &user_id,
                                             ts_sec,
                                             &sym,
                                             "close_long",
@@ -740,7 +722,6 @@ impl BacktestRunner {
                                             &backtest_repo,
                                             &trade_id,
                                             &run_id,
-                                            &user_id,
                                             ts_sec,
                                             &sym,
                                             "close_short",
@@ -765,7 +746,6 @@ impl BacktestRunner {
                                 &backtest_repo,
                                 &dec_id,
                                 &run_id,
-                                &user_id,
                                 ts_sec,
                                 &sym,
                                 &dec.action,
@@ -799,7 +779,6 @@ impl BacktestRunner {
                 let _ = append_equity_point(
                     &backtest_repo,
                     &run_id,
-                    &user_id,
                     ts_sec,
                     eq,
                     self.account.cash,
@@ -811,7 +790,6 @@ impl BacktestRunner {
 
                 // Push backtest progress to realtime clients
                 realtime_hub.publish(crate::realtime::RealtimeEvent::BacktestProgress {
-                    user_id: user_id.clone(),
                     run_id: run_id.clone(),
                     state: "running".to_string(),
                     bar_index: self.bar_index,
@@ -843,7 +821,6 @@ impl BacktestRunner {
 
         // Push final status to realtime clients
         realtime_hub.publish(crate::realtime::RealtimeEvent::BacktestProgress {
-            user_id,
             run_id,
             state: status_str,
             bar_index: self.bar_index,
@@ -1027,7 +1004,6 @@ async fn write_run_status(
 async fn append_equity_point(
     backtest_repo: &BacktestRepo,
     run_id: &str,
-    user_id: &str,
     ts: i64,
     equity: f64,
     available: f64,
@@ -1038,7 +1014,6 @@ async fn append_equity_point(
     backtest_repo
         .insert_equity_point(BacktestEquityPointRecord {
             run_id: run_id.to_string(),
-            user_id: user_id.to_string(),
             ts,
             equity,
             available,
@@ -1054,7 +1029,6 @@ async fn append_trade(
     backtest_repo: &BacktestRepo,
     id: &str,
     run_id: &str,
-    user_id: &str,
     ts: i64,
     symbol: &str,
     action: &str,
@@ -1071,7 +1045,6 @@ async fn append_trade(
         .insert_trade(BacktestTradeRecord {
             id: id.to_string(),
             run_id: run_id.to_string(),
-            user_id: user_id.to_string(),
             ts,
             symbol: symbol.to_string(),
             action: action.to_string(),
@@ -1091,7 +1064,6 @@ async fn append_decision(
     backtest_repo: &BacktestRepo,
     id: &str,
     run_id: &str,
-    user_id: &str,
     ts: i64,
     symbol: &str,
     action: &str,
@@ -1103,7 +1075,6 @@ async fn append_decision(
         .insert_decision(BacktestDecisionRecord {
             id: id.to_string(),
             run_id: run_id.to_string(),
-            user_id: user_id.to_string(),
             ts,
             symbol: symbol.to_string(),
             action: action.to_string(),
@@ -1226,7 +1197,6 @@ fn interval_to_ms(interval: &str) -> Option<i64> {
 
 /// Entry tracking an in-flight backtest run.
 struct RunEntry {
-    user_id: String,
     stop_tx: oneshot::Sender<()>,
 }
 
@@ -1264,7 +1234,6 @@ async fn start_backtest(
     realtime_hub: RealtimeHub,
 ) -> Result<String, String> {
     let run_id = cfg.run_id.clone();
-    let user_id = cfg.user_id.clone();
 
     // Persist initial run row
     let config_json = serde_json::to_string(&cfg).unwrap_or_default();
@@ -1272,7 +1241,6 @@ async fn start_backtest(
     backtest_repo
         .create_run(CreateBacktestRunRecord {
             run_id: run_id.clone(),
-            user_id: user_id.clone(),
             config_json,
             created_at: now,
             updated_at: now,
@@ -1323,7 +1291,7 @@ async fn start_backtest(
         let mut guard = mgr.lock().unwrap();
         guard
             .runs
-            .insert(run_id.clone(), RunEntry { user_id, stop_tx });
+            .insert(run_id.clone(), RunEntry { stop_tx });
     }
 
     // Spawn the run loop
@@ -1333,14 +1301,10 @@ async fn start_backtest(
 }
 
 /// Stop a running backtest by sending stop signal.
-fn stop_backtest(run_id: &str, user_id: &str) -> Result<(), String> {
+fn stop_backtest(run_id: &str) -> Result<(), String> {
     let mgr = get_backtest_manager();
     let mut guard = mgr.lock().unwrap();
     if let Some(entry) = guard.runs.remove(run_id) {
-        if entry.user_id != user_id {
-            guard.runs.insert(run_id.to_string(), entry);
-            return Err("unauthorized".into());
-        }
         // Sending on the channel signals the runner to stop
         let _ = entry.stop_tx.send(());
         Ok(())
@@ -1361,10 +1325,9 @@ fn required_run_id(run_id: Option<String>) -> AppResult<String> {
 async fn query_run_status(
     backtest_repo: &BacktestRepo,
     run_id: &str,
-    user_id: &str,
 ) -> Option<Value> {
     let row = backtest_repo
-        .get_run(user_id, run_id)
+        .get_run(run_id)
         .await
         .ok()
         .flatten()?;
@@ -1396,9 +1359,9 @@ async fn query_run_status(
     }))
 }
 
-async fn list_runs(backtest_repo: &BacktestRepo, user_id: &str, limit: i64) -> Vec<Value> {
+async fn list_runs(backtest_repo: &BacktestRepo, limit: i64) -> Vec<Value> {
     backtest_repo
-        .list_runs(user_id, limit)
+        .list_runs(limit)
         .await
         .unwrap_or_default()
 }
@@ -1406,11 +1369,10 @@ async fn list_runs(backtest_repo: &BacktestRepo, user_id: &str, limit: i64) -> V
 async fn query_equity_points(
     backtest_repo: &BacktestRepo,
     run_id: &str,
-    user_id: &str,
     limit: i64,
 ) -> Vec<Value> {
     backtest_repo
-        .list_equity_points(user_id, run_id, limit)
+        .list_equity_points(run_id, limit)
         .await
         .unwrap_or_default()
 }
@@ -1418,11 +1380,10 @@ async fn query_equity_points(
 async fn query_trades(
     backtest_repo: &BacktestRepo,
     run_id: &str,
-    user_id: &str,
     limit: i64,
 ) -> Vec<Value> {
     backtest_repo
-        .list_trades(user_id, run_id, limit)
+        .list_trades(run_id, limit)
         .await
         .unwrap_or_default()
 }
@@ -1430,17 +1391,16 @@ async fn query_trades(
 async fn query_decisions(
     backtest_repo: &BacktestRepo,
     run_id: &str,
-    user_id: &str,
     limit: i64,
 ) -> Vec<Value> {
     backtest_repo
-        .list_decisions(user_id, run_id, limit)
+        .list_decisions(run_id, limit)
         .await
         .unwrap_or_default()
 }
 
-async fn compute_metrics(backtest_repo: &BacktestRepo, run_id: &str, user_id: &str) -> Value {
-    let Some(row) = backtest_repo.get_run(user_id, run_id).await.ok().flatten() else {
+async fn compute_metrics(backtest_repo: &BacktestRepo, run_id: &str) -> Value {
+    let Some(row) = backtest_repo.get_run(run_id).await.ok().flatten() else {
         return json!({"error": "run not found"});
     };
 

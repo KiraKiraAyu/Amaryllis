@@ -10,27 +10,25 @@ use crate::{
         DebateVotesPayload, StartDebateRequest,
     },
     error::Result,
-    http::{extractors::AuthUser, response::ApiResponse},
+    http::response::ApiResponse,
     state,
 };
 
 pub async fn handle_get_debates(
     State(app): State<state::AppState>,
-    user: AuthUser,
 ) -> Result<Json<ApiResponse<DebateListPayload>>> {
-    let payload = app.services.debate_service.list(&user.sub).await;
+    let payload = app.services.debate_service.list().await;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 
 pub async fn handle_create_debate(
     State(app): State<state::AppState>,
-    user: AuthUser,
     Json(request): Json<CreateDebateRequest>,
 ) -> Result<Json<ApiResponse<DebateActionPayload>>> {
     let payload = app
         .services
         .debate_service
-        .create(&user.sub, request)
+        .create(request)
         .await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
@@ -44,68 +42,61 @@ pub async fn handle_get_debate_personalities(
 
 pub async fn handle_get_debate(
     State(app): State<state::AppState>,
-    user: AuthUser,
     Path(id): Path<String>,
 ) -> Result<Json<ApiResponse<DebateDetailPayload>>> {
-    let payload = app.services.debate_service.get(&user.sub, &id).await?;
+    let payload = app.services.debate_service.get(&id).await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 
 pub async fn handle_delete_debate(
     State(app): State<state::AppState>,
-    user: AuthUser,
     Path(id): Path<String>,
 ) -> Result<Json<ApiResponse<DebateMessagePayload>>> {
-    let payload = app.services.debate_service.delete(&user.sub, &id).await?;
+    let payload = app.services.debate_service.delete(&id).await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 
 pub async fn handle_start_debate(
     State(app): State<state::AppState>,
-    user: AuthUser,
     Path(id): Path<String>,
     Json(_request): Json<StartDebateRequest>,
 ) -> Result<Json<ApiResponse<DebateActionPayload>>> {
-    let payload = app.services.debate_service.start(&user.sub, &id).await?;
+    let payload = app.services.debate_service.start(&id).await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 
 pub async fn handle_cancel_debate(
     State(app): State<state::AppState>,
-    user: AuthUser,
     Path(id): Path<String>,
 ) -> Result<Json<ApiResponse<DebateActionPayload>>> {
-    let payload = app.services.debate_service.cancel(&user.sub, &id)?;
+    let payload = app.services.debate_service.cancel(&id)?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 
 pub async fn handle_execute_debate(
     State(app): State<state::AppState>,
-    user: AuthUser,
     Path(id): Path<String>,
 ) -> Result<Json<ApiResponse<DebateExecutionPayload>>> {
     let payload = app
         .services
         .debate_service
-        .execution(&user.sub, &id)
+        .execution(&id)
         .await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 
 pub async fn handle_get_debate_messages(
     State(app): State<state::AppState>,
-    user: AuthUser,
     Path(id): Path<String>,
 ) -> Result<Json<ApiResponse<DebateMessagesPayload>>> {
-    let payload = app.services.debate_service.messages(&user.sub, &id).await;
+    let payload = app.services.debate_service.messages(&id).await;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 
 pub async fn handle_get_debate_votes(
     State(app): State<state::AppState>,
-    user: AuthUser,
     Path(id): Path<String>,
 ) -> Result<Json<ApiResponse<DebateVotesPayload>>> {
-    let payload = app.services.debate_service.votes(&user.sub, &id).await;
+    let payload = app.services.debate_service.votes(&id).await;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }

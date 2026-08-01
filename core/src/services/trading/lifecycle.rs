@@ -1,7 +1,7 @@
 use super::service::*;
 
-pub async fn list_traders(app: &SharedState, user_id: &str) -> AppResult<TraderListPayload> {
-    match app.trading_repo.list_traders(user_id).await {
+pub async fn list_traders(app: &SharedState) -> AppResult<TraderListPayload> {
+    match app.trading_repo.list_traders().await {
         Ok(traders) => {
             let traders: Vec<TraderPayload> = traders
                 .into_iter()
@@ -19,8 +19,8 @@ pub async fn list_traders(app: &SharedState, user_id: &str) -> AppResult<TraderL
     }
 }
 
-pub async fn get_trader(app: &SharedState, user_id: &str, id: &str) -> AppResult<TraderPayload> {
-    match get_trader_by_owner(app, user_id, id).await {
+pub async fn get_trader(app: &SharedState, id: &str) -> AppResult<TraderPayload> {
+    match get_trader_by_owner(app, id).await {
         Ok(Some(trader)) => Ok(trader.into_payload()),
         Ok(None) => Err(app_error(
             AppErrorKind::NotFound,
@@ -32,10 +32,9 @@ pub async fn get_trader(app: &SharedState, user_id: &str, id: &str) -> AppResult
 
 pub async fn get_trader_config(
     app: &SharedState,
-    user_id: &str,
     id: &str,
 ) -> AppResult<TraderPayload> {
-    match get_trader_by_owner(app, user_id, id).await {
+    match get_trader_by_owner(app, id).await {
         Ok(Some(trader)) => Ok(trader.into_payload()),
         Ok(None) => Err(app_error(
             AppErrorKind::NotFound,
@@ -50,7 +49,6 @@ pub async fn get_trader_config(
 
 pub async fn create_trader(
     app: &SharedState,
-    user_id: &str,
     req: CreateTraderRequest,
 ) -> AppResult<TraderCreatedPayload> {
     let name = req.name.trim();
@@ -71,7 +69,7 @@ pub async fn create_trader(
     }
     if let Err(err) = app
         .llm_service
-        .resolve_for_user(user_id, Some(ai_model_id))
+        .resolve_for_user(Some(ai_model_id))
         .await
     {
         return Err(match err {
@@ -92,7 +90,6 @@ pub async fn create_trader(
         .create_trader_with_snapshot(CreateTraderRecord {
             id: trader_id.clone(),
             snapshot_id,
-            user_id: user_id.to_string(),
             name: name.to_string(),
             ai_model_id: ai_model_id.to_string(),
             exchange_id: exchange_id.to_string(),
@@ -126,11 +123,10 @@ pub async fn create_trader(
 
 pub async fn update_trader(
     app: &SharedState,
-    user_id: &str,
     id: &str,
     req: UpdateTraderRequest,
 ) -> AppResult<TraderMessagePayload> {
-    let existing = match get_trader_by_owner(app, user_id, id).await {
+    let existing = match get_trader_by_owner(app, id).await {
         Ok(Some(v)) => v,
         Ok(None) => {
             return Err(app_error(
@@ -160,7 +156,7 @@ pub async fn update_trader(
         }
         if let Err(err) = app
             .llm_service
-            .resolve_for_user(user_id, Some(ai_model_id))
+            .resolve_for_user(Some(ai_model_id))
             .await
         {
             return Err(match err {
@@ -178,7 +174,6 @@ pub async fn update_trader(
     let result = app
         .trading_repo
         .update_trader(
-            user_id,
             id,
             UpdateTraderRecord {
                 name: req.name.unwrap_or(existing.name).trim().to_string(),
@@ -247,11 +242,10 @@ pub async fn update_trader(
 pub async fn delete_trader(
     app: &SharedState,
     trading_runtime_service: &TradingRuntimeService,
-    user_id: &str,
     id: &str,
 ) -> AppResult<TraderMessagePayload> {
     if let Err(err) = trading_runtime_service
-        .stop_trader_for_user(user_id, id)
+        .stop_trader_for_user(id)
         .await
     {
         if !matches!(err, AppError::NotRunning(_)) {
@@ -262,7 +256,7 @@ pub async fn delete_trader(
         }
     }
 
-    let deleted = app.trading_repo.delete_trader(user_id, id).await;
+    let deleted = app.trading_repo.delete_trader(id).await;
     match deleted {
         Ok(0) => {
             return Err(app_error(
@@ -285,10 +279,9 @@ pub async fn delete_trader(
 
 pub async fn start_trader(
     trading_runtime_service: &TradingRuntimeService,
-    user_id: &str,
     id: &str,
 ) -> AppResult<TraderMessagePayload> {
-    match trading_runtime_service.start_trader(user_id, id).await {
+    match trading_runtime_service.start_trader(id).await {
         Ok(_) => Ok(TraderMessagePayload {
             message: "Trader started successfully",
         }),
@@ -305,11 +298,10 @@ pub async fn start_trader(
 
 pub async fn stop_trader(
     trading_runtime_service: &TradingRuntimeService,
-    user_id: &str,
     id: &str,
 ) -> AppResult<TraderMessagePayload> {
     match trading_runtime_service
-        .stop_trader_for_user(user_id, id)
+        .stop_trader_for_user(id)
         .await
     {
         Ok(_) => Ok(TraderMessagePayload {
@@ -328,14 +320,12 @@ pub async fn stop_trader(
 
 pub async fn update_trader_prompt(
     app: &SharedState,
-    user_id: &str,
     id: &str,
     req: UpdatePromptRequest,
 ) -> AppResult<TraderMessagePayload> {
     let result = app
         .trading_repo
         .update_prompt(
-            user_id,
             id,
             req.custom_prompt.trim().to_string(),
             req.override_base_prompt,
@@ -357,13 +347,12 @@ pub async fn update_trader_prompt(
 
 pub async fn toggle_competition(
     app: &SharedState,
-    user_id: &str,
     id: &str,
     req: ToggleCompetitionRequest,
 ) -> AppResult<TraderMessagePayload> {
     let result = app
         .trading_repo
-        .toggle_competition(user_id, id, req.show_in_competition, now_ts())
+        .toggle_competition(id, req.show_in_competition, now_ts())
         .await;
 
     match result {

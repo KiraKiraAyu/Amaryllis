@@ -14,9 +14,8 @@ use super::{
 };
 
 impl TradingRepo {
-    pub async fn list_traders(&self, user_id: &str) -> Result<Vec<TraderRecord>, DbErr> {
+    pub async fn list_traders(&self) -> Result<Vec<TraderRecord>, DbErr> {
         entity::traders::Entity::find()
-            .filter(entity::traders::Column::UserId.eq(user_id.trim()))
             .order_by_desc(entity::traders::Column::CreatedAt)
             .all(&self.db)
             .await
@@ -25,37 +24,33 @@ impl TradingRepo {
 
     pub async fn get_trader(
         &self,
-        user_id: &str,
         trader_id: &str,
     ) -> Result<Option<TraderRecord>, DbErr> {
         entity::traders::Entity::find_by_id(trader_id.trim().to_string())
-            .filter(entity::traders::Column::UserId.eq(user_id.trim()))
             .one(&self.db)
             .await
             .map(|row| row.map(map_trader))
     }
 
-    pub async fn first_trader_id(&self, user_id: &str) -> Result<Option<String>, DbErr> {
+    pub async fn first_trader_id(&self) -> Result<Option<String>, DbErr> {
         entity::traders::Entity::find()
-            .filter(entity::traders::Column::UserId.eq(user_id.trim()))
             .order_by_desc(entity::traders::Column::CreatedAt)
             .one(&self.db)
             .await
             .map(|row| row.map(|v| v.id))
     }
 
-    pub async fn running_traders(&self) -> Result<Vec<(String, String)>, DbErr> {
+    pub async fn running_traders(&self) -> Result<Vec<String>, DbErr> {
         entity::traders::Entity::find()
             .filter(entity::traders::Column::IsRunning.eq(1))
             .order_by_desc(entity::traders::Column::UpdatedAt)
             .all(&self.db)
             .await
-            .map(|rows| rows.into_iter().map(|row| (row.user_id, row.id)).collect())
+            .map(|rows| rows.into_iter().map(|row| row.id).collect())
     }
 
     pub async fn set_trader_running(
         &self,
-        user_id: &str,
         trader_id: &str,
         running: bool,
         updated_at: i64,
@@ -70,7 +65,6 @@ impl TradingRepo {
                 Expr::value(ts_to_dt(updated_at)),
             )
             .filter(entity::traders::Column::Id.eq(trader_id.trim()))
-            .filter(entity::traders::Column::UserId.eq(user_id.trim()))
             .exec(&self.db)
             .await
             .map(|_| ())
@@ -83,7 +77,6 @@ impl TradingRepo {
         let tx = self.db.begin().await?;
         entity::traders::ActiveModel {
             id: Set(input.id.clone()),
-            user_id: Set(input.user_id.clone()),
             name: Set(input.name),
             ai_model_id: Set(input.ai_model_id),
             exchange_id: Set(input.exchange_id.clone()),
@@ -110,7 +103,6 @@ impl TradingRepo {
         entity::trader_accounts::ActiveModel {
             id: Set(input.snapshot_id),
             trader_id: Set(input.id),
-            user_id: Set(input.user_id),
             exchange_id: Set(input.exchange_id),
             total_balance: Set(decimal_from_f64(input.initial_balance.max(0.0))),
             available_balance: Set(decimal_from_f64(input.initial_balance.max(0.0))),
@@ -130,7 +122,6 @@ impl TradingRepo {
 
     pub async fn update_trader(
         &self,
-        user_id: &str,
         trader_id: &str,
         patch: UpdateTraderRecord,
     ) -> Result<u64, DbErr> {
@@ -201,16 +192,14 @@ impl TradingRepo {
                 Expr::value(ts_to_dt(patch.updated_at)),
             )
             .filter(entity::traders::Column::Id.eq(trader_id.trim()))
-            .filter(entity::traders::Column::UserId.eq(user_id.trim()))
             .exec(&self.db)
             .await
             .map(|res| res.rows_affected)
     }
 
-    pub async fn delete_trader(&self, user_id: &str, trader_id: &str) -> Result<u64, DbErr> {
+    pub async fn delete_trader(&self, trader_id: &str) -> Result<u64, DbErr> {
         let tx = self.db.begin().await?;
         let owner = entity::traders::Entity::find_by_id(trader_id.trim().to_string())
-            .filter(entity::traders::Column::UserId.eq(user_id.trim()))
             .one(&tx)
             .await?;
         if owner.is_none() {
@@ -219,33 +208,27 @@ impl TradingRepo {
 
         entity::trader_accounts::Entity::delete_many()
             .filter(entity::trader_accounts::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::trader_accounts::Column::UserId.eq(user_id.trim()))
             .exec(&tx)
             .await?;
         entity::trader_positions::Entity::delete_many()
             .filter(entity::trader_positions::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::trader_positions::Column::UserId.eq(user_id.trim()))
             .exec(&tx)
             .await?;
         entity::order_fills::Entity::delete_many()
             .filter(entity::order_fills::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::order_fills::Column::UserId.eq(user_id.trim()))
             .exec(&tx)
             .await?;
         entity::trader_orders::Entity::delete_many()
             .filter(entity::trader_orders::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::trader_orders::Column::UserId.eq(user_id.trim()))
             .exec(&tx)
             .await?;
         entity::trader_trades::Entity::delete_many()
             .filter(entity::trader_trades::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::trader_trades::Column::UserId.eq(user_id.trim()))
             .exec(&tx)
             .await?;
 
         let deleted = entity::traders::Entity::delete_many()
             .filter(entity::traders::Column::Id.eq(trader_id.trim()))
-            .filter(entity::traders::Column::UserId.eq(user_id.trim()))
             .exec(&tx)
             .await?;
 
@@ -255,7 +238,6 @@ impl TradingRepo {
 
     pub async fn update_prompt(
         &self,
-        user_id: &str,
         trader_id: &str,
         custom_prompt: String,
         override_base_prompt: bool,
@@ -275,7 +257,6 @@ impl TradingRepo {
                 Expr::value(ts_to_dt(updated_at)),
             )
             .filter(entity::traders::Column::Id.eq(trader_id.trim()))
-            .filter(entity::traders::Column::UserId.eq(user_id.trim()))
             .exec(&self.db)
             .await
             .map(|res| res.rows_affected)
@@ -283,7 +264,6 @@ impl TradingRepo {
 
     pub async fn toggle_competition(
         &self,
-        user_id: &str,
         trader_id: &str,
         show_in_competition: bool,
         updated_at: i64,
@@ -298,7 +278,6 @@ impl TradingRepo {
                 Expr::value(ts_to_dt(updated_at)),
             )
             .filter(entity::traders::Column::Id.eq(trader_id.trim()))
-            .filter(entity::traders::Column::UserId.eq(user_id.trim()))
             .exec(&self.db)
             .await
             .map(|res| res.rows_affected)

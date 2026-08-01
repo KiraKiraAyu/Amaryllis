@@ -26,8 +26,8 @@ impl ModelService {
         Self { repo, llm_service }
     }
 
-    pub async fn list_configs(&self, user_id: &str) -> Result<ModelConfigPayload> {
-        let rows = self.repo.list_for_user(user_id).await.map_err(|err| {
+    pub async fn list_configs(&self) -> Result<ModelConfigPayload> {
+        let rows = self.repo.list_for_user().await.map_err(|err| {
             AppError::Internal(format!("Failed to get LLM configurations: {err}"))
         })?;
 
@@ -58,7 +58,6 @@ impl ModelService {
 
     pub async fn update_configs(
         &self,
-        user_id: &str,
         request: UpdateModelConfigRequest,
     ) -> Result<MessagePayload> {
         let mut providers = Vec::new();
@@ -98,7 +97,7 @@ impl ModelService {
         }
 
         self.repo
-            .replace_for_user(user_id, providers)
+            .replace_for_user(providers)
             .await
             .map_err(|err| {
                 AppError::Internal(format!("Failed to update LLM configurations: {err}"))

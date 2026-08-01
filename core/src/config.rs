@@ -1,11 +1,9 @@
 use std::{
-    fmt, fs,
     net::{IpAddr, SocketAddr},
     path::Path,
 };
 
 use envconfig::Envconfig;
-use jsonwebtoken::{DecodingKey, EncodingKey};
 
 macro_rules! ensure {
     ($cond:expr, $msg:expr) => {
@@ -23,7 +21,6 @@ macro_rules! validate_all {
 pub struct AppConfig {
     pub app: AppMetadataConfig,
     pub server: ServerConfig,
-    pub jwt: JwtConfig,
     pub auth: AuthConfig,
     pub database: DatabaseConfig,
     pub logging: LoggingConfig,
@@ -37,8 +34,6 @@ struct EnvAppConfig {
     app: AppMetadataConfig,
     #[envconfig(nested)]
     server: ServerConfig,
-    #[envconfig(nested)]
-    jwt: JwtPathConfig,
     #[envconfig(nested)]
     auth: AuthConfig,
     #[envconfig(nested)]
@@ -56,12 +51,6 @@ impl EnvAppConfig {
         Ok(AppConfig {
             app: self.app,
             server: self.server,
-            jwt: JwtConfig::from_key_paths(
-                &self.jwt.private_key_path,
-                &self.jwt.public_key_path,
-                self.jwt.issuer,
-                self.jwt.ttl_secs,
-            )?,
             auth: self.auth,
             database: self.database,
             logging: self.logging,
@@ -79,7 +68,7 @@ impl AppConfig {
             .unwrap_or_else(|err| panic!("Failed to load config from env: {err}"));
         let config = env_config
             .into_app_config()
-            .unwrap_or_else(|err| panic!("Failed to load JWT keys: {err}"));
+            .unwrap_or_else(|err| panic!("Failed to load config: {err}"));
 
         config.validate();
 
@@ -88,7 +77,6 @@ impl AppConfig {
 
     pub fn validate(&self) {
         self.server.validate();
-        self.jwt.validate();
         self.auth.validate();
         self.database.validate();
         self.live.validate();
@@ -124,103 +112,6 @@ pub struct AppMetadataConfig {
     pub environment: String,
 }
 
-#[derive(Clone)]
-pub struct JwtConfig {
-    pub encoding_key: EncodingKey,
-    pub decoding_key: DecodingKey,
-    pub issuer: String,
-    pub ttl_secs: u64,
-}
-
-impl fmt::Debug for JwtConfig {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("JwtConfig")
-            .field("issuer", &self.issuer)
-            .field("ttl_secs", &self.ttl_secs)
-            .finish_non_exhaustive()
-    }
-}
-
-impl JwtConfig {
-    fn from_key_paths(
-        private_key_path: impl AsRef<Path>,
-        public_key_path: impl AsRef<Path>,
-        issuer: String,
-        ttl_secs: u64,
-    ) -> Result<Self, String> {
-        let private_key_path = private_key_path.as_ref();
-        let public_key_path = public_key_path.as_ref();
-
-        if private_key_path.as_os_str().is_empty() {
-            return Err("JWT_PRIVATE_KEY_PATH cannot be empty".into());
-        }
-
-        if public_key_path.as_os_str().is_empty() {
-            return Err("JWT_PUBLIC_KEY_PATH cannot be empty".into());
-        }
-
-        if issuer.trim().is_empty() {
-            return Err("JWT_ISSUER cannot be empty".into());
-        }
-
-        if ttl_secs == 0 {
-            return Err("JWT_TTL_SECS cannot be 0".into());
-        }
-
-        let private_key = fs::read(private_key_path).map_err(|err| {
-            format!(
-                "failed to read JWT private key from {}: {err}",
-                private_key_path.display()
-            )
-        })?;
-        let public_key = fs::read(public_key_path).map_err(|err| {
-            format!(
-                "failed to read JWT public key from {}: {err}",
-                public_key_path.display()
-            )
-        })?;
-
-        let encoding_key = EncodingKey::from_rsa_pem(&private_key).map_err(|err| {
-            format!(
-                "invalid JWT private key at {}: {err}",
-                private_key_path.display()
-            )
-        })?;
-        let decoding_key = DecodingKey::from_rsa_pem(&public_key).map_err(|err| {
-            format!(
-                "invalid JWT public key at {}: {err}",
-                public_key_path.display()
-            )
-        })?;
-
-        Ok(Self {
-            encoding_key,
-            decoding_key,
-            issuer,
-            ttl_secs,
-        })
-    }
-
-    fn validate(&self) {
-        validate_all! {
-            !self.issuer.trim().is_empty() => "JWT_ISSUER cannot be empty",
-            self.ttl_secs != 0 => "JWT_TTL_SECS cannot be 0",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Envconfig)]
-struct JwtPathConfig {
-    #[envconfig(from = "JWT_PRIVATE_KEY_PATH")]
-    private_key_path: String,
-    #[envconfig(from = "JWT_PUBLIC_KEY_PATH")]
-    public_key_path: String,
-    #[envconfig(from = "JWT_ISSUER", default = "quantaura")]
-    issuer: String,
-    #[envconfig(from = "JWT_TTL_SECS", default = "86400")]
-    ttl_secs: u64,
-}
-
 #[derive(Debug, Clone, Envconfig)]
 pub struct ServerConfig {
     #[envconfig(from = "HOST", default = "0.0.0.0")]
@@ -247,18 +138,25 @@ impl ServerConfig {
 
 #[derive(Debug, Clone, Envconfig)]
 pub struct AuthConfig {
-    #[envconfig(from = "REGISTRATION_ENABLED", default = "true")]
-    pub registration_enabled: bool,
-    #[envconfig(from = "MAX_USERS", default = "0")]
-    pub max_users: usize,
-    #[envconfig(from = "TOKEN_BLACKLIST_MAX_ENTRIES", default = "100000")]
-    pub token_blacklist_max_entries: usize,
+    /// Optional base32 TOTP secret. When set, the authenticator is managed
+    /// via environment and the in-app setup/reset endpoints are disabled.
+    #[envconfig(from = "AUTH_TOTP_SECRET", default = "")]
+    pub totp_secret: String,
+    /// Optional session signing secret. When empty, a random secret is
+    /// generated on first boot and persisted in the `app_settings` table.
+    #[envconfig(from = "AUTH_SESSION_SECRET", default = "")]
+    pub session_secret: String,
+    #[envconfig(from = "JWT_ISSUER", default = "quantaura")]
+    pub jwt_issuer: String,
+    #[envconfig(from = "JWT_TTL_SECS", default = "604800")]
+    pub jwt_ttl_secs: u64,
 }
 
 impl AuthConfig {
     fn validate(&self) {
         validate_all! {
-            self.token_blacklist_max_entries != 0 => "TOKEN_BLACKLIST_MAX_ENTRIES cannot be 0",
+            !self.jwt_issuer.trim().is_empty() => "JWT_ISSUER cannot be empty",
+            self.jwt_ttl_secs != 0 => "JWT_TTL_SECS cannot be 0",
         }
     }
 }

@@ -142,7 +142,6 @@ pub async fn open_position(
         .insert_order(InsertTraderOrderRecord {
             id: order_id.clone(),
             trader_id: cfg.trader_id.clone(),
-            user_id: cfg.user_id.clone(),
             exchange_order_id: format!("sim-ex-{}", &order_id[..8]),
             client_order_id: format!("sim-cl-{}", &order_id[..8]),
             symbol: symbol.to_string(),
@@ -169,7 +168,6 @@ pub async fn open_position(
             id: fill_id,
             order_id: order_id.clone(),
             trader_id: cfg.trader_id.clone(),
-            user_id: cfg.user_id.clone(),
             exchange_trade_id: format!("sim-tr-{}", &order_id[..8]),
             symbol: symbol.to_string(),
             side: order_side.to_string(),
@@ -188,7 +186,6 @@ pub async fn open_position(
         .insert_position(InsertTraderPositionRecord {
             id: pos_id,
             trader_id: cfg.trader_id.clone(),
-            user_id: cfg.user_id.clone(),
             symbol: symbol.to_string(),
             side: side.to_string(),
             quantity,
@@ -236,7 +233,7 @@ pub async fn close_position(
 
     state
         .trading_repo
-        .close_position(&cfg.user_id, &cfg.trader_id, &p.id, exit_price, net_pnl, ts)
+        .close_position(&cfg.trader_id, &p.id, exit_price, net_pnl, ts)
         .await?;
 
     insert_trade_record(
@@ -261,7 +258,6 @@ pub async fn close_position(
         .insert_decision(InsertTraderDecisionRecord {
             id: Uuid::now_v7().to_string(),
             trader_id: cfg.trader_id.clone(),
-            user_id: cfg.user_id.clone(),
             symbol: p.symbol.clone(),
             timeframe: "3m".to_string(),
             decision: "CLOSE".to_string(),

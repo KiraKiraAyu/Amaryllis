@@ -18,7 +18,6 @@ impl MigrationTrait for Migration {
                             .primary_key(),
                     )
                     .col(ColumnDef::new(TraderAccounts::TraderId).string().not_null())
-                    .col(ColumnDef::new(TraderAccounts::UserId).string().not_null())
                     .col(
                         ColumnDef::new(TraderAccounts::ExchangeId)
                             .string()
@@ -90,17 +89,6 @@ impl MigrationTrait for Migration {
                     .col((TraderAccounts::SnapshotAt, IndexOrder::Desc))
                     .to_owned(),
             )
-            .await?;
-        manager
-            .create_index(
-                Index::create()
-                    .if_not_exists()
-                    .name("idx_trader_accounts_user_trader")
-                    .table(TraderAccounts::Table)
-                    .col(TraderAccounts::UserId)
-                    .col(TraderAccounts::TraderId)
-                    .to_owned(),
-            )
             .await
     }
 
@@ -121,7 +109,6 @@ enum TraderAccounts {
     Table,
     Id,
     TraderId,
-    UserId,
     ExchangeId,
     TotalBalance,
     AvailableBalance,

@@ -98,10 +98,10 @@ impl DebateService {
         }
     }
 
-    pub async fn list(&self, user_id: &str) -> DebateListPayload {
+    pub async fn list(&self) -> DebateListPayload {
         let debates = self
             .debate_repo
-            .list(user_id, 100)
+            .list(100)
             .await
             .unwrap_or_default();
         let count = debates.len();
@@ -110,7 +110,6 @@ impl DebateService {
 
     pub async fn create(
         &self,
-        user_id: &str,
         req: CreateDebateRequest,
     ) -> AppResult<DebateActionPayload> {
         let create_request = DebateCreateRequest {
@@ -121,7 +120,7 @@ impl DebateService {
             participants: req.participants,
         };
 
-        let id = create_debate(&self.debate_repo, user_id, &create_request)
+        let id = create_debate(&self.debate_repo, &create_request)
             .await
             .map_err(|err| AppError::Internal(format!("Failed to create debate: {err}")))?;
 
@@ -143,18 +142,18 @@ impl DebateService {
         DebatePersonalitiesPayload { personalities }
     }
 
-    pub async fn get(&self, user_id: &str, debate_id: &str) -> AppResult<DebateDetailPayload> {
+    pub async fn get(&self, debate_id: &str) -> AppResult<DebateDetailPayload> {
         let debate = self
             .debate_repo
-            .get(user_id, debate_id)
+            .get(debate_id)
             .await
             .map_err(|err| AppError::Internal(format!("Failed to get debate: {err}")))?
             .ok_or_else(|| AppError::NotFound("Debate not found".into()))?;
         Ok(DebateDetailPayload { debate })
     }
 
-    pub async fn delete(&self, user_id: &str, debate_id: &str) -> AppResult<DebateMessagePayload> {
-        delete_debate(&self.debate_repo, debate_id, user_id)
+    pub async fn delete(&self, debate_id: &str) -> AppResult<DebateMessagePayload> {
+        delete_debate(&self.debate_repo, debate_id)
             .await
             .map_err(|err| AppError::BadRequest(err.into()))?;
 
@@ -163,13 +162,12 @@ impl DebateService {
         })
     }
 
-    pub async fn start(&self, user_id: &str, debate_id: &str) -> AppResult<DebateActionPayload> {
-        let available = self.llm_service.list_runnable_for_user(user_id).await?;
+    pub async fn start(&self, debate_id: &str) -> AppResult<DebateActionPayload> {
+        let available = self.llm_service.list_runnable_for_user().await?;
 
         start_debate(
             self.debate_repo.clone(),
             debate_id.to_string(),
-            user_id.to_string(),
             available,
             self.llm_service.clone(),
             self.realtime_hub.clone(),
@@ -183,8 +181,8 @@ impl DebateService {
         })
     }
 
-    pub fn cancel(&self, user_id: &str, debate_id: &str) -> AppResult<DebateActionPayload> {
-        cancel_debate(debate_id, user_id).map_err(|err| AppError::BadRequest(err.into()))?;
+    pub fn cancel(&self, debate_id: &str) -> AppResult<DebateActionPayload> {
+        cancel_debate(debate_id).map_err(|err| AppError::BadRequest(err.into()))?;
 
         Ok(DebateActionPayload {
             id: debate_id.to_string(),
@@ -194,12 +192,11 @@ impl DebateService {
 
     pub async fn execution(
         &self,
-        user_id: &str,
         debate_id: &str,
     ) -> AppResult<DebateExecutionPayload> {
         let debate = self
             .debate_repo
-            .get(user_id, debate_id)
+            .get(debate_id)
             .await
             .map_err(|err| AppError::Internal(format!("Failed to get debate: {err}")))?
             .ok_or_else(|| AppError::NotFound("Debate not found".into()))?;
@@ -215,20 +212,20 @@ impl DebateService {
         })
     }
 
-    pub async fn messages(&self, user_id: &str, debate_id: &str) -> DebateMessagesPayload {
+    pub async fn messages(&self, debate_id: &str) -> DebateMessagesPayload {
         let messages = self
             .debate_repo
-            .list_messages(user_id, debate_id)
+            .list_messages(debate_id)
             .await
             .unwrap_or_default();
         let count = messages.len();
         DebateMessagesPayload { messages, count }
     }
 
-    pub async fn votes(&self, user_id: &str, debate_id: &str) -> DebateVotesPayload {
+    pub async fn votes(&self, debate_id: &str) -> DebateVotesPayload {
         let votes = self
             .debate_repo
-            .votes(user_id, debate_id)
+            .votes(debate_id)
             .await
             .unwrap_or_else(|_| json!([]));
         DebateVotesPayload { votes }
@@ -259,7 +256,6 @@ struct DebateCreateRequest {
 /// Create a new debate row in DB without starting it.
 async fn create_debate(
     debate_repo: &DebateRepo,
-    user_id: &str,
     req: &DebateCreateRequest,
 ) -> Result<String, crate::database::DbErr> {
     let id = Uuid::now_v7().to_string();
@@ -281,7 +277,6 @@ async fn create_debate(
     debate_repo
         .create(CreateDebateRecord {
             id: id.clone(),
-            user_id: user_id.trim().to_string(),
             name: req.name.trim().to_string(),
             symbol: req.symbol.trim().to_uppercase(),
             status: DebateStatus::Pending.to_string(),
@@ -299,7 +294,6 @@ async fn create_debate(
 async fn delete_debate(
     debate_repo: &DebateRepo,
     debate_id: &str,
-    user_id: &str,
 ) -> Result<(), String> {
     let mgr = get_debate_manager();
     let is_running = mgr
@@ -312,7 +306,7 @@ async fn delete_debate(
     }
 
     let rows_affected = debate_repo
-        .delete(user_id, debate_id)
+        .delete(debate_id)
         .await
         .map_err(|e| e.to_string())?;
     if rows_affected == 0 {
@@ -322,14 +316,10 @@ async fn delete_debate(
 }
 
 /// Cancel a running debate by signalling the background task.
-fn cancel_debate(debate_id: &str, user_id: &str) -> Result<(), String> {
+fn cancel_debate(debate_id: &str) -> Result<(), String> {
     let mgr = get_debate_manager();
     let mut guard = mgr.lock().unwrap();
-    if let Some((uid, tx)) = guard.remove(debate_id) {
-        if uid != user_id {
-            guard.insert(debate_id.to_string(), (uid, tx));
-            return Err("unauthorized".into());
-        }
+    if let Some(tx) = guard.remove(debate_id) {
         let _ = tx.send(());
         Ok(())
     } else {
@@ -337,8 +327,8 @@ fn cancel_debate(debate_id: &str, user_id: &str) -> Result<(), String> {
     }
 }
 
-/// Global manager: debate_id -> (user_id, cancel_tx)
-type DebateManagerInner = HashMap<String, (String, tokio::sync::oneshot::Sender<()>)>;
+/// Global manager: debate_id -> cancel_tx
+type DebateManagerInner = HashMap<String, tokio::sync::oneshot::Sender<()>>;
 type SharedDebateManager = Arc<Mutex<DebateManagerInner>>;
 
 static DEBATE_MANAGER: OnceLock<SharedDebateManager> = OnceLock::new();
@@ -353,14 +343,13 @@ fn get_debate_manager() -> SharedDebateManager {
 async fn start_debate(
     debate_repo: Arc<DebateRepo>,
     debate_id: String,
-    user_id: String,
     ai_configs: Vec<ResolvedModelRecord>,
     llm_service: Arc<LlmService>,
     realtime_hub: RealtimeHub,
 ) -> Result<(), String> {
     // Fetch debate config
     let debate = debate_repo
-        .get(&user_id, &debate_id)
+        .get(&debate_id)
         .await
         .map_err(|e| e.to_string())?
         .ok_or("Debate not found")?;
@@ -379,7 +368,7 @@ async fn start_debate(
         let mgr = get_debate_manager();
         mgr.lock()
             .unwrap()
-            .insert(debate_id.clone(), (user_id.clone(), cancel_tx));
+            .insert(debate_id.clone(), cancel_tx);
     }
 
     let max_rounds = debate["max_rounds"].as_i64().unwrap_or(3) as usize;
@@ -394,7 +383,6 @@ async fn start_debate(
     tokio::spawn(run_debate_task(
         debate_repo,
         debate_id,
-        user_id,
         participants,
         ai_configs,
         llm_service,
@@ -411,7 +399,6 @@ async fn start_debate(
 async fn run_debate_task(
     debate_repo: Arc<DebateRepo>,
     debate_id: String,
-    user_id: String,
     participants: Vec<String>,
     ai_configs: Vec<ResolvedModelRecord>,
     llm_service: Arc<LlmService>,
@@ -515,7 +502,6 @@ Format: Your analysis paragraph... then on a new line: VOTE: LONG|SHORT|HOLD"#,
 
             // Push debate message to realtime clients in real-time
             realtime_hub.publish(crate::realtime::RealtimeEvent::DebateMessage {
-                user_id: user_id.clone(),
                 debate_id: debate_id.clone(),
                 round: round as i64,
                 personality: personality.clone(),
@@ -562,7 +548,6 @@ Format: Your analysis paragraph... then on a new line: VOTE: LONG|SHORT|HOLD"#,
 
     // Push debate finished event to realtime clients
     realtime_hub.publish(crate::realtime::RealtimeEvent::DebateFinished {
-        user_id,
         debate_id: debate_id.clone(),
         status: "completed".to_string(),
         final_decision,

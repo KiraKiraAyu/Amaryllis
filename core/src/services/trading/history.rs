@@ -2,10 +2,9 @@ use super::service::*;
 
 pub async fn decisions(
     app: &SharedState,
-    user_id: &str,
     q: DecisionQuery,
 ) -> AppResult<DecisionListPayload> {
-    let trader_id = match resolve_trader_id(app, user_id, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, q.trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
@@ -20,7 +19,7 @@ pub async fn decisions(
 
     match app
         .trading_repo
-        .decisions(user_id, &trader_id, symbol_filter.as_deref(), limit, offset)
+        .decisions(&trader_id, symbol_filter.as_deref(), limit, offset)
         .await
     {
         Ok(items) => {
@@ -43,17 +42,16 @@ pub async fn decisions(
 
 pub async fn latest_decisions(
     app: &SharedState,
-    user_id: &str,
     q: TraderQuery,
 ) -> AppResult<LatestDecisionsPayload> {
-    let trader_id = match resolve_trader_id(app, user_id, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, q.trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
 
     match app
         .trading_repo
-        .decisions(user_id, &trader_id, None, 20, 0)
+        .decisions(&trader_id, None, 20, 0)
         .await
     {
         Ok(items) => {
@@ -73,10 +71,9 @@ pub async fn latest_decisions(
 
 pub async fn trades(
     app: &SharedState,
-    user_id: &str,
     q: PaginationQuery,
 ) -> AppResult<TradeListPayload> {
-    let trader_id = match resolve_trader_id(app, user_id, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, q.trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
@@ -85,7 +82,7 @@ pub async fn trades(
 
     match app
         .trading_repo
-        .trades(user_id, &trader_id, limit, offset)
+        .trades(&trader_id, limit, offset)
         .await
     {
         Ok(items) => {
@@ -104,26 +101,24 @@ pub async fn trades(
 
 pub async fn orders(
     app: &SharedState,
-    user_id: &str,
     q: PaginationQuery,
 ) -> AppResult<OrderListPayload> {
-    order_list(app, user_id, q, false, true, true, "Failed to load orders").await
+    order_list(app, q, false, true, true, "Failed to load orders").await
 }
 
 pub async fn order_fills(
     app: &SharedState,
-    user_id: &str,
     order_id: &str,
     q: TraderQuery,
 ) -> AppResult<FillListPayload> {
-    let trader_id = match resolve_trader_id(app, user_id, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, q.trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
 
     match app
         .trading_repo
-        .order_fills(user_id, &trader_id, order_id)
+        .order_fills(&trader_id, order_id)
         .await
     {
         Ok(items) => {
@@ -144,12 +139,10 @@ pub async fn order_fills(
 
 pub async fn open_orders(
     app: &SharedState,
-    user_id: &str,
     q: PaginationQuery,
 ) -> AppResult<OrderListPayload> {
     order_list(
         app,
-        user_id,
         q,
         true,
         false,
@@ -161,14 +154,13 @@ pub async fn open_orders(
 
 async fn order_list(
     app: &SharedState,
-    user_id: &str,
     q: PaginationQuery,
     open_only: bool,
     include_avg_fill: bool,
     include_closed_at: bool,
     error_message: &str,
 ) -> AppResult<OrderListPayload> {
-    let trader_id = match resolve_trader_id(app, user_id, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, q.trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
@@ -177,7 +169,7 @@ async fn order_list(
 
     match app
         .trading_repo
-        .orders(user_id, &trader_id, open_only, limit, offset)
+        .orders(&trader_id, open_only, limit, offset)
         .await
     {
         Ok(items) => {

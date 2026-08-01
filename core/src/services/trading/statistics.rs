@@ -2,10 +2,9 @@ use super::service::*;
 
 pub async fn statistics(
     app: &SharedState,
-    user_id: &str,
     q: StatisticsQuery,
 ) -> AppResult<TraderStatisticsPayload> {
-    let trader_id = match resolve_trader_id(app, user_id, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, q.trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
@@ -15,7 +14,7 @@ pub async fn statistics(
 
     let stats = app
         .trading_repo
-        .statistics(user_id, &trader_id, from_ts)
+        .statistics(&trader_id, from_ts)
         .await
         .unwrap_or_default();
 

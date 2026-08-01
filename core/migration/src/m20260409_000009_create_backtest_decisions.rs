@@ -19,11 +19,6 @@ impl MigrationTrait for Migration {
                     )
                     .col(ColumnDef::new(BacktestDecisions::RunId).string().not_null())
                     .col(
-                        ColumnDef::new(BacktestDecisions::UserId)
-                            .string()
-                            .not_null(),
-                    )
-                    .col(
                         ColumnDef::new(BacktestDecisions::Ts)
                             .timestamp_with_time_zone()
                             .not_null(),
@@ -102,7 +97,6 @@ enum BacktestDecisions {
     Table,
     Id,
     RunId,
-    UserId,
     Ts,
     Symbol,
     Timeframe,

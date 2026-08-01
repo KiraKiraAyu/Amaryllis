@@ -32,20 +32,20 @@ impl StrategyService {
         }
     }
 
-    pub async fn list_strategies(&self, user_id: &str) -> Result<StrategyListPayload> {
+    pub async fn list_strategies(&self) -> Result<StrategyListPayload> {
         let rows = self
             .strategy_repo
-            .list_for_user_with_defaults(user_id)
+            .list_for_user_with_defaults()
             .await
             .map_err(|_| strategy_error(AppErrorKind::Internal, "Failed to get strategy list"))?;
 
         Ok(strategy_list_payload(rows))
     }
 
-    pub async fn get_strategy(&self, user_id: &str, id: String) -> Result<StrategyPayload> {
+    pub async fn get_strategy(&self, id: String) -> Result<StrategyPayload> {
         let row = self
             .strategy_repo
-            .get_accessible(user_id, &id)
+            .get_accessible(&id)
             .await
             .map_err(|_| strategy_error(AppErrorKind::Internal, "Failed to get strategy"))?
             .ok_or_else(|| strategy_error(AppErrorKind::NotFound, "Strategy not found"))?;
@@ -55,7 +55,6 @@ impl StrategyService {
 
     pub async fn create_strategy(
         &self,
-        user_id: &str,
         request: CreateStrategyRequest,
     ) -> Result<StrategyCreatedPayload> {
         if request.name.trim().is_empty() {
@@ -77,7 +76,6 @@ impl StrategyService {
         self.strategy_repo
             .create(CreateStrategyRecord {
                 id: id.clone(),
-                user_id: user_id.to_string(),
                 name: request.name.trim().to_string(),
                 description: request.description.trim().to_string(),
                 config,
@@ -95,13 +93,12 @@ impl StrategyService {
 
     pub async fn update_strategy(
         &self,
-        user_id: &str,
         id: String,
         request: UpdateStrategyRequest,
     ) -> Result<StrategyMessagePayload> {
         let existing = self
             .strategy_repo
-            .get_owned(user_id, &id)
+            .get_owned(&id)
             .await
             .map_err(|_| strategy_error(AppErrorKind::Internal, "Failed to update strategy"))?
             .ok_or_else(|| strategy_error(AppErrorKind::NotFound, "Strategy not found"))?;
@@ -131,7 +128,6 @@ impl StrategyService {
 
         self.strategy_repo
             .update_owned(
-                user_id,
                 &id,
                 UpdateStrategyRecord {
                     name,
@@ -150,12 +146,11 @@ impl StrategyService {
 
     pub async fn delete_strategy(
         &self,
-        user_id: &str,
         id: String,
     ) -> Result<StrategyMessagePayload> {
         let row = self
             .strategy_repo
-            .get_owned(user_id, &id)
+            .get_owned(&id)
             .await
             .map_err(|_| strategy_error(AppErrorKind::Internal, "Failed to delete strategy"))?
             .ok_or_else(|| strategy_error(AppErrorKind::NotFound, "Strategy not found"))?;
@@ -168,7 +163,7 @@ impl StrategyService {
         }
 
         self.strategy_repo
-            .delete_owned(user_id, &id)
+            .delete_owned(&id)
             .await
             .map_err(|_| strategy_error(AppErrorKind::Internal, "Failed to delete strategy"))?;
 
@@ -179,12 +174,11 @@ impl StrategyService {
 
     pub async fn activate_strategy(
         &self,
-        user_id: &str,
         id: String,
     ) -> Result<StrategyMessagePayload> {
         let exists = self
             .strategy_repo
-            .get_owned(user_id, &id)
+            .get_owned(&id)
             .await
             .map_err(|_| strategy_error(AppErrorKind::Internal, "Failed to activate strategy"))?;
         if exists.is_none() {
@@ -193,11 +187,11 @@ impl StrategyService {
 
         let now = now_ts();
         self.strategy_repo
-            .deactivate_all_for_user(user_id, now)
+            .deactivate_all_for_user(now)
             .await
             .map_err(|_| strategy_error(AppErrorKind::Internal, "Failed to activate strategy"))?;
         self.strategy_repo
-            .activate_owned(user_id, &id, now)
+            .activate_owned(&id, now)
             .await
             .map_err(|_| strategy_error(AppErrorKind::Internal, "Failed to activate strategy"))?;
 
@@ -208,13 +202,12 @@ impl StrategyService {
 
     pub async fn duplicate_strategy(
         &self,
-        user_id: &str,
         id: String,
         request: DuplicateStrategyRequest,
     ) -> Result<StrategyCreatedPayload> {
         let source = self
             .strategy_repo
-            .get_duplicable(user_id, &id)
+            .get_duplicable(&id)
             .await
             .map_err(|_| strategy_error(AppErrorKind::Internal, "Failed to duplicate strategy"))?
             .ok_or_else(|| strategy_error(AppErrorKind::NotFound, "Strategy not found"))?;
@@ -230,7 +223,6 @@ impl StrategyService {
         self.strategy_repo
             .create(CreateStrategyRecord {
                 id: new_id.clone(),
-                user_id: user_id.to_string(),
                 name: new_name,
                 description: source.description,
                 config: source.config,
@@ -246,10 +238,10 @@ impl StrategyService {
         })
     }
 
-    pub async fn active_strategy(&self, user_id: &str) -> Result<StrategyPayload> {
+    pub async fn active_strategy(&self) -> Result<StrategyPayload> {
         let row = self
             .strategy_repo
-            .active_for_user(user_id)
+            .active_for_user()
             .await
             .map_err(|_| strategy_error(AppErrorKind::Internal, "Failed to get active strategy"))?
             .ok_or_else(|| strategy_error(AppErrorKind::NotFound, "No active strategy"))?;
@@ -300,7 +292,6 @@ impl StrategyService {
 
     pub async fn test_run(
         &self,
-        user_id: &str,
         request: StrategyTestRunRequest,
     ) -> Result<StrategyTestRunPayload> {
         if !request.config.is_object() {
@@ -318,7 +309,7 @@ impl StrategyService {
             .to_string();
         let resolved_model = self
             .llm_service
-            .resolve_for_user(user_id, request.ai_model_id.as_deref())
+            .resolve_for_user(request.ai_model_id.as_deref())
             .await?;
         let ai_model_id = resolved_model.id.clone();
         let run_real_ai = request.run_real_ai.unwrap_or(false);

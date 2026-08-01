@@ -9,8 +9,6 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false, column_type = "Text")]
     pub run_id: String,
-    #[sea_orm(column_type = "Text")]
-    pub user_id: String,
     #[sea_orm(primary_key, auto_increment = false)]
     pub ts: DateTimeWithTimeZone,
     pub equity: Decimal,

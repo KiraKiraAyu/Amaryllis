@@ -22,7 +22,6 @@ impl MigrationTrait for Migration {
                             .string()
                             .not_null(),
                     )
-                    .col(ColumnDef::new(TraderPositions::UserId).string().not_null())
                     .col(ColumnDef::new(TraderPositions::Symbol).string().not_null())
                     .col(ColumnDef::new(TraderPositions::Side).string().not_null())
                     .col(
@@ -145,7 +144,6 @@ enum TraderPositions {
     Table,
     Id,
     TraderId,
-    UserId,
     Symbol,
     Side,
     Quantity,

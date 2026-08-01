@@ -12,7 +12,6 @@ impl MigrationTrait for Migration {
                     .table(LlmProviders::Table)
                     .if_not_exists()
                     .col(ColumnDef::new(LlmProviders::Id).string().not_null())
-                    .col(ColumnDef::new(LlmProviders::UserId).string().not_null())
                     .col(ColumnDef::new(LlmProviders::Name).string().not_null())
                     .col(
                         ColumnDef::new(LlmProviders::ProviderType)
@@ -47,23 +46,7 @@ impl MigrationTrait for Migration {
                             .timestamp_with_time_zone()
                             .not_null(),
                     )
-                    .primary_key(
-                        Index::create()
-                            .col(LlmProviders::UserId)
-                            .col(LlmProviders::Id),
-                    )
-                    .to_owned(),
-            )
-            .await?;
-
-        manager
-            .create_index(
-                Index::create()
-                    .if_not_exists()
-                    .name("idx_llm_providers_user_type")
-                    .table(LlmProviders::Table)
-                    .col(LlmProviders::UserId)
-                    .col(LlmProviders::ProviderType)
+                    .primary_key(Index::create().col(LlmProviders::Id))
                     .to_owned(),
             )
             .await
@@ -85,7 +68,6 @@ impl MigrationTrait for Migration {
 enum LlmProviders {
     Table,
     Id,
-    UserId,
     Name,
     ProviderType,
     Enabled,

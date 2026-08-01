@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue"
 import { useRoute, RouterLink } from "vue-router"
-import Button from "primevue/button"
 import { useAuthStore } from "@/stores/auth"
 import { useRealtimeStore } from "@/stores/realtime"
 
@@ -83,26 +82,15 @@ const nav = computed(() => [
         <span>{{ isDark ? 'Light Mode' : 'Dark Mode' }}</span>
       </button>
 
-      <!-- User Profile & Logout -->
-      <div class="flex items-center gap-3 border-t border-surface-200 dark:border-surface-800 pt-4 mt-1 w-full">
-        <div
-          class="w-10 h-10 shrink-0 rounded-full bg-primary-100 dark:bg-primary-950/40 text-primary-600 dark:text-primary-400 flex items-center justify-center text-sm font-bold"
-          :title="authStore.username"
-        >
-          {{ (authStore.username || "?").charAt(0).toUpperCase() }}
-        </div>
-        <div class="flex-1 truncate text-sm font-medium text-surface-700 dark:text-surface-300">
-          {{ authStore.username || 'User' }}
-        </div>
-        <Button
-          text
-          rounded
-          icon="pi pi-sign-out"
-          class="h-9 w-9 shrink-0 text-surface-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-colors"
-          @click="authStore.logout()"
-          title="Sign Out"
-        />
-      </div>
+      <!-- Lock Session -->
+      <button
+        class="cursor-pointer h-11 w-full px-4 flex items-center gap-3 rounded-xl text-surface-600 dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-800 hover:text-surface-900 dark:hover:text-surface-0 transition-colors font-medium text-sm border-t border-surface-200 dark:border-surface-800 pt-4 mt-1"
+        title="Lock"
+        @click="authStore.logout()"
+      >
+        <span class="pi pi-lock text-lg w-6 text-center"></span>
+        <span>Lock</span>
+      </button>
     </div>
   </aside>
 </template>

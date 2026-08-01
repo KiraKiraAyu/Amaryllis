@@ -93,7 +93,6 @@ pub struct SymbolConfig {
 #[derive(Debug, Clone)]
 pub struct TraderRuntimeConfig {
     pub trader_id: String,
-    pub user_id: String,
     #[allow(dead_code)]
     pub name: String,
     pub ai_model_id: String,

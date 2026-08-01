@@ -22,7 +22,6 @@ impl MigrationTrait for Migration {
                             .string()
                             .not_null(),
                     )
-                    .col(ColumnDef::new(ExecutionIntents::UserId).string().not_null())
                     .col(
                         ColumnDef::new(ExecutionIntents::IntentKey)
                             .string()
@@ -82,11 +81,10 @@ impl MigrationTrait for Migration {
             .create_index(
                 Index::create()
                     .if_not_exists()
-                    .name("idx_execution_intents_trader_user_intent_key")
+                    .name("idx_execution_intents_trader_intent_key")
                     .table(ExecutionIntents::Table)
                     .unique()
                     .col(ExecutionIntents::TraderId)
-                    .col(ExecutionIntents::UserId)
                     .col(ExecutionIntents::IntentKey)
                     .to_owned(),
             )
@@ -122,7 +120,6 @@ enum ExecutionIntents {
     Table,
     Id,
     TraderId,
-    UserId,
     IntentKey,
     Symbol,
     Side,

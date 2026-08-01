@@ -19,7 +19,6 @@ pub async fn emit_runtime_event(
         .insert_runtime_event(InsertRuntimeEventRecord {
             id: Uuid::now_v7().to_string(),
             trader_id: cfg.trader_id.clone(),
-            user_id: cfg.user_id.clone(),
             event_type: event_type.trim().to_string(),
             symbol: symbol.trim().to_uppercase(),
             side: side.trim().to_uppercase(),

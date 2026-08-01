@@ -11,110 +11,102 @@ use crate::{
         StrategyTestRunPayload, StrategyTestRunRequest, UpdateStrategyRequest,
     },
     error::Result,
-    http::{extractors::AuthUser, response::ApiResponse},
+    http::response::ApiResponse,
     state::AppState,
 };
 
 pub async fn handle_get_strategies(
     State(app): State<AppState>,
-    user: AuthUser,
 ) -> Result<Json<ApiResponse<StrategyListPayload>>> {
     let payload = app
         .services
         .strategy_service
-        .list_strategies(&user.sub)
+        .list_strategies()
         .await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 
 pub async fn handle_get_strategy(
     State(app): State<AppState>,
-    user: AuthUser,
     Path(id): Path<String>,
 ) -> Result<Json<ApiResponse<StrategyPayload>>> {
     let payload = app
         .services
         .strategy_service
-        .get_strategy(&user.sub, id)
+        .get_strategy(id)
         .await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 
 pub async fn handle_create_strategy(
     State(app): State<AppState>,
-    user: AuthUser,
     Json(request): Json<CreateStrategyRequest>,
 ) -> Result<Json<ApiResponse<StrategyCreatedPayload>>> {
     let payload = app
         .services
         .strategy_service
-        .create_strategy(&user.sub, request)
+        .create_strategy(request)
         .await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 
 pub async fn handle_update_strategy(
     State(app): State<AppState>,
-    user: AuthUser,
     Path(id): Path<String>,
     Json(request): Json<UpdateStrategyRequest>,
 ) -> Result<Json<ApiResponse<StrategyMessagePayload>>> {
     let payload = app
         .services
         .strategy_service
-        .update_strategy(&user.sub, id, request)
+        .update_strategy(id, request)
         .await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 
 pub async fn handle_delete_strategy(
     State(app): State<AppState>,
-    user: AuthUser,
     Path(id): Path<String>,
 ) -> Result<Json<ApiResponse<StrategyMessagePayload>>> {
     let payload = app
         .services
         .strategy_service
-        .delete_strategy(&user.sub, id)
+        .delete_strategy(id)
         .await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 
 pub async fn handle_activate_strategy(
     State(app): State<AppState>,
-    user: AuthUser,
     Path(id): Path<String>,
 ) -> Result<Json<ApiResponse<StrategyMessagePayload>>> {
     let payload = app
         .services
         .strategy_service
-        .activate_strategy(&user.sub, id)
+        .activate_strategy(id)
         .await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 
 pub async fn handle_duplicate_strategy(
     State(app): State<AppState>,
-    user: AuthUser,
     Path(id): Path<String>,
     Json(request): Json<DuplicateStrategyRequest>,
 ) -> Result<Json<ApiResponse<StrategyCreatedPayload>>> {
     let payload = app
         .services
         .strategy_service
-        .duplicate_strategy(&user.sub, id, request)
+        .duplicate_strategy(id, request)
         .await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 
 pub async fn handle_get_active_strategy(
     State(app): State<AppState>,
-    user: AuthUser,
 ) -> Result<Json<ApiResponse<StrategyPayload>>> {
     let payload = app
         .services
         .strategy_service
-        .active_strategy(&user.sub)
+        .active_strategy()
         .await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
@@ -140,13 +132,12 @@ pub async fn handle_preview_prompt(
 
 pub async fn handle_strategy_test_run(
     State(app): State<AppState>,
-    user: AuthUser,
     Json(request): Json<StrategyTestRunRequest>,
 ) -> Result<Json<ApiResponse<StrategyTestRunPayload>>> {
     let payload = app
         .services
         .strategy_service
-        .test_run(&user.sub, request)
+        .test_run(request)
         .await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }

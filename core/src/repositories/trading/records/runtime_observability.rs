@@ -16,7 +16,6 @@ pub struct RuntimeEventRecord {
 pub struct InsertRuntimeEventRecord {
     pub id: String,
     pub trader_id: String,
-    pub user_id: String,
     pub event_type: String,
     pub symbol: String,
     pub side: String,

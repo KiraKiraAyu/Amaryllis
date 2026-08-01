@@ -23,9 +23,9 @@ impl ExchangeConfigService {
         Self { repo }
     }
 
-    pub async fn list_configs(&self, user_id: &str) -> Result<Vec<SafeExchangeConfig>> {
+    pub async fn list_configs(&self) -> Result<Vec<SafeExchangeConfig>> {
         let rows =
-            self.repo.list_for_user(user_id).await.map_err(|err| {
+            self.repo.list_for_user().await.map_err(|err| {
                 AppError::Internal(format!("Failed to get exchange configs: {err}"))
             })?;
 
@@ -46,7 +46,6 @@ impl ExchangeConfigService {
 
     pub async fn create_exchange(
         &self,
-        user_id: &str,
         request: CreateExchangeRequest,
     ) -> Result<CreateExchangePayload> {
         let exchange_type = request.exchange_type.trim().to_ascii_lowercase();
@@ -74,7 +73,6 @@ impl ExchangeConfigService {
                 id: id.clone(),
                 exchange_type,
                 account_name,
-                user_id: user_id.trim().to_string(),
                 name: name.to_string(),
                 exchange_kind: exchange_kind.to_string(),
                 enabled: request.enabled,
@@ -99,7 +97,6 @@ impl ExchangeConfigService {
 
     pub async fn update_configs(
         &self,
-        user_id: &str,
         request: UpdateExchangeConfigRequest,
     ) -> Result<MessagePayload> {
         let now = now_ts();
@@ -107,7 +104,7 @@ impl ExchangeConfigService {
         for (exchange_id, patch) in request.exchanges {
             let existing = self
                 .repo
-                .find_secrets(&exchange_id, user_id)
+                .find_secrets(&exchange_id)
                 .await
                 .map_err(|err| {
                     AppError::Internal(format!("Failed to load exchange secrets: {err}"))
@@ -120,7 +117,6 @@ impl ExchangeConfigService {
             self.repo
                 .update(
                     &exchange_id,
-                    user_id,
                     UpdateExchangeAccount {
                         enabled: patch.enabled,
                         api_key: keep_or_new(existing.api_key, &patch.api_key),
@@ -144,7 +140,6 @@ impl ExchangeConfigService {
 
     pub async fn delete_exchange(
         &self,
-        user_id: &str,
         exchange_id: &str,
     ) -> Result<MessagePayload> {
         if exchange_id.trim().is_empty() {
@@ -153,7 +148,7 @@ impl ExchangeConfigService {
 
         if self
             .repo
-            .find_trader_usage(user_id, exchange_id)
+            .find_trader_usage(exchange_id)
             .await
             .map_err(|err| AppError::Internal(format!("Failed to check trader usage: {err}")))?
             .is_some()
@@ -165,7 +160,7 @@ impl ExchangeConfigService {
 
         let deleted = self
             .repo
-            .delete(exchange_id, user_id)
+            .delete(exchange_id)
             .await
             .map_err(|err| {
                 AppError::Internal(format!("Failed to delete exchange account: {err}"))

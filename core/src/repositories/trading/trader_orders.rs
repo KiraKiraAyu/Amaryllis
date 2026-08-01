@@ -21,7 +21,6 @@ impl TradingRepo {
         entity::trader_orders::ActiveModel {
             id: Set(input.id),
             trader_id: Set(input.trader_id),
-            user_id: Set(input.user_id),
             exchange_order_id: Set(input.exchange_order_id),
             client_order_id: Set(input.client_order_id),
             symbol: Set(input.symbol),
@@ -46,14 +45,12 @@ impl TradingRepo {
 
     pub async fn stale_live_open_orders(
         &self,
-        user_id: &str,
         trader_id: &str,
         threshold_ts: i64,
         limit: u64,
     ) -> Result<Vec<TraderOrderRecord>, DbErr> {
         entity::trader_orders::Entity::find()
             .filter(entity::trader_orders::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::trader_orders::Column::UserId.eq(user_id.trim()))
             .filter(entity::trader_orders::Column::ReduceOnly.eq(0))
             .filter(entity::trader_orders::Column::OrderType.ne("limit"))
             .filter(entity::trader_orders::Column::ExchangeOrderId.ne(""))
@@ -72,14 +69,12 @@ impl TradingRepo {
 
     pub async fn stale_limit_live_open_orders(
         &self,
-        user_id: &str,
         trader_id: &str,
         threshold_ts: i64,
         limit: u64,
     ) -> Result<Vec<TraderOrderRecord>, DbErr> {
         entity::trader_orders::Entity::find()
             .filter(entity::trader_orders::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::trader_orders::Column::UserId.eq(user_id.trim()))
             .filter(entity::trader_orders::Column::ReduceOnly.eq(0))
             .filter(entity::trader_orders::Column::OrderType.eq("limit"))
             .filter(entity::trader_orders::Column::ExchangeOrderId.ne(""))
@@ -98,13 +93,11 @@ impl TradingRepo {
 
     pub async fn active_orders_for_reconciliation(
         &self,
-        user_id: &str,
         trader_id: &str,
         limit: u64,
     ) -> Result<Vec<TraderOrderRecord>, DbErr> {
         entity::trader_orders::Entity::find()
             .filter(entity::trader_orders::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::trader_orders::Column::UserId.eq(user_id.trim()))
             .filter(entity::trader_orders::Column::ExchangeOrderId.ne(""))
             .filter(entity::trader_orders::Column::Status.is_in([
                 "open",
@@ -120,13 +113,11 @@ impl TradingRepo {
 
     pub async fn reduce_only_filled_orders(
         &self,
-        user_id: &str,
         trader_id: &str,
         limit: u64,
     ) -> Result<Vec<TraderOrderRecord>, DbErr> {
         entity::trader_orders::Entity::find()
             .filter(entity::trader_orders::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::trader_orders::Column::UserId.eq(user_id.trim()))
             .filter(entity::trader_orders::Column::ReduceOnly.eq(1))
             .filter(entity::trader_orders::Column::Status.eq("filled"))
             .filter(entity::trader_orders::Column::FilledQuantity.gt(decimal_from_f64(0.0)))
@@ -166,7 +157,6 @@ impl TradingRepo {
 
     pub async fn update_order_status(
         &self,
-        user_id: &str,
         trader_id: &str,
         order_id: &str,
         status: &str,
@@ -188,7 +178,6 @@ impl TradingRepo {
             )
             .filter(entity::trader_orders::Column::Id.eq(order_id.trim()))
             .filter(entity::trader_orders::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::trader_orders::Column::UserId.eq(user_id.trim()))
             .exec(&self.db)
             .await
             .map(|_| ())
@@ -196,13 +185,11 @@ impl TradingRepo {
 
     pub async fn order_by_exchange_order_id(
         &self,
-        user_id: &str,
         trader_id: &str,
         exchange_order_id: &str,
     ) -> Result<Option<TraderOrderRecord>, DbErr> {
         entity::trader_orders::Entity::find()
             .filter(entity::trader_orders::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::trader_orders::Column::UserId.eq(user_id.trim()))
             .filter(entity::trader_orders::Column::ExchangeOrderId.eq(exchange_order_id.trim()))
             .one(&self.db)
             .await
@@ -264,7 +251,6 @@ impl TradingRepo {
 
     pub async fn has_recent_open_order(
         &self,
-        user_id: &str,
         trader_id: &str,
         symbol: &str,
         side: &str,
@@ -272,7 +258,6 @@ impl TradingRepo {
     ) -> Result<bool, DbErr> {
         let orders = entity::trader_orders::Entity::find()
             .filter(entity::trader_orders::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::trader_orders::Column::UserId.eq(user_id.trim()))
             .filter(entity::trader_orders::Column::Symbol.eq(symbol.trim().to_uppercase()))
             .filter(entity::trader_orders::Column::Side.eq(side.trim().to_uppercase()))
             .filter(entity::trader_orders::Column::ReduceOnly.eq(0))
@@ -292,7 +277,6 @@ impl TradingRepo {
 
     pub async fn orders(
         &self,
-        user_id: &str,
         trader_id: &str,
         open_only: bool,
         limit: i64,
@@ -300,7 +284,6 @@ impl TradingRepo {
     ) -> Result<Vec<TraderOrderRecord>, DbErr> {
         let mut query = entity::trader_orders::Entity::find()
             .filter(entity::trader_orders::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::trader_orders::Column::UserId.eq(user_id.trim()))
             .order_by_desc(entity::trader_orders::Column::PlacedAt)
             .limit(limit.max(0) as u64)
             .offset(offset.max(0) as u64);

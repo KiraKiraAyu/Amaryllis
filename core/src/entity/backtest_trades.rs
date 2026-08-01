@@ -11,8 +11,6 @@ pub struct Model {
     pub id: String,
     #[sea_orm(column_type = "Text")]
     pub run_id: String,
-    #[sea_orm(column_type = "Text")]
-    pub user_id: String,
     pub ts: DateTimeWithTimeZone,
     #[sea_orm(column_type = "Text")]
     pub symbol: String,

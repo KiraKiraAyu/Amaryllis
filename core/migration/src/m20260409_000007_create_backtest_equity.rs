@@ -12,7 +12,6 @@ impl MigrationTrait for Migration {
                     .table(BacktestEquity::Table)
                     .if_not_exists()
                     .col(ColumnDef::new(BacktestEquity::RunId).string().not_null())
-                    .col(ColumnDef::new(BacktestEquity::UserId).string().not_null())
                     .col(
                         ColumnDef::new(BacktestEquity::Ts)
                             .timestamp_with_time_zone()
@@ -66,7 +65,6 @@ impl MigrationTrait for Migration {
 enum BacktestEquity {
     Table,
     RunId,
-    UserId,
     Ts,
     Equity,
     Available,

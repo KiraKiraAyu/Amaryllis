@@ -17,7 +17,6 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(Traders::UserId).string().not_null())
                     .col(ColumnDef::new(Traders::Name).string().not_null())
                     .col(ColumnDef::new(Traders::AiModelId).string().not_null())
                     .col(ColumnDef::new(Traders::ExchangeId).string().not_null())
@@ -112,28 +111,6 @@ impl MigrationTrait for Migration {
                     )
                     .to_owned(),
             )
-            .await?;
-
-        manager
-            .create_index(
-                Index::create()
-                    .if_not_exists()
-                    .name("idx_traders_user_id")
-                    .table(Traders::Table)
-                    .col(Traders::UserId)
-                    .to_owned(),
-            )
-            .await?;
-        manager
-            .create_index(
-                Index::create()
-                    .if_not_exists()
-                    .name("idx_traders_user_created")
-                    .table(Traders::Table)
-                    .col(Traders::UserId)
-                    .col((Traders::CreatedAt, IndexOrder::Desc))
-                    .to_owned(),
-            )
             .await
     }
 
@@ -148,7 +125,6 @@ impl MigrationTrait for Migration {
 enum Traders {
     Table,
     Id,
-    UserId,
     Name,
     AiModelId,
     ExchangeId,

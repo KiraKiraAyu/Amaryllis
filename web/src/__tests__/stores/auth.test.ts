@@ -11,9 +11,12 @@ vi.mock("@/router", () => ({
 
 // Mock API
 vi.mock("@/api/auth", () => ({
-  loginApi: vi.fn(),
-  logoutApi: vi.fn().mockResolvedValue({}),
-  registerApi: vi.fn(),
+  getAuthStatusApi: vi.fn().mockResolvedValue({ configured: true }),
+  verifyApi: vi.fn().mockResolvedValue({ token: "verified-token", message: "ok" }),
+  setupStartApi: vi.fn(),
+  setupConfirmApi: vi.fn(),
+  resetStartApi: vi.fn(),
+  resetConfirmApi: vi.fn(),
 }));
 
 describe("Auth Store", () => {
@@ -26,32 +29,53 @@ describe("Auth Store", () => {
     const store = useAuthStore();
     expect(store.isLoggedIn).toBe(false);
     expect(store.token).toBe("");
-    expect(store.userId).toBe("");
-    expect(store.email).toBe("");
+    expect(store.configured).toBeNull();
   });
 
-  it("should set session on setSession", () => {
+  it("should restore token from localStorage", () => {
+    localStorage.setItem("quantaura_token", "saved-token");
+    const store = useAuthStore();
+    expect(store.isLoggedIn).toBe(true);
+    expect(store.token).toBe("saved-token");
+  });
+
+  it("should set token on setToken", () => {
     const store = useAuthStore();
 
-    store.setSession("test-token", "user-123", "test@example.com");
+    store.setToken("test-token");
 
     expect(store.isLoggedIn).toBe(true);
     expect(store.token).toBe("test-token");
-    expect(store.userId).toBe("user-123");
-    expect(store.email).toBe("test@example.com");
     expect(localStorage.getItem("quantaura_token")).toBe("test-token");
   });
 
-  it("should clear session on logout", async () => {
+  it("should set token after successful verify", async () => {
     const store = useAuthStore();
-    store.setSession("test-token", "user-123", "test@example.com");
 
-    await store.logout();
+    await store.verify("123456");
+
+    expect(store.isLoggedIn).toBe(true);
+    expect(store.token).toBe("verified-token");
+    expect(localStorage.getItem("quantaura_token")).toBe("verified-token");
+  });
+
+  it("should refresh configured status from the server", async () => {
+    const store = useAuthStore();
+
+    const configured = await store.refreshStatus();
+
+    expect(configured).toBe(true);
+    expect(store.configured).toBe(true);
+  });
+
+  it("should clear token on logout", () => {
+    const store = useAuthStore();
+    store.setToken("test-token");
+
+    store.logout();
 
     expect(store.isLoggedIn).toBe(false);
     expect(store.token).toBe("");
-    expect(store.userId).toBe("");
-    expect(store.email).toBe("");
     expect(localStorage.getItem("quantaura_token")).toBeNull();
   });
 });

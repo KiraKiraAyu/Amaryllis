@@ -12,8 +12,8 @@ pub use crate::config::AppConfig;
 use crate::{
     database,
     repositories::{
-        BacktestRepo, CompetitionRepo, DebateRepo, ExchangeRepo, ModelRepo, StrategyRepo,
-        TradingRepo, UserRepo,
+        AppSettingsRepo, BacktestRepo, CompetitionRepo, DebateRepo, ExchangeRepo, ModelRepo,
+        StrategyRepo, TradingRepo,
     },
     services::{
         competition::CompetitionService, llm::LlmService, models::ModelService,
@@ -30,18 +30,8 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UserRecord {
-    pub id: String,
-    pub email: String,
-    pub password_hash: String,
-    pub created_at: u64,
-    pub updated_at: u64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RuntimeEngineState {
     pub trader_id: String,
-    pub user_id: String,
     pub exchange_id: String,
     pub ai_model_id: String,
     pub started_at: u64,
@@ -68,12 +58,8 @@ impl RuntimeEngineManager {
         self.engines.get(trader_id).cloned()
     }
 
-    pub fn list_by_user(&self, user_id: &str) -> Vec<RuntimeEngineState> {
-        self.engines
-            .values()
-            .filter(|v| v.user_id == user_id)
-            .cloned()
-            .collect()
+    pub fn list(&self) -> Vec<RuntimeEngineState> {
+        self.engines.values().cloned().collect()
     }
 
     pub fn set_running(
@@ -121,22 +107,17 @@ pub struct Services {
 }
 
 impl Services {
-    fn new(
+    async fn new(
         config: &AppConfig,
         db: &DatabaseConnection,
-        token_blacklist: Arc<RwLock<HashMap<String, u64>>>,
         runtime_engine_manager: Arc<RwLock<RuntimeEngineManager>>,
         realtime_hub: RealtimeHub,
     ) -> Self {
-        let user_repo = Arc::new(UserRepo::new(db.clone()));
+        let app_settings_repo = Arc::new(AppSettingsRepo::new(db.clone()));
         let auth_service = Arc::new(
-            AuthService::new(
-                config.auth.clone(),
-                config.jwt.clone(),
-                token_blacklist,
-                user_repo,
-            )
-            .expect("Failed to initialize auth service"),
+            AuthService::new(config.auth.clone(), app_settings_repo)
+                .await
+                .expect("Failed to initialize auth service"),
         );
 
         let model_repo = Arc::new(ModelRepo::new(db.clone()));
@@ -203,16 +184,15 @@ impl AppState {
             .await
             .expect("Failed to init database");
 
-        let token_blacklist = Arc::new(RwLock::new(HashMap::new()));
         let runtime_engine_manager = Arc::new(RwLock::new(RuntimeEngineManager::default()));
         let realtime_hub = RealtimeHub::new();
         let services = Services::new(
             &config,
             &db,
-            token_blacklist,
             runtime_engine_manager.clone(),
             realtime_hub.clone(),
-        );
+        )
+        .await;
 
         Self {
             config,

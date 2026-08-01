@@ -121,85 +121,79 @@ impl TradingService {
         self.state.clone()
     }
 
-    pub async fn list_traders(&self, user_id: &str) -> AppResult<TraderListPayload> {
+    pub async fn list_traders(&self) -> AppResult<TraderListPayload> {
         let state = self.state();
-        list_traders(&state, user_id).await
+        list_traders(&state).await
     }
 
-    pub async fn get_trader(&self, user_id: &str, id: &str) -> AppResult<TraderPayload> {
+    pub async fn get_trader(&self, id: &str) -> AppResult<TraderPayload> {
         let state = self.state();
-        get_trader(&state, user_id, id).await
+        get_trader(&state, id).await
     }
 
-    pub async fn get_trader_config(&self, user_id: &str, id: &str) -> AppResult<TraderPayload> {
+    pub async fn get_trader_config(&self, id: &str) -> AppResult<TraderPayload> {
         let state = self.state();
-        get_trader_config(&state, user_id, id).await
+        get_trader_config(&state, id).await
     }
 
     pub async fn create_trader(
         &self,
-        user_id: &str,
         req: CreateTraderRequest,
     ) -> AppResult<TraderCreatedPayload> {
         let state = self.state();
-        create_trader(&state, user_id, req).await
+        create_trader(&state, req).await
     }
 
     pub async fn update_trader(
         &self,
-        user_id: &str,
         id: &str,
         req: UpdateTraderRequest,
     ) -> AppResult<TraderMessagePayload> {
         let state = self.state();
-        update_trader(&state, user_id, id, req).await
+        update_trader(&state, id, req).await
     }
 
-    pub async fn delete_trader(&self, user_id: &str, id: &str) -> AppResult<TraderMessagePayload> {
+    pub async fn delete_trader(&self, id: &str) -> AppResult<TraderMessagePayload> {
         let state = self.state();
-        delete_trader(&state, self.trading_runtime_service.as_ref(), user_id, id).await
+        delete_trader(&state, self.trading_runtime_service.as_ref(), id).await
     }
 
-    pub async fn start_trader(&self, user_id: &str, id: &str) -> AppResult<TraderMessagePayload> {
-        start_trader(self.trading_runtime_service.as_ref(), user_id, id).await
+    pub async fn start_trader(&self, id: &str) -> AppResult<TraderMessagePayload> {
+        start_trader(self.trading_runtime_service.as_ref(), id).await
     }
 
-    pub async fn stop_trader(&self, user_id: &str, id: &str) -> AppResult<TraderMessagePayload> {
-        stop_trader(self.trading_runtime_service.as_ref(), user_id, id).await
+    pub async fn stop_trader(&self, id: &str) -> AppResult<TraderMessagePayload> {
+        stop_trader(self.trading_runtime_service.as_ref(), id).await
     }
 
     pub async fn update_trader_prompt(
         &self,
-        user_id: &str,
         id: &str,
         req: UpdatePromptRequest,
     ) -> AppResult<TraderMessagePayload> {
         let state = self.state();
-        update_trader_prompt(&state, user_id, id, req).await
+        update_trader_prompt(&state, id, req).await
     }
 
     pub async fn toggle_competition(
         &self,
-        user_id: &str,
         id: &str,
         req: ToggleCompetitionRequest,
     ) -> AppResult<TraderMessagePayload> {
         let state = self.state();
-        toggle_competition(&state, user_id, id, req).await
+        toggle_competition(&state, id, req).await
     }
 
     pub async fn sync_balance(
         &self,
-        user_id: &str,
         id: &str,
     ) -> AppResult<TraderBalanceSyncPayload> {
         let state = self.state();
-        sync_balance(&state, user_id, id).await
+        sync_balance(&state, id).await
     }
 
     pub async fn close_position(
         &self,
-        user_id: &str,
         id: &str,
         req: ClosePositionRequest,
     ) -> AppResult<ClosePositionPayload> {
@@ -207,215 +201,192 @@ impl TradingService {
         close_position(
             &state,
             self.trading_runtime_service.as_ref(),
-            user_id,
             id,
             req,
         )
         .await
     }
 
-    pub async fn grid_risk_info(&self, user_id: &str, id: &str) -> AppResult<GridRiskInfoPayload> {
+    pub async fn grid_risk_info(&self, id: &str) -> AppResult<GridRiskInfoPayload> {
         let state = self.state();
-        grid_risk_info(&state, user_id, id).await
+        grid_risk_info(&state, id).await
     }
 
     pub async fn status(
         &self,
-        user_id: &str,
         query: TraderQuery,
     ) -> AppResult<TraderStatusPayload> {
         let state = self.state();
-        status(&state, user_id, query).await
+        status(&state, query).await
     }
 
     pub async fn account(
         &self,
-        user_id: &str,
         query: TraderQuery,
     ) -> AppResult<TraderAccountPayload> {
         let state = self.state();
-        account(&state, user_id, query).await
+        account(&state, query).await
     }
 
     pub async fn positions(
         &self,
-        user_id: &str,
         query: PositionQuery,
     ) -> AppResult<PositionListPayload> {
         let state = self.state();
-        positions(&state, user_id, query).await
+        positions(&state, query).await
     }
 
     pub async fn positions_history(
         &self,
-        user_id: &str,
         query: PaginationQuery,
     ) -> AppResult<PositionListPayload> {
         let state = self.state();
-        positions_history(&state, user_id, query).await
+        positions_history(&state, query).await
     }
 
     pub async fn decisions(
         &self,
-        user_id: &str,
         query: DecisionQuery,
     ) -> AppResult<DecisionListPayload> {
         let state = self.state();
-        decisions(&state, user_id, query).await
+        decisions(&state, query).await
     }
 
     pub async fn latest_decisions(
         &self,
-        user_id: &str,
         query: TraderQuery,
     ) -> AppResult<LatestDecisionsPayload> {
         let state = self.state();
-        latest_decisions(&state, user_id, query).await
+        latest_decisions(&state, query).await
     }
 
     pub async fn trades(
         &self,
-        user_id: &str,
         query: PaginationQuery,
     ) -> AppResult<TradeListPayload> {
         let state = self.state();
-        trades(&state, user_id, query).await
+        trades(&state, query).await
     }
 
     pub async fn orders(
         &self,
-        user_id: &str,
         query: PaginationQuery,
     ) -> AppResult<OrderListPayload> {
         let state = self.state();
-        orders(&state, user_id, query).await
+        orders(&state, query).await
     }
 
     pub async fn order_fills(
         &self,
-        user_id: &str,
         order_id: &str,
         query: TraderQuery,
     ) -> AppResult<FillListPayload> {
         let state = self.state();
-        order_fills(&state, user_id, order_id, query).await
+        order_fills(&state, order_id, query).await
     }
 
     pub async fn open_orders(
         &self,
-        user_id: &str,
         query: PaginationQuery,
     ) -> AppResult<OrderListPayload> {
         let state = self.state();
-        open_orders(&state, user_id, query).await
+        open_orders(&state, query).await
     }
 
     pub async fn runtime_events(
         &self,
-        user_id: &str,
         query: RuntimeEventsQuery,
     ) -> AppResult<RuntimeEventsPayload> {
         let state = self.state();
-        runtime_events(&state, user_id, query).await
+        runtime_events(&state, query).await
     }
 
     pub async fn runtime_event_types(
         &self,
-        user_id: &str,
         query: RuntimeEventTypesQuery,
     ) -> AppResult<RuntimeEventTypesPayload> {
         let state = self.state();
-        runtime_event_types(&state, user_id, query).await
+        runtime_event_types(&state, query).await
     }
 
     pub async fn runtime_metrics(
         &self,
-        user_id: &str,
         query: RuntimeMetricsQuery,
     ) -> AppResult<RuntimeMetricsPayload> {
         let state = self.state();
-        runtime_metrics(&state, user_id, query).await
+        runtime_metrics(&state, query).await
     }
 
     pub async fn runtime_metrics_series(
         &self,
-        user_id: &str,
         query: RuntimeMetricsSeriesQuery,
     ) -> AppResult<RuntimeMetricsSeriesPayload> {
         let state = self.state();
-        runtime_metrics_series(&state, user_id, query).await
+        runtime_metrics_series(&state, query).await
     }
 
     pub async fn runtime_alerts(
         &self,
-        user_id: &str,
         query: RuntimeAlertsQuery,
     ) -> AppResult<RuntimeAlertsPayload> {
         let state = self.state();
-        runtime_alerts(&state, user_id, query).await
+        runtime_alerts(&state, query).await
     }
 
     pub async fn runtime_alert_history(
         &self,
-        user_id: &str,
         query: RuntimeAlertHistoryQuery,
     ) -> AppResult<RuntimeAlertHistoryPayload> {
         let state = self.state();
-        runtime_alert_history(&state, user_id, query).await
+        runtime_alert_history(&state, query).await
     }
 
     pub async fn runtime_alert_deliveries(
         &self,
-        user_id: &str,
         query: RuntimeAlertDeliveriesQuery,
     ) -> AppResult<RuntimeAlertDeliveriesPayload> {
         let state = self.state();
-        runtime_alert_deliveries(&state, user_id, query).await
+        runtime_alert_deliveries(&state, query).await
     }
 
     pub async fn runtime_alert_controls(
         &self,
-        user_id: &str,
         query: RuntimeAlertControlsQuery,
     ) -> AppResult<RuntimeAlertControlsPayload> {
         let state = self.state();
-        runtime_alert_controls(&state, user_id, query).await
+        runtime_alert_controls(&state, query).await
     }
 
     pub async fn mute_runtime_alerts(
         &self,
-        user_id: &str,
         req: RuntimeAlertMuteRequest,
     ) -> AppResult<RuntimeAlertMutePayload> {
         let state = self.state();
-        mute_runtime_alerts(&state, user_id, req).await
+        mute_runtime_alerts(&state, req).await
     }
 
     pub async fn unmute_runtime_alerts(
         &self,
-        user_id: &str,
         req: RuntimeAlertControlTargetRequest,
     ) -> AppResult<RuntimeAlertMutePayload> {
         let state = self.state();
-        unmute_runtime_alerts(&state, user_id, req).await
+        unmute_runtime_alerts(&state, req).await
     }
 
     pub async fn ack_runtime_alerts(
         &self,
-        user_id: &str,
         req: RuntimeAlertAckRequest,
     ) -> AppResult<RuntimeAlertAckPayload> {
         let state = self.state();
-        ack_runtime_alerts(&state, user_id, req).await
+        ack_runtime_alerts(&state, req).await
     }
 
     pub async fn statistics(
         &self,
-        user_id: &str,
         query: StatisticsQuery,
     ) -> AppResult<TraderStatisticsPayload> {
         let state = self.state();
-        statistics(&state, user_id, query).await
+        statistics(&state, query).await
     }
 }
 

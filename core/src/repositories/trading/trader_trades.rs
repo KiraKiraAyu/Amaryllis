@@ -17,7 +17,6 @@ impl TradingRepo {
         entity::trader_trades::ActiveModel {
             id: Set(input.id),
             trader_id: Set(input.trader_id),
-            user_id: Set(input.user_id),
             symbol: Set(input.symbol),
             side: Set(input.side),
             entry_price: Set(decimal_from_f64(input.entry_price)),
@@ -37,14 +36,12 @@ impl TradingRepo {
 
     pub async fn trades(
         &self,
-        user_id: &str,
         trader_id: &str,
         limit: i64,
         offset: i64,
     ) -> Result<Vec<TraderTradeRecord>, DbErr> {
         entity::trader_trades::Entity::find()
             .filter(entity::trader_trades::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::trader_trades::Column::UserId.eq(user_id.trim()))
             .order_by_desc(entity::trader_trades::Column::ClosedAt)
             .limit(limit.max(0) as u64)
             .offset(offset.max(0) as u64)
@@ -55,13 +52,11 @@ impl TradingRepo {
 
     pub async fn statistics(
         &self,
-        user_id: &str,
         trader_id: &str,
         from_ts: i64,
     ) -> Result<TraderStatisticsRecord, DbErr> {
         let trades = entity::trader_trades::Entity::find()
             .filter(entity::trader_trades::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::trader_trades::Column::UserId.eq(user_id.trim()))
             .filter(entity::trader_trades::Column::ClosedAt.gte(ts_to_dt(from_ts)))
             .all(&self.db)
             .await?;
@@ -87,7 +82,6 @@ impl TradingRepo {
         };
         let open_positions = entity::trader_positions::Entity::find()
             .filter(entity::trader_positions::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::trader_positions::Column::UserId.eq(user_id.trim()))
             .filter(entity::trader_positions::Column::Status.eq("open"))
             .count(&self.db)
             .await? as i64;

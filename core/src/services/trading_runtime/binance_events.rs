@@ -107,7 +107,7 @@ pub async fn apply_order_stream_update_event(
 
     let existing_order = state
         .trading_repo
-        .order_by_exchange_order_id(&cfg.user_id, &cfg.trader_id, &exchange_order_id)
+        .order_by_exchange_order_id(&cfg.trader_id, &exchange_order_id)
         .await?;
 
     let local_order_id = if let Some(existing) = existing_order {
@@ -153,7 +153,6 @@ pub async fn apply_order_stream_update_event(
             .insert_order(InsertTraderOrderRecord {
                 id: id.clone(),
                 trader_id: cfg.trader_id.clone(),
-                user_id: cfg.user_id.clone(),
                 exchange_order_id: exchange_order_id.clone(),
                 client_order_id: ev.client_order_id.clone(),
                 symbol: symbol.clone(),
@@ -200,7 +199,7 @@ pub async fn apply_order_stream_update_event(
         };
         let existed = state
             .trading_repo
-            .order_fill_exists(&cfg.user_id, &cfg.trader_id, &exchange_trade_id)
+            .order_fill_exists(&cfg.trader_id, &exchange_trade_id)
             .await?;
 
         let mut fill_inserted = false;
@@ -211,7 +210,6 @@ pub async fn apply_order_stream_update_event(
                     id: Uuid::now_v7().to_string(),
                     order_id: local_order_id.clone(),
                     trader_id: cfg.trader_id.clone(),
-                    user_id: cfg.user_id.clone(),
                     exchange_trade_id,
                     symbol: symbol.clone(),
                     side: ev.side.trim().to_uppercase(),
@@ -246,7 +244,6 @@ pub async fn apply_order_stream_update_event(
         state
             .realtime_hub
             .publish(crate::realtime::RealtimeEvent::TradeExecution {
-                user_id: cfg.user_id.clone(),
                 trader_id: cfg.trader_id.clone(),
                 trade: json!({
                     "symbol": symbol,
@@ -332,7 +329,6 @@ pub async fn apply_account_stream_update_event(
             .trading_repo
             .insert_account_snapshot(
                 Uuid::now_v7().to_string(),
-                &cfg.user_id,
                 &cfg.trader_id,
                 &cfg.exchange_id,
                 &TraderAccountRecord {
@@ -370,7 +366,6 @@ pub async fn apply_account_stream_update_event(
             state
                 .trading_repo
                 .close_open_positions_for_symbol_side(
-                    &cfg.user_id,
                     &cfg.trader_id,
                     &symbol,
                     side,
@@ -385,7 +380,6 @@ pub async fn apply_account_stream_update_event(
             .trading_repo
             .upsert_open_position_from_exchange(UpsertPositionFromExchangeRecord {
                 trader_id: cfg.trader_id.clone(),
-                user_id: cfg.user_id.clone(),
                 symbol: symbol.clone(),
                 side: side.to_string(),
                 quantity: qty,
@@ -403,7 +397,7 @@ pub async fn apply_account_stream_update_event(
     // Push all current open positions to realtime clients after Binance account update
     let open_positions_ws = state
         .trading_repo
-        .open_position_records(&cfg.user_id, &cfg.trader_id, None, None)
+        .open_position_records(&cfg.trader_id, None, None)
         .await
         .unwrap_or_default();
 
@@ -415,7 +409,6 @@ pub async fn apply_account_stream_update_event(
     state
         .realtime_hub
         .publish(crate::realtime::RealtimeEvent::PositionUpdate {
-            user_id: cfg.user_id.clone(),
             trader_id: cfg.trader_id.clone(),
             positions: positions_snapshot,
         });

@@ -12,12 +12,10 @@ use super::{
 impl TradingRepo {
     pub async fn latest_account(
         &self,
-        user_id: &str,
         trader_id: &str,
     ) -> Result<Option<TraderAccountRecord>, DbErr> {
         entity::trader_accounts::Entity::find()
             .filter(entity::trader_accounts::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::trader_accounts::Column::UserId.eq(user_id.trim()))
             .order_by_desc(entity::trader_accounts::Column::SnapshotAt)
             .one(&self.db)
             .await
@@ -27,7 +25,6 @@ impl TradingRepo {
     pub async fn insert_account_snapshot(
         &self,
         snapshot_id: String,
-        user_id: &str,
         trader_id: &str,
         exchange_id: &str,
         account: &TraderAccountRecord,
@@ -36,7 +33,6 @@ impl TradingRepo {
         entity::trader_accounts::ActiveModel {
             id: Set(snapshot_id),
             trader_id: Set(trader_id.to_string()),
-            user_id: Set(user_id.to_string()),
             exchange_id: Set(exchange_id.to_string()),
             total_balance: Set(decimal_from_f64(account.total_balance)),
             available_balance: Set(decimal_from_f64(account.available_balance)),
@@ -55,12 +51,10 @@ impl TradingRepo {
 
     pub async fn compute_account_totals(
         &self,
-        user_id: &str,
         trader_id: &str,
     ) -> Result<(f64, f64, f64), DbErr> {
         let positions = entity::trader_positions::Entity::find()
             .filter(entity::trader_positions::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::trader_positions::Column::UserId.eq(user_id.trim()))
             .filter(entity::trader_positions::Column::Status.eq("open"))
             .all(&self.db)
             .await?;
@@ -79,7 +73,6 @@ impl TradingRepo {
 
         let trades = entity::trader_trades::Entity::find()
             .filter(entity::trader_trades::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::trader_trades::Column::UserId.eq(user_id.trim()))
             .all(&self.db)
             .await?;
         let realized_pnl = trades

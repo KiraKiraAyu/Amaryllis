@@ -14,7 +14,6 @@ use super::{
 impl TradingRepo {
     pub async fn runtime_alert_deliveries(
         &self,
-        user_id: &str,
         trader_id: &str,
         from_ts: i64,
         success: Option<bool>,
@@ -24,7 +23,6 @@ impl TradingRepo {
     ) -> Result<(i64, Vec<RuntimeAlertDeliveryRecord>), DbErr> {
         let mut query = entity::runtime_alert_delivery_log::Entity::find()
             .filter(entity::runtime_alert_delivery_log::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::runtime_alert_delivery_log::Column::UserId.eq(user_id.trim()))
             .filter(entity::runtime_alert_delivery_log::Column::CreatedAt.gte(ts_to_dt(from_ts)));
         if let Some(success) = success {
             query = query.filter(
@@ -56,7 +54,6 @@ impl TradingRepo {
         entity::runtime_alert_delivery_log::ActiveModel {
             id: Set(input.id),
             trader_id: Set(input.trader_id),
-            user_id: Set(input.user_id),
             alert_history_id: Set(input.alert_history_id),
             destination: Set(input.destination),
             endpoint: Set(input.endpoint),

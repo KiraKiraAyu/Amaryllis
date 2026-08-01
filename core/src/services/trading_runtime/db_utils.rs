@@ -21,7 +21,6 @@ pub async fn insert_trade_record(
         .insert_trade(InsertTraderTradeRecord {
             id: Uuid::now_v7().to_string(),
             trader_id: cfg.trader_id.clone(),
-            user_id: cfg.user_id.clone(),
             symbol: symbol.trim().to_uppercase(),
             side: side.trim().to_uppercase(),
             entry_price,
@@ -53,7 +52,6 @@ pub async fn apply_close_fill_to_open_positions(
     Ok(state
         .trading_repo
         .apply_close_fill_to_open_positions(
-            &cfg.user_id,
             &cfg.trader_id,
             symbol,
             position_side,

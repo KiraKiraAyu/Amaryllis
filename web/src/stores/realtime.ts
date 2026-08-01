@@ -6,7 +6,6 @@ import { useAuthStore } from "./auth"
 
 export interface RealtimeEvent {
   type: string
-  user_id?: string
   trader_id?: string
   [key: string]: unknown
 }

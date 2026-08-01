@@ -22,7 +22,6 @@ pub struct TraderPositionRecord {
 pub struct InsertTraderPositionRecord {
     pub id: String,
     pub trader_id: String,
-    pub user_id: String,
     pub symbol: String,
     pub side: String,
     pub quantity: f64,
@@ -43,7 +42,6 @@ pub struct InsertTraderPositionRecord {
 #[derive(Debug, Clone)]
 pub struct UpsertPositionFromExchangeRecord {
     pub trader_id: String,
-    pub user_id: String,
     pub symbol: String,
     pub side: String,
     pub quantity: f64,

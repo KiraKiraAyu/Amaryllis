@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait, PaginatorTrait,
-    QueryFilter, Set, TransactionTrait, sea_query::OnConflict,
+    QueryFilter, Set, TransactionTrait,
 };
 
 use crate::clients::llm_chat::normalize_provider_type;
@@ -226,17 +226,14 @@ impl ModelRepo {
 
     pub async fn list_for_user(
         &self,
-        user_id: &str,
     ) -> Result<Vec<ProviderConfigRecord>, crate::database::DbErr> {
-        self.ensure_defaults(user_id).await?;
+        self.ensure_defaults().await?;
 
         let providers = llm_providers::Entity::find()
-            .filter(llm_providers::Column::UserId.eq(user_id.trim()))
             .all(&self.db)
             .await?;
 
         let models = llm_models::Entity::find()
-            .filter(llm_models::Column::UserId.eq(user_id.trim()))
             .all(&self.db)
             .await?;
 
@@ -277,16 +274,12 @@ impl ModelRepo {
 
     pub async fn replace_for_user(
         &self,
-        user_id: &str,
         providers: Vec<UpsertProviderConfig>,
     ) -> Result<(), crate::database::DbErr> {
-        let user_id = user_id.trim();
         let existing_providers = llm_providers::Entity::find()
-            .filter(llm_providers::Column::UserId.eq(user_id))
             .all(&self.db)
             .await?;
         let existing_models = llm_models::Entity::find()
-            .filter(llm_models::Column::UserId.eq(user_id))
             .all(&self.db)
             .await?;
 
@@ -330,7 +323,6 @@ impl ModelRepo {
 
             llm_providers::Entity::insert(llm_providers::ActiveModel {
                 id: Set(provider_id.clone()),
-                user_id: Set(user_id.to_string()),
                 name: Set(provider.name.trim().to_string()),
                 provider_type: Set(normalized_provider_type_or_original(
                     &provider.provider_type,
@@ -341,18 +333,6 @@ impl ModelRepo {
                 created_at: Set(now),
                 updated_at: Set(now),
             })
-            .on_conflict(
-                OnConflict::columns([llm_providers::Column::UserId, llm_providers::Column::Id])
-                    .update_columns([
-                        llm_providers::Column::Name,
-                        llm_providers::Column::ProviderType,
-                        llm_providers::Column::Enabled,
-                        llm_providers::Column::ApiKey,
-                        llm_providers::Column::BaseUrl,
-                        llm_providers::Column::UpdatedAt,
-                    ])
-                    .to_owned(),
-            )
             .exec(&tx)
             .await?;
 
@@ -373,30 +353,19 @@ impl ModelRepo {
 
                 llm_models::Entity::insert(llm_models::ActiveModel {
                     id: Set(model_id),
-                    user_id: Set(user_id.to_string()),
                     provider_id: Set(provider_id.clone()),
                     name: Set(model.name.trim().to_string()),
                     model_id: Set(model.model_id.trim().to_string()),
                     created_at: Set(now),
                     updated_at: Set(now),
                 })
-                .on_conflict(
-                    OnConflict::columns([llm_models::Column::UserId, llm_models::Column::Id])
-                        .update_columns([
-                            llm_models::Column::ProviderId,
-                            llm_models::Column::Name,
-                            llm_models::Column::ModelId,
-                            llm_models::Column::UpdatedAt,
-                        ])
-                        .to_owned(),
-                )
                 .exec(&tx)
                 .await?;
             }
         }
 
-        delete_stale_models(&tx, user_id, &keep_model_ids).await?;
-        delete_stale_providers(&tx, user_id, &keep_provider_ids).await?;
+        delete_stale_models(&tx, &keep_model_ids).await?;
+        delete_stale_providers(&tx, &keep_provider_ids).await?;
         tx.commit().await?;
 
         Ok(())
@@ -404,10 +373,9 @@ impl ModelRepo {
 
     pub async fn resolve_for_user(
         &self,
-        user_id: &str,
         model_id: Option<&str>,
     ) -> Result<Option<ResolvedModelRecord>, crate::database::DbErr> {
-        let providers = self.list_for_user(user_id).await?;
+        let providers = self.list_for_user().await?;
 
         if let Some(requested_id) = model_id.map(str::trim).filter(|id| !id.is_empty()) {
             return Ok(find_model(&providers, requested_id));
@@ -435,9 +403,8 @@ impl ModelRepo {
 
     pub async fn list_runnable_for_user(
         &self,
-        user_id: &str,
     ) -> Result<Vec<ResolvedModelRecord>, crate::database::DbErr> {
-        let providers = self.list_for_user(user_id).await?;
+        let providers = self.list_for_user().await?;
         let mut items = Vec::new();
 
         for provider in providers {
@@ -453,11 +420,8 @@ impl ModelRepo {
         Ok(items)
     }
 
-    pub async fn ensure_defaults(&self, user_id: &str) -> Result<(), crate::database::DbErr> {
-        let user_id = user_id.trim();
-
+    pub async fn ensure_defaults(&self) -> Result<(), crate::database::DbErr> {
         let existing_count = llm_providers::Entity::find()
-            .filter(llm_providers::Column::UserId.eq(user_id))
             .count(&self.db)
             .await?;
 
@@ -471,7 +435,6 @@ impl ModelRepo {
         for provider in PROVIDER_PRESETS {
             llm_providers::ActiveModel {
                 id: Set(provider.id.to_string()),
-                user_id: Set(user_id.to_string()),
                 name: Set(provider.name.to_string()),
                 provider_type: Set(provider.provider_type.to_string()),
                 enabled: Set(1),
@@ -486,7 +449,6 @@ impl ModelRepo {
             for model in provider.models {
                 llm_models::ActiveModel {
                     id: Set(model.id.to_string()),
-                    user_id: Set(user_id.to_string()),
                     provider_id: Set(provider.id.to_string()),
                     name: Set(model.name.to_string()),
                     model_id: Set(model.model_id.to_string()),
@@ -505,13 +467,12 @@ impl ModelRepo {
 
 async fn delete_stale_models<C>(
     db: &C,
-    user_id: &str,
     keep_ids: &HashSet<String>,
 ) -> Result<(), crate::database::DbErr>
 where
     C: sea_orm::ConnectionTrait,
 {
-    let mut condition = Condition::all().add(llm_models::Column::UserId.eq(user_id));
+    let mut condition = Condition::all();
     if !keep_ids.is_empty() {
         condition = condition.add(llm_models::Column::Id.is_not_in(keep_ids.iter().cloned()));
     }
@@ -526,13 +487,12 @@ where
 
 async fn delete_stale_providers<C>(
     db: &C,
-    user_id: &str,
     keep_ids: &HashSet<String>,
 ) -> Result<(), crate::database::DbErr>
 where
     C: sea_orm::ConnectionTrait,
 {
-    let mut condition = Condition::all().add(llm_providers::Column::UserId.eq(user_id));
+    let mut condition = Condition::all();
     if !keep_ids.is_empty() {
         condition = condition.add(llm_providers::Column::Id.is_not_in(keep_ids.iter().cloned()));
     }
@@ -697,7 +657,7 @@ mod tests {
         let repo = ModelRepo::new(db);
 
         let providers = repo
-            .list_for_user("provider-type-defaults")
+            .list_for_user()
             .await
             .expect("list defaults");
 
@@ -721,42 +681,39 @@ mod tests {
             .expect("connect sqlite memory");
         let repo = ModelRepo::new(db);
 
-        repo.replace_for_user(
-            "provider-type-legacy",
-            vec![
-                UpsertProviderConfig {
-                    id: Some("legacy-deepseek".to_string()),
-                    name: "Legacy DeepSeek".to_string(),
-                    provider_type: "deepseek".to_string(),
-                    enabled: true,
-                    api_key: "secret".to_string(),
-                    base_url: "https://api.deepseek.com/v1".to_string(),
-                    models: vec![UpsertModelConfig {
-                        id: Some("legacy-deepseek-chat".to_string()),
-                        name: "DeepSeek Chat".to_string(),
-                        model_id: "deepseek-chat".to_string(),
-                    }],
-                },
-                UpsertProviderConfig {
-                    id: Some("legacy-claude".to_string()),
-                    name: "Legacy Claude".to_string(),
-                    provider_type: "claude".to_string(),
-                    enabled: true,
-                    api_key: "secret".to_string(),
-                    base_url: "https://api.anthropic.com".to_string(),
-                    models: vec![UpsertModelConfig {
-                        id: Some("legacy-claude-sonnet".to_string()),
-                        name: "Claude Sonnet".to_string(),
-                        model_id: "claude-3-5-sonnet-20241022".to_string(),
-                    }],
-                },
-            ],
-        )
+        repo.replace_for_user(vec![
+            UpsertProviderConfig {
+                id: Some("legacy-deepseek".to_string()),
+                name: "Legacy DeepSeek".to_string(),
+                provider_type: "deepseek".to_string(),
+                enabled: true,
+                api_key: "secret".to_string(),
+                base_url: "https://api.deepseek.com/v1".to_string(),
+                models: vec![UpsertModelConfig {
+                    id: Some("legacy-deepseek-chat".to_string()),
+                    name: "DeepSeek Chat".to_string(),
+                    model_id: "deepseek-chat".to_string(),
+                }],
+            },
+            UpsertProviderConfig {
+                id: Some("legacy-claude".to_string()),
+                name: "Legacy Claude".to_string(),
+                provider_type: "claude".to_string(),
+                enabled: true,
+                api_key: "secret".to_string(),
+                base_url: "https://api.anthropic.com".to_string(),
+                models: vec![UpsertModelConfig {
+                    id: Some("legacy-claude-sonnet".to_string()),
+                    name: "Claude Sonnet".to_string(),
+                    model_id: "claude-3-5-sonnet-20241022".to_string(),
+                }],
+            },
+        ])
         .await
         .expect("replace providers");
 
         let providers = repo
-            .list_for_user("provider-type-legacy")
+            .list_for_user()
             .await
             .expect("list providers");
 

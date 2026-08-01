@@ -1,37 +1,42 @@
 import type {
-  ChangePasswordRequest,
-  CurrentUserPayload,
-  LoginRequest,
+  AuthStatusPayload,
   MessagePayload,
-  RegisterRequest,
+  SetupConfirmRequest,
+  SetupStartPayload,
   TokenPayload,
+  VerifyRequest,
 } from "@/types/auth"
 import request from "@/utils/request"
 
 const Api = {
-  Register: "/api/register",
-  Login: "/api/login",
-  Logout: "/api/logout",
-  Me: "/api/me",
-  ChangePassword: "/api/auth/change-password",
+  Status: "/api/auth/status",
+  Verify: "/api/auth/verify",
+  SetupStart: "/api/auth/setup/start",
+  SetupConfirm: "/api/auth/setup/confirm",
+  ResetStart: "/api/auth/reset/start",
+  ResetConfirm: "/api/auth/reset/confirm",
 } as const
 
-export function registerApi(data: RegisterRequest) {
-  return request.post<TokenPayload>(Api.Register, data)
+export function getAuthStatusApi() {
+  return request.get<AuthStatusPayload>(Api.Status)
 }
 
-export function loginApi(data: LoginRequest) {
-  return request.post<TokenPayload>(Api.Login, data)
+export function verifyApi(data: VerifyRequest) {
+  return request.post<TokenPayload>(Api.Verify, data)
 }
 
-export function logoutApi() {
-  return request.post<MessagePayload>(Api.Logout)
+export function setupStartApi() {
+  return request.post<SetupStartPayload>(Api.SetupStart)
 }
 
-export function getCurrentUserApi() {
-  return request.get<CurrentUserPayload>(Api.Me)
+export function setupConfirmApi(data: SetupConfirmRequest) {
+  return request.post<TokenPayload>(Api.SetupConfirm, data)
 }
 
-export function changePasswordApi(data: ChangePasswordRequest) {
-  return request.post<MessagePayload>(Api.ChangePassword, data)
+export function resetStartApi() {
+  return request.post<SetupStartPayload>(Api.ResetStart)
+}
+
+export function resetConfirmApi(data: SetupConfirmRequest) {
+  return request.post<MessagePayload>(Api.ResetConfirm, data)
 }

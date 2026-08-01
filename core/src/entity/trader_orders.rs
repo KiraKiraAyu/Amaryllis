@@ -12,8 +12,6 @@ pub struct Model {
     #[sea_orm(column_type = "Text")]
     pub trader_id: String,
     #[sea_orm(column_type = "Text")]
-    pub user_id: String,
-    #[sea_orm(column_type = "Text")]
     pub exchange_order_id: String,
     #[sea_orm(column_type = "Text")]
     pub client_order_id: String,

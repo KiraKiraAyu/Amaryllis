@@ -10,8 +10,6 @@ pub struct Model {
     pub id: String,
     #[sea_orm(column_type = "Text")]
     pub trader_id: String,
-    #[sea_orm(column_type = "Text")]
-    pub user_id: String,
     pub window_hours: i32,
     #[sea_orm(column_type = "Text")]
     pub thresholds_json: String,

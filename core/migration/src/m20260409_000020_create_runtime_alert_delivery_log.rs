@@ -23,11 +23,6 @@ impl MigrationTrait for Migration {
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(RuntimeAlertDeliveryLog::UserId)
-                            .string()
-                            .not_null(),
-                    )
-                    .col(
                         ColumnDef::new(RuntimeAlertDeliveryLog::AlertHistoryId)
                             .string()
                             .not_null()
@@ -123,17 +118,6 @@ impl MigrationTrait for Migration {
             .create_index(
                 Index::create()
                     .if_not_exists()
-                    .name("idx_runtime_alert_delivery_log_user_created")
-                    .table(RuntimeAlertDeliveryLog::Table)
-                    .col(RuntimeAlertDeliveryLog::UserId)
-                    .col((RuntimeAlertDeliveryLog::CreatedAt, IndexOrder::Desc))
-                    .to_owned(),
-            )
-            .await?;
-        manager
-            .create_index(
-                Index::create()
-                    .if_not_exists()
                     .name("idx_runtime_alert_delivery_log_success_created")
                     .table(RuntimeAlertDeliveryLog::Table)
                     .col(RuntimeAlertDeliveryLog::Success)
@@ -171,7 +155,6 @@ enum RuntimeAlertDeliveryLog {
     Table,
     Id,
     TraderId,
-    UserId,
     AlertHistoryId,
     Destination,
     Endpoint,

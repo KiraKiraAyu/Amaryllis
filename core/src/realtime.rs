@@ -1,8 +1,7 @@
 use std::{convert::Infallible, sync::Arc, time::Duration};
 
 use axum::{
-    extract::{Query, State},
-    http::StatusCode,
+    extract::State,
     response::sse::{Event, KeepAlive, Sse},
 };
 use futures_util::{Stream, StreamExt, stream};
@@ -20,28 +19,23 @@ const SSE_CONNECTED_COMMENT: &str = "connected";
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum RealtimeEvent {
     PositionUpdate {
-        user_id: String,
         trader_id: String,
         positions: Vec<PositionPayload>,
     },
     TradeExecution {
-        user_id: String,
         trader_id: String,
         trade: serde_json::Value,
     },
     AiDecision {
-        user_id: String,
         trader_id: String,
         decision: serde_json::Value,
     },
     EngineStatus {
-        user_id: String,
         trader_id: String,
         status: String,
         message: String,
     },
     EquitySnapshot {
-        user_id: String,
         trader_id: String,
         equity: f64,
         available_cash: f64,
@@ -49,7 +43,6 @@ pub enum RealtimeEvent {
         ts: i64,
     },
     BacktestProgress {
-        user_id: String,
         run_id: String,
         state: String,
         bar_index: usize,
@@ -58,7 +51,6 @@ pub enum RealtimeEvent {
         ts: i64,
     },
     DebateMessage {
-        user_id: String,
         debate_id: String,
         round: i64,
         personality: String,
@@ -66,33 +58,15 @@ pub enum RealtimeEvent {
         vote: String,
     },
     DebateFinished {
-        user_id: String,
         debate_id: String,
         status: String,
         final_decision: String,
         final_reasoning: String,
     },
     Error {
-        user_id: String,
         code: String,
         message: String,
     },
-}
-
-impl RealtimeEvent {
-    pub fn user_id(&self) -> &str {
-        match self {
-            RealtimeEvent::PositionUpdate { user_id, .. }
-            | RealtimeEvent::TradeExecution { user_id, .. }
-            | RealtimeEvent::AiDecision { user_id, .. }
-            | RealtimeEvent::EngineStatus { user_id, .. }
-            | RealtimeEvent::EquitySnapshot { user_id, .. }
-            | RealtimeEvent::BacktestProgress { user_id, .. }
-            | RealtimeEvent::DebateMessage { user_id, .. }
-            | RealtimeEvent::DebateFinished { user_id, .. }
-            | RealtimeEvent::Error { user_id, .. } => user_id,
-        }
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -121,29 +95,19 @@ impl Default for RealtimeHub {
     }
 }
 
-#[derive(Debug, Deserialize)]
-pub struct EventStreamQuery {
-    pub token: Option<String>,
-}
-
+/// SSE stream handler. Authentication is enforced by the route-level
+/// auth middleware (token via `Authorization` header or `?token=` query).
 pub async fn events_handler(
     State(app): State<AppState>,
-    Query(query): Query<EventStreamQuery>,
-) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, StatusCode> {
-    let token = query.token.unwrap_or_default();
-    let user_id = validate_stream_token(&app, &token).ok_or(StatusCode::UNAUTHORIZED)?;
+) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let rx = app.realtime_hub.subscribe();
 
-    debug!("sse: client connected user_id={}", user_id);
+    debug!("sse: client connected");
 
-    let event_stream = stream::unfold((rx, user_id), |(mut rx, user_id)| async move {
+    let event_stream = stream::unfold(rx, |mut rx| async move {
         loop {
             match rx.recv().await {
                 Ok(event) => {
-                    if event.user_id() != user_id {
-                        continue;
-                    }
-
                     let json = match serde_json::to_string(event.as_ref()) {
                         Ok(json) => json,
                         Err(err) => {
@@ -152,10 +116,10 @@ pub async fn events_handler(
                         }
                     };
 
-                    return Some((Ok(Event::default().data(json)), (rx, user_id)));
+                    return Some((Ok(Event::default().data(json)), rx));
                 }
                 Err(broadcast::error::RecvError::Lagged(count)) => {
-                    warn!("sse: client {} lagged by {count} events", user_id);
+                    warn!("sse: client lagged by {count} events");
                 }
                 Err(broadcast::error::RecvError::Closed) => return None,
             }
@@ -163,29 +127,15 @@ pub async fn events_handler(
     });
     let stream = sse_initial_stream().chain(event_stream);
 
-    Ok(Sse::new(stream).keep_alive(
+    Sse::new(stream).keep_alive(
         KeepAlive::new()
             .interval(Duration::from_secs(20))
             .text("keep-alive"),
-    ))
+    )
 }
 
 fn sse_initial_stream() -> impl Stream<Item = Result<Event, Infallible>> {
     stream::once(async { Ok(Event::default().comment(SSE_CONNECTED_COMMENT)) })
-}
-
-fn validate_stream_token(app: &AppState, token: &str) -> Option<String> {
-    if token.is_empty() {
-        return None;
-    }
-
-    match app.services.auth_service.authenticate_token(token) {
-        Ok(claims) => Some(claims.sub),
-        Err(err) => {
-            debug!("sse: token auth failed: {err}");
-            None
-        }
-    }
 }
 
 #[cfg(test)]
@@ -211,7 +161,6 @@ mod tests {
     #[test]
     fn position_update_serializes_full_position_payloads() {
         let event = RealtimeEvent::PositionUpdate {
-            user_id: "user_1".to_string(),
             trader_id: "trader_1".to_string(),
             positions: vec![sample_position_payload()],
         };
@@ -222,7 +171,6 @@ mod tests {
             value,
             json!({
                 "type": "position_update",
-                "user_id": "user_1",
                 "trader_id": "trader_1",
                 "positions": [
                     {
@@ -252,7 +200,6 @@ mod tests {
     fn position_update_deserializes_typed_position_payloads() {
         let event: RealtimeEvent = serde_json::from_value(json!({
             "type": "position_update",
-            "user_id": "user_1",
             "trader_id": "trader_1",
             "positions": [
                 {
@@ -278,7 +225,6 @@ mod tests {
         .expect("deserialize position update event");
 
         let RealtimeEvent::PositionUpdate {
-            user_id,
             trader_id,
             positions,
         } = event
@@ -286,7 +232,6 @@ mod tests {
             panic!("expected position update event");
         };
 
-        assert_eq!(user_id, "user_1");
         assert_eq!(trader_id, "trader_1");
         assert_eq!(positions.len(), 1);
 

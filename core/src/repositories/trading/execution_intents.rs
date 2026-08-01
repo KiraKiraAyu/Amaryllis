@@ -14,7 +14,6 @@ use super::{
 impl TradingRepo {
     pub async fn count_recent_execution_intents(
         &self,
-        user_id: &str,
         trader_id: &str,
         decision: &str,
         symbol: &str,
@@ -23,7 +22,6 @@ impl TradingRepo {
     ) -> Result<i64, DbErr> {
         entity::execution_intents::Entity::find()
             .filter(entity::execution_intents::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::execution_intents::Column::UserId.eq(user_id.trim()))
             .filter(entity::execution_intents::Column::Decision.eq(decision.trim()))
             .filter(entity::execution_intents::Column::Symbol.eq(symbol.trim().to_uppercase()))
             .filter(entity::execution_intents::Column::Side.eq(side.trim().to_uppercase()))
@@ -35,13 +33,11 @@ impl TradingRepo {
 
     pub async fn execution_intent_by_key(
         &self,
-        user_id: &str,
         trader_id: &str,
         intent_key: &str,
     ) -> Result<Option<ExecutionIntentRecord>, DbErr> {
         entity::execution_intents::Entity::find()
             .filter(entity::execution_intents::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::execution_intents::Column::UserId.eq(user_id.trim()))
             .filter(entity::execution_intents::Column::IntentKey.eq(intent_key.trim()))
             .one(&self.db)
             .await
@@ -55,7 +51,6 @@ impl TradingRepo {
         entity::execution_intents::Entity::insert(entity::execution_intents::ActiveModel {
             id: Set(input.id),
             trader_id: Set(input.trader_id),
-            user_id: Set(input.user_id),
             intent_key: Set(input.intent_key),
             symbol: Set(input.symbol),
             side: Set(input.side),
@@ -66,15 +61,6 @@ impl TradingRepo {
             created_at: Set(ts_to_dt(input.created_at)),
             updated_at: Set(ts_to_dt(input.updated_at)),
         })
-        .on_conflict(
-            sea_orm::sea_query::OnConflict::columns([
-                entity::execution_intents::Column::TraderId,
-                entity::execution_intents::Column::UserId,
-                entity::execution_intents::Column::IntentKey,
-            ])
-            .do_nothing()
-            .to_owned(),
-        )
         .exec(&self.db)
         .await
         .map(|_| ())
@@ -82,7 +68,6 @@ impl TradingRepo {
 
     pub async fn mark_execution_intent_submitted(
         &self,
-        user_id: &str,
         trader_id: &str,
         intent_key: &str,
         exchange_order_id: &str,
@@ -107,7 +92,6 @@ impl TradingRepo {
                 Expr::value(ts_to_dt(updated_at)),
             )
             .filter(entity::execution_intents::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::execution_intents::Column::UserId.eq(user_id.trim()))
             .filter(entity::execution_intents::Column::IntentKey.eq(intent_key.trim()))
             .filter(entity::execution_intents::Column::Status.eq("pending"))
             .exec(&self.db)
@@ -117,13 +101,11 @@ impl TradingRepo {
 
     pub async fn submitted_execution_intents_by_exchange_order(
         &self,
-        user_id: &str,
         trader_id: &str,
         exchange_order_id: &str,
     ) -> Result<Vec<ExecutionIntentRecord>, DbErr> {
         entity::execution_intents::Entity::find()
             .filter(entity::execution_intents::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::execution_intents::Column::UserId.eq(user_id.trim()))
             .filter(entity::execution_intents::Column::ExchangeOrderId.eq(exchange_order_id.trim()))
             .filter(entity::execution_intents::Column::Status.eq("submitted"))
             .all(&self.db)
@@ -159,14 +141,12 @@ impl TradingRepo {
 
     pub async fn stale_submitted_execution_intents(
         &self,
-        user_id: &str,
         trader_id: &str,
         threshold_ts: i64,
         limit: u64,
     ) -> Result<Vec<ExecutionIntentRecord>, DbErr> {
         entity::execution_intents::Entity::find()
             .filter(entity::execution_intents::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::execution_intents::Column::UserId.eq(user_id.trim()))
             .filter(entity::execution_intents::Column::Status.eq("submitted"))
             .filter(entity::execution_intents::Column::ExchangeOrderId.ne(""))
             .filter(entity::execution_intents::Column::UpdatedAt.lte(ts_to_dt(threshold_ts)))

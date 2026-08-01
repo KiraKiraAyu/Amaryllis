@@ -269,7 +269,7 @@ pub async fn run_trader_loop(
         }
     }
 
-    set_trader_running(&engine.inner.state, &cfg.trader_id, &cfg.user_id, false).await?;
+    set_trader_running(&engine.inner.state, &cfg.trader_id, false).await?;
     let _ = engine
         .inner
         .state
@@ -312,7 +312,7 @@ pub async fn process_cycle(
     }
 
     // 3) mark-to-market open positions
-    let mut open_positions = load_open_positions(state, &cfg.trader_id, &cfg.user_id).await?;
+    let mut open_positions = load_open_positions(state, &cfg.trader_id).await?;
     mark_to_market_positions(state, cfg, &mut open_positions, market, now).await?;
 
     // 4) account metrics
@@ -407,7 +407,6 @@ pub async fn process_cycle(
     state
         .realtime_hub
         .publish(crate::realtime::RealtimeEvent::EquitySnapshot {
-            user_id: cfg.user_id.clone(),
             trader_id: cfg.trader_id.clone(),
             equity: refreshed.total_balance,
             available_cash: refreshed.available_balance,
@@ -420,7 +419,6 @@ pub async fn process_cycle(
         state
             .realtime_hub
             .publish(crate::realtime::RealtimeEvent::AiDecision {
-                user_id: cfg.user_id.clone(),
                 trader_id: cfg.trader_id.clone(),
                 decision: json!({
                     "symbol": signal.symbol,
@@ -436,7 +434,7 @@ pub async fn process_cycle(
     // heartbeat
     state
         .trading_repo
-        .set_trader_running(&cfg.user_id, &cfg.trader_id, true, now)
+        .set_trader_running(&cfg.trader_id, true, now)
         .await?;
 
     Ok(())

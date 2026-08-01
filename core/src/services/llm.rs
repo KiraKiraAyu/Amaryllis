@@ -20,11 +20,10 @@ impl LlmService {
 
     pub async fn resolve_for_user(
         &self,
-        user_id: &str,
         model_id: Option<&str>,
     ) -> Result<ResolvedModelRecord> {
         self.model_repo
-            .resolve_for_user(user_id, model_id)
+            .resolve_for_user(model_id)
             .await
             .map_err(|err| AppError::Internal(format!("Failed to load LLM configuration: {err}")))?
             .ok_or_else(|| {
@@ -34,21 +33,20 @@ impl LlmService {
             })
     }
 
-    pub async fn list_runnable_for_user(&self, user_id: &str) -> Result<Vec<ResolvedModelRecord>> {
+    pub async fn list_runnable_for_user(&self) -> Result<Vec<ResolvedModelRecord>> {
         self.model_repo
-            .list_runnable_for_user(user_id)
+            .list_runnable_for_user()
             .await
             .map_err(|err| AppError::Internal(format!("Failed to load runnable models: {err}")))
     }
 
     pub async fn chat_for_user(
         &self,
-        user_id: &str,
         model_id: Option<&str>,
         messages: Vec<LlmMessage>,
         system_prompt: Option<&str>,
     ) -> Result<String> {
-        let model = self.resolve_for_user(user_id, model_id).await?;
+        let model = self.resolve_for_user(model_id).await?;
         self.chat_with_model(&model, messages, system_prompt).await
     }
 

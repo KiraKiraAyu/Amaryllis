@@ -18,7 +18,6 @@ impl MigrationTrait for Migration {
                             .primary_key(),
                     )
                     .col(ColumnDef::new(TraderOrders::TraderId).string().not_null())
-                    .col(ColumnDef::new(TraderOrders::UserId).string().not_null())
                     .col(
                         ColumnDef::new(TraderOrders::ExchangeOrderId)
                             .string()
@@ -137,7 +136,6 @@ enum TraderOrders {
     Table,
     Id,
     TraderId,
-    UserId,
     ExchangeOrderId,
     ClientOrderId,
     Symbol,

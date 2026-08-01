@@ -22,7 +22,6 @@ impl MigrationTrait for Migration {
                             .string()
                             .not_null(),
                     )
-                    .col(ColumnDef::new(TraderDecisions::UserId).string().not_null())
                     .col(
                         ColumnDef::new(TraderDecisions::Symbol)
                             .string()
@@ -78,17 +77,7 @@ impl MigrationTrait for Migration {
                     .to_owned(),
             )
             .await?;
-        manager
-            .create_index(
-                Index::create()
-                    .if_not_exists()
-                    .name("idx_trader_decisions_user_created")
-                    .table(TraderDecisions::Table)
-                    .col(TraderDecisions::UserId)
-                    .col((TraderDecisions::CreatedAt, IndexOrder::Desc))
-                    .to_owned(),
-            )
-            .await
+        Ok(())
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
@@ -108,7 +97,6 @@ enum TraderDecisions {
     Table,
     Id,
     TraderId,
-    UserId,
     Symbol,
     Timeframe,
     Decision,

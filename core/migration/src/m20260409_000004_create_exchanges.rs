@@ -29,7 +29,6 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .default(""),
                     )
-                    .col(ColumnDef::new(Exchanges::UserId).string().not_null())
                     .col(ColumnDef::new(Exchanges::Name).string().not_null())
                     .col(
                         ColumnDef::new(Exchanges::Type)
@@ -91,30 +90,8 @@ impl MigrationTrait for Migration {
             .create_index(
                 Index::create()
                     .if_not_exists()
-                    .name("idx_exchanges_user_id")
+                    .name("idx_exchanges_type_account")
                     .table(Exchanges::Table)
-                    .col(Exchanges::UserId)
-                    .to_owned(),
-            )
-            .await?;
-        manager
-            .create_index(
-                Index::create()
-                    .if_not_exists()
-                    .name("idx_exchanges_user_type")
-                    .table(Exchanges::Table)
-                    .col(Exchanges::UserId)
-                    .col(Exchanges::ExchangeType)
-                    .to_owned(),
-            )
-            .await?;
-        manager
-            .create_index(
-                Index::create()
-                    .if_not_exists()
-                    .name("idx_exchanges_user_type_account")
-                    .table(Exchanges::Table)
-                    .col(Exchanges::UserId)
                     .col(Exchanges::ExchangeType)
                     .col(Exchanges::AccountName)
                     .unique()
@@ -136,7 +113,6 @@ enum Exchanges {
     Id,
     ExchangeType,
     AccountName,
-    UserId,
     Name,
     Type,
     Enabled,

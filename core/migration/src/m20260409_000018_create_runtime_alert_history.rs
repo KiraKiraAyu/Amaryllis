@@ -23,11 +23,6 @@ impl MigrationTrait for Migration {
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(RuntimeAlertHistory::UserId)
-                            .string()
-                            .not_null(),
-                    )
-                    .col(
                         ColumnDef::new(RuntimeAlertHistory::WindowHours)
                             .integer()
                             .not_null()
@@ -87,17 +82,6 @@ impl MigrationTrait for Migration {
             .create_index(
                 Index::create()
                     .if_not_exists()
-                    .name("idx_runtime_alert_history_user_created")
-                    .table(RuntimeAlertHistory::Table)
-                    .col(RuntimeAlertHistory::UserId)
-                    .col((RuntimeAlertHistory::CreatedAt, IndexOrder::Desc))
-                    .to_owned(),
-            )
-            .await?;
-        manager
-            .create_index(
-                Index::create()
-                    .if_not_exists()
                     .name("idx_runtime_alert_history_breached_created")
                     .table(RuntimeAlertHistory::Table)
                     .col(RuntimeAlertHistory::Breached)
@@ -124,7 +108,6 @@ enum RuntimeAlertHistory {
     Table,
     Id,
     TraderId,
-    UserId,
     WindowHours,
     ThresholdsJson,
     RatesJson,

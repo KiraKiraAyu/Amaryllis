@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from "vue"
 import Button from "primevue/button"
 import PageHeader from "@/components/layout/PageHeader.vue"
 import StrategyEditor from "@/components/strategy/StrategyEditor.vue"
@@ -7,6 +8,7 @@ import StrategyList from "@/components/strategy/StrategyList.vue"
 import StrategyPromptPreview from "@/components/strategy/StrategyPromptPreview.vue"
 import StrategyTestResult from "@/components/strategy/StrategyTestResult.vue"
 import { useStrategyPage } from "@/composables/useStrategyPage"
+import type { EditableStrategy } from "@/types/strategy-ui"
 
 const {
   createNew,
@@ -30,6 +32,14 @@ const {
   selectStrategy,
   backToList,
 } = useStrategyPage()
+
+// The editor is only rendered while `isEditing`, which implies a non-null selection.
+const editingStrategy = computed<EditableStrategy>({
+  get: () => selected.value as EditableStrategy,
+  set: (value) => {
+    selected.value = value
+  },
+})
 </script>
 
 <template>
@@ -89,7 +99,7 @@ const {
         <!-- View 3: Strategy Editor Screen (Full Width Editor) -->
         <div v-else-if="isEditing" class="w-full" key="edit-view">
           <StrategyEditor
-            v-model="selected!"
+            v-model="editingStrategy"
             :saving="saving"
             :duplicating="duplicating"
             @save="saveStrategy"

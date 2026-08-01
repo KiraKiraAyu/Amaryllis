@@ -2,7 +2,7 @@ use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder,
-    QuerySelect, Set, prelude::Expr, sea_query::OnConflict,
+    QuerySelect, Set, prelude::Expr,
 };
 use serde_json::{Value, json};
 
@@ -20,7 +20,6 @@ pub struct BacktestRepo {
 #[derive(Debug, Clone)]
 pub struct CreateBacktestRunRecord {
     pub run_id: String,
-    pub user_id: String,
     pub config_json: String,
     pub created_at: i64,
     pub updated_at: i64,
@@ -41,7 +40,6 @@ pub struct BacktestRunRecord {
 #[derive(Debug, Clone)]
 pub struct BacktestEquityPointRecord {
     pub run_id: String,
-    pub user_id: String,
     pub ts: i64,
     pub equity: f64,
     pub available: f64,
@@ -54,7 +52,6 @@ pub struct BacktestEquityPointRecord {
 pub struct BacktestTradeRecord {
     pub id: String,
     pub run_id: String,
-    pub user_id: String,
     pub ts: i64,
     pub symbol: String,
     pub action: String,
@@ -72,7 +69,6 @@ pub struct BacktestTradeRecord {
 pub struct BacktestDecisionRecord {
     pub id: String,
     pub run_id: String,
-    pub user_id: String,
     pub ts: i64,
     pub symbol: String,
     pub action: String,
@@ -89,7 +85,6 @@ impl BacktestRepo {
     pub async fn create_run(&self, input: CreateBacktestRunRecord) -> Result<(), DbErr> {
         backtest_runs::ActiveModel {
             run_id: Set(input.run_id),
-            user_id: Set(input.user_id),
             label: Set(String::new()),
             last_error: Set(String::new()),
             version: Set(1),
@@ -106,7 +101,6 @@ impl BacktestRepo {
 
     pub async fn update_label(
         &self,
-        user_id: &str,
         run_id: &str,
         label: String,
         updated_at: i64,
@@ -118,16 +112,14 @@ impl BacktestRepo {
                 Expr::value(ts_to_dt(updated_at)),
             )
             .filter(backtest_runs::Column::RunId.eq(run_id.trim()))
-            .filter(backtest_runs::Column::UserId.eq(user_id.trim()))
             .exec(&self.db)
             .await
             .map(|res| res.rows_affected)
     }
 
-    pub async fn delete_run(&self, user_id: &str, run_id: &str) -> Result<u64, DbErr> {
+    pub async fn delete_run(&self, run_id: &str) -> Result<u64, DbErr> {
         let deleted = backtest_runs::Entity::delete_many()
             .filter(backtest_runs::Column::RunId.eq(run_id.trim()))
-            .filter(backtest_runs::Column::UserId.eq(user_id.trim()))
             .exec(&self.db)
             .await?;
 
@@ -180,19 +172,16 @@ impl BacktestRepo {
 
     pub async fn get_run(
         &self,
-        user_id: &str,
         run_id: &str,
     ) -> Result<Option<BacktestRunRecord>, DbErr> {
         backtest_runs::Entity::find_by_id(run_id.trim().to_string())
-            .filter(backtest_runs::Column::UserId.eq(user_id.trim()))
             .one(&self.db)
             .await
             .map(|row| row.map(map_run_record))
     }
 
-    pub async fn list_runs(&self, user_id: &str, limit: i64) -> Result<Vec<Value>, DbErr> {
+    pub async fn list_runs(&self, limit: i64) -> Result<Vec<Value>, DbErr> {
         backtest_runs::Entity::find()
-            .filter(backtest_runs::Column::UserId.eq(user_id.trim()))
             .order_by_desc(backtest_runs::Column::CreatedAt)
             .limit(limit.max(0) as u64)
             .all(&self.db)
@@ -202,13 +191,11 @@ impl BacktestRepo {
 
     pub async fn list_equity_points(
         &self,
-        user_id: &str,
         run_id: &str,
         limit: i64,
     ) -> Result<Vec<Value>, DbErr> {
         backtest_equity::Entity::find()
             .filter(backtest_equity::Column::RunId.eq(run_id.trim()))
-            .filter(backtest_equity::Column::UserId.eq(user_id.trim()))
             .order_by_asc(backtest_equity::Column::Ts)
             .limit(limit.max(0) as u64)
             .all(&self.db)
@@ -218,13 +205,11 @@ impl BacktestRepo {
 
     pub async fn list_trades(
         &self,
-        user_id: &str,
         run_id: &str,
         limit: i64,
     ) -> Result<Vec<Value>, DbErr> {
         backtest_trades::Entity::find()
             .filter(backtest_trades::Column::RunId.eq(run_id.trim()))
-            .filter(backtest_trades::Column::UserId.eq(user_id.trim()))
             .order_by_asc(backtest_trades::Column::Ts)
             .limit(limit.max(0) as u64)
             .all(&self.db)
@@ -234,13 +219,11 @@ impl BacktestRepo {
 
     pub async fn list_decisions(
         &self,
-        user_id: &str,
         run_id: &str,
         limit: i64,
     ) -> Result<Vec<Value>, DbErr> {
         backtest_decisions::Entity::find()
             .filter(backtest_decisions::Column::RunId.eq(run_id.trim()))
-            .filter(backtest_decisions::Column::UserId.eq(user_id.trim()))
             .order_by_asc(backtest_decisions::Column::Ts)
             .limit(limit.max(0) as u64)
             .all(&self.db)
@@ -257,7 +240,6 @@ impl BacktestRepo {
 
         backtest_equity::Entity::insert(backtest_equity::ActiveModel {
             run_id: Set(input.run_id),
-            user_id: Set(input.user_id),
             ts: Set(ts_to_dt(input.ts)),
             equity: Set(decimal_from_f64(input.equity)),
             available: Set(decimal_from_f64(input.available)),
@@ -266,19 +248,6 @@ impl BacktestRepo {
             dd_pct: Set(decimal_from_f64(input.dd_pct)),
             cycle: Set(input.cycle as i32),
         })
-        .on_conflict(
-            OnConflict::columns([backtest_equity::Column::RunId, backtest_equity::Column::Ts])
-                .update_columns([
-                    backtest_equity::Column::UserId,
-                    backtest_equity::Column::Equity,
-                    backtest_equity::Column::Available,
-                    backtest_equity::Column::Pnl,
-                    backtest_equity::Column::PnlPct,
-                    backtest_equity::Column::DdPct,
-                    backtest_equity::Column::Cycle,
-                ])
-                .to_owned(),
-        )
         .exec(&self.db)
         .await
         .map(|_| ())
@@ -288,7 +257,6 @@ impl BacktestRepo {
         backtest_trades::ActiveModel {
             id: Set(input.id),
             run_id: Set(input.run_id),
-            user_id: Set(input.user_id),
             ts: Set(ts_to_dt(input.ts)),
             symbol: Set(input.symbol),
             action: Set(input.action),
@@ -314,7 +282,6 @@ impl BacktestRepo {
         backtest_decisions::ActiveModel {
             id: Set(input.id),
             run_id: Set(input.run_id),
-            user_id: Set(input.user_id),
             ts: Set(ts_to_dt(input.ts)),
             symbol: Set(input.symbol),
             timeframe: Set(String::new()),

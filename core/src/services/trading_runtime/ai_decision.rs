@@ -290,7 +290,6 @@ pub async fn persist_decision(
         .insert_decision(InsertTraderDecisionRecord {
             id: Uuid::now_v7().to_string(),
             trader_id: cfg.trader_id.clone(),
-            user_id: cfg.user_id.clone(),
             symbol: d.symbol.clone(),
             timeframe: d.timeframe.to_string(),
             decision: d.action.to_string(),

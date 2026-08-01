@@ -1,6 +1,6 @@
 # QuantAura
 
-QuantAura is a full-stack application for AI-assisted trading, quantitative strategy experiments, and runtime trading operations. It includes a Rust/Axum backend and a Vue 3 frontend, with support for authentication, model and exchange configuration, strategy management, backtesting, runtime trading monitoring, debate-style decision workflows, and alerts.
+QuantAura is a self-hosted, single-operator full-stack application for AI-assisted trading, quantitative strategy experiments, and runtime trading operations. It includes a Rust/Axum backend and a Vue 3 frontend, with support for model and exchange configuration, strategy management, backtesting, runtime trading monitoring, debate-style decision workflows, and alerts.
 
 ## Tech Stack
 
@@ -9,13 +9,21 @@ QuantAura is a full-stack application for AI-assisted trading, quantitative stra
 - Package management: pnpm workspace
 - Database: local SQLite with automatic migrations on startup
 
+## Authentication
+
+QuantAura is designed for self-hosting by a single operator. Access is guarded by one TOTP authenticator (Google Authenticator, 1Password, Microsoft Authenticator, etc.):
+
+- **First boot**: open the web UI and you will be guided to scan a QR code with your authenticator app, then confirm with a 6-digit code. The secret is stored in the local database (`app_settings` table).
+- **Daily access**: enter the current 6-digit code to unlock a session (JWT, HS256, 7-day TTL by default).
+- **Rebind**: Settings → Security → Rebind Authenticator.
+- **Optional env-pinning**: set `AUTH_TOTP_SECRET` (base32) to manage the secret outside the app; the in-app setup/rebind endpoints are then disabled.
+
 ## Local Setup
 
 Prerequisites:
 
 - Rust 1.92+
 - Node.js and pnpm
-- OpenSSL
 
 Install frontend dependencies:
 
@@ -28,22 +36,6 @@ Prepare local environment variables:
 ```bash
 cp .env.example .env
 ```
-
-Generate development JWT keys:
-
-```bash
-openssl genrsa -out core/private.pem 2048
-openssl rsa -in core/private.pem -pubout -out core/public.pem
-```
-
-The default `.env.example` uses:
-
-```env
-JWT_PRIVATE_KEY_PATH=./private.pem
-JWT_PUBLIC_KEY_PATH=./public.pem
-```
-
-Backend development scripts run from the `core/` directory, so these relative paths are resolved from `core/`. If you store the keys elsewhere, update the paths in `.env` accordingly.
 
 ## Start Development
 
@@ -116,15 +108,13 @@ pnpm run build
 
 ## Docker Deployment
 
-Before starting the containers, prepare the root `.env` file and generate backend JWT keys:
+Before starting the containers, prepare the root `.env` file:
 
 ```bash
 cp .env.example .env
-openssl genrsa -out core/private.pem 2048
-openssl rsa -in core/private.pem -pubout -out core/public.pem
 ```
 
-The default key paths in `.env`, `./private.pem` and `./public.pem`, are relative to `core/` during local development. In Docker, they are mounted into the backend container at `/app`, so no separate Docker-specific path changes are required.
+No key generation is needed. The TOTP secret and session signing secret are created on first boot and persisted in the `quantaura-data` volume alongside the database.
 
 Start Docker:
 

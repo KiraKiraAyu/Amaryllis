@@ -15,7 +15,6 @@ impl TradingRepo {
             id: Set(input.id),
             order_id: Set(input.order_id),
             trader_id: Set(input.trader_id),
-            user_id: Set(input.user_id),
             exchange_trade_id: Set(input.exchange_trade_id),
             symbol: Set(input.symbol),
             side: Set(input.side),
@@ -34,13 +33,11 @@ impl TradingRepo {
 
     pub async fn order_fill_exists(
         &self,
-        user_id: &str,
         trader_id: &str,
         exchange_trade_id: &str,
     ) -> Result<bool, DbErr> {
         entity::order_fills::Entity::find()
             .filter(entity::order_fills::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::order_fills::Column::UserId.eq(user_id.trim()))
             .filter(entity::order_fills::Column::ExchangeTradeId.eq(exchange_trade_id.trim()))
             .one(&self.db)
             .await
@@ -49,14 +46,12 @@ impl TradingRepo {
 
     pub async fn order_fill_summary(
         &self,
-        user_id: &str,
         trader_id: &str,
         order_id: &str,
     ) -> Result<(f64, f64), DbErr> {
         let fills = entity::order_fills::Entity::find()
             .filter(entity::order_fills::Column::OrderId.eq(order_id.trim()))
             .filter(entity::order_fills::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::order_fills::Column::UserId.eq(user_id.trim()))
             .all(&self.db)
             .await?;
         let filled_qty: f64 = fills
@@ -77,14 +72,12 @@ impl TradingRepo {
 
     pub async fn order_fills(
         &self,
-        user_id: &str,
         trader_id: &str,
         order_id: &str,
     ) -> Result<Vec<OrderFillRecord>, DbErr> {
         entity::order_fills::Entity::find()
             .filter(entity::order_fills::Column::OrderId.eq(order_id.trim()))
             .filter(entity::order_fills::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::order_fills::Column::UserId.eq(user_id.trim()))
             .order_by_desc(entity::order_fills::Column::ExecutedAt)
             .all(&self.db)
             .await

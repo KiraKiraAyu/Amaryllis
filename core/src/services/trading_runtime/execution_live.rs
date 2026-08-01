@@ -30,7 +30,6 @@ pub async fn sync_live_positions_and_balances(
             .trading_repo
             .upsert_open_position_from_exchange(UpsertPositionFromExchangeRecord {
                 trader_id: cfg.trader_id.clone(),
-                user_id: cfg.user_id.clone(),
                 symbol,
                 side: side.to_string(),
                 quantity,
@@ -47,7 +46,7 @@ pub async fn sync_live_positions_and_balances(
 
     state
         .trading_repo
-        .close_open_positions_missing_from_exchange(&cfg.user_id, &cfg.trader_id, &live_keys, ts)
+        .close_open_positions_missing_from_exchange(&cfg.trader_id, &live_keys, ts)
         .await?;
 
     let balances = get_balances_with_retry(adapter).await?;
@@ -64,7 +63,6 @@ pub async fn sync_live_positions_and_balances(
             .trading_repo
             .insert_account_snapshot(
                 Uuid::now_v7().to_string(),
-                &cfg.user_id,
                 &cfg.trader_id,
                 &cfg.exchange_id,
                 &TraderAccountRecord {
@@ -747,7 +745,7 @@ pub async fn has_recent_live_open_order(
     let threshold = now_ts.saturating_sub(cooldown_secs.max(1));
     Ok(state
         .trading_repo
-        .has_recent_open_order(&cfg.user_id, &cfg.trader_id, symbol, side, threshold)
+        .has_recent_open_order(&cfg.trader_id, symbol, side, threshold)
         .await?)
 }
 
@@ -766,7 +764,7 @@ pub async fn try_register_execution_intent(
 ) -> Result<bool, AppError> {
     if state
         .trading_repo
-        .execution_intent_by_key(&cfg.user_id, &cfg.trader_id, intent_key)
+        .execution_intent_by_key(&cfg.trader_id, intent_key)
         .await?
         .is_some()
     {
@@ -786,7 +784,6 @@ pub async fn try_register_execution_intent(
         .insert_execution_intent(InsertExecutionIntentRecord {
             id: Uuid::now_v7().to_string(),
             trader_id: cfg.trader_id.clone(),
-            user_id: cfg.user_id.clone(),
             intent_key: intent_key.to_string(),
             symbol: symbol.trim().to_uppercase(),
             side: side.trim().to_uppercase(),
@@ -811,7 +808,7 @@ pub async fn mark_execution_intent_submitted(
 ) -> Result<(), AppError> {
     if let Some(intent) = state
         .trading_repo
-        .execution_intent_by_key(&cfg.user_id, &cfg.trader_id, intent_key)
+        .execution_intent_by_key(&cfg.trader_id, intent_key)
         .await?
         .filter(|intent| intent.status == "pending")
     {
@@ -829,7 +826,6 @@ pub async fn mark_execution_intent_submitted(
         state
             .trading_repo
             .mark_execution_intent_submitted(
-                &cfg.user_id,
                 &cfg.trader_id,
                 intent_key,
                 exchange_order_id,
@@ -861,7 +857,6 @@ pub async fn finalize_execution_intent_for_exchange_order(
     let intents = state
         .trading_repo
         .submitted_execution_intents_by_exchange_order(
-            &cfg.user_id,
             &cfg.trader_id,
             exchange_order_id,
         )
@@ -902,7 +897,7 @@ pub async fn reconcile_stale_submitted_execution_intents(
 
     let rows = state
         .trading_repo
-        .stale_submitted_execution_intents(&cfg.user_id, &cfg.trader_id, threshold, 200)
+        .stale_submitted_execution_intents(&cfg.trader_id, threshold, 200)
         .await?;
 
     for row in rows {
@@ -947,7 +942,7 @@ pub async fn reconcile_stale_submitted_execution_intents(
                 } else {
                     if let Some(intent) = state
                         .trading_repo
-                        .execution_intent_by_key(&cfg.user_id, &cfg.trader_id, &intent_key)
+                        .execution_intent_by_key(&cfg.trader_id, &intent_key)
                         .await?
                         .filter(|intent| intent.status == "submitted")
                     {
@@ -1038,7 +1033,7 @@ pub async fn cancel_stale_live_open_orders(
 
     let stale_rows = state
         .trading_repo
-        .stale_live_open_orders(&cfg.user_id, &cfg.trader_id, threshold, 100)
+        .stale_live_open_orders(&cfg.trader_id, threshold, 100)
         .await?;
 
     for row in stale_rows {
@@ -1051,7 +1046,6 @@ pub async fn cancel_stale_live_open_orders(
                 state
                     .trading_repo
                     .update_order_status(
-                        &cfg.user_id,
                         &cfg.trader_id,
                         &order_id,
                         "canceled",
@@ -1073,7 +1067,6 @@ pub async fn cancel_stale_live_open_orders(
                 state
                     .trading_repo
                     .update_order_status(
-                        &cfg.user_id,
                         &cfg.trader_id,
                         &order_id,
                         "expired",
@@ -1118,7 +1111,7 @@ pub async fn cancel_replace_stale_live_limit_open_orders(
 
     let rows = state
         .trading_repo
-        .stale_limit_live_open_orders(&cfg.user_id, &cfg.trader_id, threshold, 100)
+        .stale_limit_live_open_orders(&cfg.trader_id, threshold, 100)
         .await?;
 
     for row in rows {
@@ -1189,7 +1182,6 @@ pub async fn cancel_replace_stale_live_limit_open_orders(
         state
             .trading_repo
             .update_order_status(
-                &cfg.user_id,
                 &cfg.trader_id,
                 &row.id,
                 old_terminal_status,
@@ -1368,7 +1360,6 @@ pub async fn has_recent_replace_attempt(
     let attempts = state
         .trading_repo
         .count_recent_execution_intents(
-            &cfg.user_id,
             &cfg.trader_id,
             "replace-open-limit",
             symbol,
@@ -1395,7 +1386,7 @@ pub async fn sync_open_orders_from_exchange(
         let normalized_position_side = normalize_order_position_side(&o.position_side, &o.side);
         let existing = state
             .trading_repo
-            .order_by_exchange_order_id(&cfg.user_id, &cfg.trader_id, &o.order_id)
+            .order_by_exchange_order_id(&cfg.trader_id, &o.order_id)
             .await?;
 
         let local_order_id = if let Some(existing) = existing {
@@ -1436,7 +1427,6 @@ pub async fn sync_open_orders_from_exchange(
                 .insert_order(InsertTraderOrderRecord {
                     id: id.clone(),
                     trader_id: cfg.trader_id.clone(),
-                    user_id: cfg.user_id.clone(),
                     exchange_order_id: o.order_id.clone(),
                     client_order_id: o.client_order_id.clone(),
                     symbol: o.symbol.trim().to_uppercase(),
@@ -1502,7 +1492,7 @@ pub async fn sync_terminal_orders_from_exchange(
 ) -> Result<(), AppError> {
     let rows = state
         .trading_repo
-        .active_orders_for_reconciliation(&cfg.user_id, &cfg.trader_id, 200)
+        .active_orders_for_reconciliation(&cfg.trader_id, 200)
         .await?;
 
     for row in rows {
@@ -1586,7 +1576,7 @@ pub async fn reconcile_local_positions_from_terminal_reduce_only_orders(
 ) -> Result<(), AppError> {
     let rows = state
         .trading_repo
-        .reduce_only_filled_orders(&cfg.user_id, &cfg.trader_id, 200)
+        .reduce_only_filled_orders(&cfg.trader_id, 200)
         .await?;
 
     for row in rows {
@@ -1605,7 +1595,7 @@ pub async fn reconcile_local_positions_from_terminal_reduce_only_orders(
         let decision_reason = format!("compensation-close:{}", exchange_order_id);
         if state
             .trading_repo
-            .system_decision_exists(&cfg.user_id, &cfg.trader_id, &decision_reason)
+            .system_decision_exists(&cfg.trader_id, &decision_reason)
             .await?
         {
             continue;
@@ -1647,7 +1637,6 @@ pub async fn reconcile_local_positions_from_terminal_reduce_only_orders(
                 .insert_decision(InsertTraderDecisionRecord {
                     id: Uuid::now_v7().to_string(),
                     trader_id: cfg.trader_id.clone(),
-                    user_id: cfg.user_id.clone(),
                     symbol: symbol.trim().to_uppercase(),
                     timeframe: "3m".to_string(),
                     decision: "SYSTEM".to_string(),
@@ -1704,7 +1693,7 @@ pub async fn persist_live_order_record(
 
     let existing_order = state
         .trading_repo
-        .order_by_exchange_order_id(&cfg.user_id, &cfg.trader_id, &order.order_id)
+        .order_by_exchange_order_id(&cfg.trader_id, &order.order_id)
         .await?;
 
     let local_order_id = if let Some(existing) = existing_order {
@@ -1740,7 +1729,6 @@ pub async fn persist_live_order_record(
             .insert_order(InsertTraderOrderRecord {
                 id: id.clone(),
                 trader_id: cfg.trader_id.clone(),
-                user_id: cfg.user_id.clone(),
                 exchange_order_id: order.order_id.clone(),
                 client_order_id: order.client_order_id.clone(),
                 symbol: symbol.clone(),
@@ -1820,7 +1808,7 @@ pub async fn ingest_live_fills_for_order(
     for fill in fills {
         let existed = state
             .trading_repo
-            .order_fill_exists(&cfg.user_id, &cfg.trader_id, &fill.trade_id)
+            .order_fill_exists(&cfg.trader_id, &fill.trade_id)
             .await?;
 
         if existed {
@@ -1833,7 +1821,6 @@ pub async fn ingest_live_fills_for_order(
                 id: Uuid::now_v7().to_string(),
                 order_id: local_order_id.to_string(),
                 trader_id: cfg.trader_id.clone(),
-                user_id: cfg.user_id.clone(),
                 exchange_trade_id: fill.trade_id.clone(),
                 symbol: fill.symbol.trim().to_uppercase(),
                 side: if fill.side.trim().is_empty() {
@@ -1862,7 +1849,7 @@ pub async fn ingest_live_fills_for_order(
 
     Ok(state
         .trading_repo
-        .order_fill_summary(&cfg.user_id, &cfg.trader_id, local_order_id)
+        .order_fill_summary(&cfg.trader_id, local_order_id)
         .await?)
 }
 

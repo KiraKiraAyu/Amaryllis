@@ -1,6 +1,6 @@
 pub use sea_orm_migration::prelude::*;
 
-mod m20260409_000001_create_users;
+mod m20260409_000001_create_app_settings;
 mod m20260409_000002_create_llm_providers;
 mod m20260409_000003_create_llm_models;
 mod m20260409_000004_create_exchanges;
@@ -30,7 +30,7 @@ pub struct Migrator;
 impl MigratorTrait for Migrator {
     fn migrations() -> Vec<Box<dyn MigrationTrait>> {
         vec![
-            Box::new(m20260409_000001_create_users::Migration),
+            Box::new(m20260409_000001_create_app_settings::Migration),
             Box::new(m20260409_000002_create_llm_providers::Migration),
             Box::new(m20260409_000003_create_llm_models::Migration),
             Box::new(m20260409_000004_create_exchanges::Migration),

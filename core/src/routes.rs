@@ -14,6 +14,7 @@ use std::time::Duration;
 use axum::{
     Router,
     http::StatusCode,
+    middleware,
     routing::{get, post},
 };
 use tower_http::{
@@ -22,7 +23,7 @@ use tower_http::{
     trace::TraceLayer,
 };
 
-use crate::{http::handlers, realtime, state::AppState};
+use crate::{http::handlers, http::middleware::require_auth, realtime, state::AppState};
 
 pub fn build_app(state: AppState, timeout_secs: u64) -> Router {
     let cors = CorsLayer::new()
@@ -32,17 +33,15 @@ pub fn build_app(state: AppState, timeout_secs: u64) -> Router {
 
     let public_api = Router::new()
         .route("/health", get(handlers::system::health))
-        .route("/register", post(handlers::auth::register))
-        .route("/login", post(handlers::auth::login));
+        .route("/auth/status", get(handlers::auth::status))
+        .route("/auth/verify", post(handlers::auth::verify))
+        .route("/auth/setup/start", post(handlers::auth::setup_start))
+        .route("/auth/setup/confirm", post(handlers::auth::setup_confirm));
 
     let protected_api = Router::new()
         .route("/config", get(handlers::system::config))
-        .route("/logout", post(handlers::auth::logout))
-        .route(
-            "/auth/change-password",
-            post(handlers::auth::change_password),
-        )
-        .route("/me", get(handlers::auth::me))
+        .route("/auth/reset/start", post(handlers::auth::reset_start))
+        .route("/auth/reset/confirm", post(handlers::auth::reset_confirm))
         .nest("/catalog", catalog::router())
         .nest("/competition", competition::router())
         .nest("/crypto", crypto::router())
@@ -52,7 +51,11 @@ pub fn build_app(state: AppState, timeout_secs: u64) -> Router {
         .nest("/strategies", strategies::router())
         .nest("/trading", trading::router())
         .nest("/backtest", backtest::router())
-        .nest("/debates", debates::router());
+        .nest("/debates", debates::router())
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            require_auth,
+        ));
 
     let timed_api =
         Router::new()
@@ -63,7 +66,12 @@ pub fn build_app(state: AppState, timeout_secs: u64) -> Router {
                 Duration::from_secs(timeout_secs),
             ));
 
-    let stream_api = Router::new().route("/events", get(realtime::events_handler));
+    let stream_api = Router::new()
+        .route("/events", get(realtime::events_handler))
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            require_auth,
+        ));
 
     let api = Router::new().merge(timed_api).merge(stream_api);
 

@@ -10,21 +10,16 @@ use super::{
 impl TradingRepo {
     pub async fn runtime_alert_controls(
         &self,
-        user_id: &str,
         trader_id: &str,
     ) -> Result<Option<RuntimeAlertControlsRecord>, DbErr> {
-        entity::runtime_alert_controls::Entity::find_by_id((
-            trader_id.trim().to_string(),
-            user_id.trim().to_string(),
-        ))
-        .one(&self.db)
+        entity::runtime_alert_controls::Entity::find_by_id(trader_id.trim().to_string())
+            .one(&self.db)
         .await
         .map(|row| row.map(map_runtime_alert_controls))
     }
 
     pub async fn unmute_expired_runtime_alerts(
         &self,
-        user_id: &str,
         trader_id: &str,
         updated_at: i64,
     ) -> Result<(), DbErr> {
@@ -46,7 +41,6 @@ impl TradingRepo {
                 Expr::value(ts_to_dt(updated_at)),
             )
             .filter(entity::runtime_alert_controls::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::runtime_alert_controls::Column::UserId.eq(user_id.trim()))
             .exec(&self.db)
             .await
             .map(|_| ())
@@ -54,13 +48,12 @@ impl TradingRepo {
 
     pub async fn set_runtime_alert_mute(
         &self,
-        user_id: &str,
         trader_id: &str,
         muted_until: Option<i64>,
         reason: String,
         now: i64,
     ) -> Result<(), DbErr> {
-        let existing = self.runtime_alert_controls(user_id, trader_id).await?;
+        let existing = self.runtime_alert_controls(trader_id).await?;
         let is_muted = muted_until.is_some();
         if existing.is_some() {
             entity::runtime_alert_controls::Entity::update_many()
@@ -81,14 +74,12 @@ impl TradingRepo {
                     Expr::value(ts_to_dt(now)),
                 )
                 .filter(entity::runtime_alert_controls::Column::TraderId.eq(trader_id.trim()))
-                .filter(entity::runtime_alert_controls::Column::UserId.eq(user_id.trim()))
                 .exec(&self.db)
                 .await
                 .map(|_| ())
         } else {
             entity::runtime_alert_controls::ActiveModel {
                 trader_id: Set(trader_id.to_string()),
-                user_id: Set(user_id.to_string()),
                 is_muted: Set(if is_muted { 1 } else { 0 }),
                 muted_until: Set(muted_until.map(ts_to_dt)),
                 mute_reason: Set(reason),
@@ -106,12 +97,11 @@ impl TradingRepo {
 
     pub async fn ack_runtime_alerts(
         &self,
-        user_id: &str,
         trader_id: &str,
         note: String,
         now: i64,
     ) -> Result<(), DbErr> {
-        let existing = self.runtime_alert_controls(user_id, trader_id).await?;
+        let existing = self.runtime_alert_controls(trader_id).await?;
         if existing.is_some() {
             entity::runtime_alert_controls::Entity::update_many()
                 .col_expr(
@@ -120,7 +110,7 @@ impl TradingRepo {
                 )
                 .col_expr(
                     entity::runtime_alert_controls::Column::AckedBy,
-                    Expr::value(user_id.to_string()),
+                    Expr::value("admin".to_string()),
                 )
                 .col_expr(
                     entity::runtime_alert_controls::Column::AckNote,
@@ -131,19 +121,17 @@ impl TradingRepo {
                     Expr::value(ts_to_dt(now)),
                 )
                 .filter(entity::runtime_alert_controls::Column::TraderId.eq(trader_id.trim()))
-                .filter(entity::runtime_alert_controls::Column::UserId.eq(user_id.trim()))
                 .exec(&self.db)
                 .await
                 .map(|_| ())
         } else {
             entity::runtime_alert_controls::ActiveModel {
                 trader_id: Set(trader_id.to_string()),
-                user_id: Set(user_id.to_string()),
                 is_muted: Set(0),
                 muted_until: Set(None),
                 mute_reason: Set(String::new()),
                 acked_at: Set(Some(ts_to_dt(now))),
-                acked_by: Set(user_id.to_string()),
+                acked_by: Set("admin".to_string()),
                 ack_note: Set(note),
                 updated_at: Set(ts_to_dt(now)),
                 created_at: Set(ts_to_dt(now)),

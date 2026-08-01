@@ -15,7 +15,6 @@ pub struct ExecutionIntentRecord {
 pub struct InsertExecutionIntentRecord {
     pub id: String,
     pub trader_id: String,
-    pub user_id: String,
     pub intent_key: String,
     pub symbol: String,
     pub side: String,

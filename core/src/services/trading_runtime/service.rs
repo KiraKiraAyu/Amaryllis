@@ -93,30 +93,22 @@ impl TradingRuntimeService {
 
         let mut recovered = Vec::new();
 
-        for (user_id, trader_id) in rows {
-            match self.start_trader(&user_id, &trader_id).await {
+        for trader_id in rows {
+            match self.start_trader(&trader_id).await {
                 Ok(_) => {
-                    info!(
-                        "startup recovery resumed trader={} user={}",
-                        trader_id, user_id
-                    );
+                    info!("startup recovery resumed trader={}", trader_id);
                     recovered.push(trader_id);
                 }
                 Err(AppError::AlreadyRunning(_)) => {
                     recovered.push(trader_id);
                 }
                 Err(err) => {
-                    warn!(
-                        "startup recovery failed trader={} user={} err={}",
-                        trader_id, user_id, err
-                    );
+                    warn!("startup recovery failed trader={} err={}", trader_id, err);
 
-                    if let Err(db_err) =
-                        set_trader_running(&state, &trader_id, &user_id, false).await
-                    {
+                    if let Err(db_err) = set_trader_running(&state, &trader_id, false).await {
                         warn!(
-                            "startup recovery failed to reset is_running trader={} user={} err={}",
-                            trader_id, user_id, db_err
+                            "startup recovery failed to reset is_running trader={} err={}",
+                            trader_id, db_err
                         );
                     }
 
@@ -132,9 +124,9 @@ impl TradingRuntimeService {
         Ok(recovered)
     }
 
-    pub async fn start_trader(&self, user_id: &str, trader_id: &str) -> Result<(), AppError> {
+    pub async fn start_trader(&self, trader_id: &str) -> Result<(), AppError> {
         let state = self.state();
-        let cfg = load_trader_runtime_config(&state, user_id, trader_id)
+        let cfg = load_trader_runtime_config(&state, trader_id)
             .await?
             .ok_or_else(|| AppError::TraderNotFound(trader_id.to_string()))?;
 
@@ -156,7 +148,6 @@ impl TradingRuntimeService {
         let now = now_u64();
         state.upsert_runtime_engine(RuntimeEngineState {
             trader_id: cfg.trader_id.clone(),
-            user_id: cfg.user_id.clone(),
             exchange_id: cfg.exchange_id.clone(),
             ai_model_id: cfg.ai_model_id.clone(),
             started_at: now,
@@ -165,7 +156,7 @@ impl TradingRuntimeService {
             last_error: None,
         })?;
 
-        set_trader_running(&state, &cfg.trader_id, &cfg.user_id, true).await?;
+        set_trader_running(&state, &cfg.trader_id, true).await?;
 
         let (stop_tx, stop_rx) = watch::channel(false);
         let engine = self.clone();
@@ -173,13 +164,8 @@ impl TradingRuntimeService {
         let handle = tokio::spawn(async move {
             if let Err(err) = run_trader_loop(engine.clone(), cfg_for_task.clone(), stop_rx).await {
                 error!("runtime loop failed: {err}");
-                if let Err(db_err) = set_trader_running(
-                    &engine.inner.state,
-                    &cfg_for_task.trader_id,
-                    &cfg_for_task.user_id,
-                    false,
-                )
-                .await
+                if let Err(db_err) =
+                    set_trader_running(&engine.inner.state, &cfg_for_task.trader_id, false).await
                 {
                     warn!(
                         "failed to clear running flag after runtime error trader={} err={}",
@@ -198,15 +184,14 @@ impl TradingRuntimeService {
         workers.insert(cfg.trader_id.clone(), EngineWorker { stop_tx, handle });
 
         info!(
-            "runtime engine started for trader={} user={} exchange={} model={}",
-            cfg.trader_id, cfg.user_id, cfg.exchange_id, cfg.ai_model_id
+            "runtime engine started for trader={} exchange={} model={}",
+            cfg.trader_id, cfg.exchange_id, cfg.ai_model_id
         );
 
         // Notify connected realtime clients that this trader started
         state
             .realtime_hub
             .publish(crate::realtime::RealtimeEvent::EngineStatus {
-                user_id: cfg.user_id.clone(),
                 trader_id: cfg.trader_id.clone(),
                 status: "running".to_string(),
                 message: format!(
@@ -218,18 +203,9 @@ impl TradingRuntimeService {
         Ok(())
     }
 
-    pub async fn stop_trader_for_user(
-        &self,
-        user_id: &str,
-        trader_id: &str,
-    ) -> Result<(), AppError> {
+    pub async fn stop_trader_for_user(&self, trader_id: &str) -> Result<(), AppError> {
         let state = self.state();
-        if state
-            .trading_repo
-            .get_trader(user_id, trader_id)
-            .await?
-            .is_none()
-        {
+        if state.trading_repo.get_trader(trader_id).await?.is_none() {
             return Err(AppError::TraderNotFound(trader_id.to_string()));
         }
 
@@ -255,23 +231,13 @@ impl TradingRuntimeService {
         }
 
         // Notify realtime clients that the trader stopped
-        // (We don't have user_id here, so we look it up from the runtime manager)
-        let user_id = state
-            .runtime_engine(trader_id)
-            .ok()
-            .flatten()
-            .map(|s| s.user_id)
-            .unwrap_or_default();
-        if !user_id.is_empty() {
-            state
-                .realtime_hub
-                .publish(crate::realtime::RealtimeEvent::EngineStatus {
-                    user_id,
-                    trader_id: trader_id.to_string(),
-                    status: "stopped".to_string(),
-                    message: "engine stopped".to_string(),
-                });
-        }
+        state
+            .realtime_hub
+            .publish(crate::realtime::RealtimeEvent::EngineStatus {
+                trader_id: trader_id.to_string(),
+                status: "stopped".to_string(),
+                message: "engine stopped".to_string(),
+            });
 
         Ok(())
     }

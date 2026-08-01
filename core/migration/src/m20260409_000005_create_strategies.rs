@@ -17,7 +17,6 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(Strategies::UserId).string().not_null())
                     .col(ColumnDef::new(Strategies::Name).string().not_null())
                     .col(
                         ColumnDef::new(Strategies::Description)
@@ -57,17 +56,6 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
-        manager
-            .create_index(
-                Index::create()
-                    .if_not_exists()
-                    .name("idx_strategies_user_active")
-                    .table(Strategies::Table)
-                    .col(Strategies::UserId)
-                    .col(Strategies::IsActive)
-                    .to_owned(),
-            )
-            .await?;
         Ok(())
     }
 
@@ -87,7 +75,6 @@ impl MigrationTrait for Migration {
 enum Strategies {
     Table,
     Id,
-    UserId,
     Name,
     Description,
     IsActive,

@@ -17,7 +17,7 @@ pub async fn compute_account_metrics(
 ) -> Result<AccountMetrics, AppError> {
     let (used_margin, unrealized_pnl, realized_pnl) = state
         .trading_repo
-        .compute_account_totals(&cfg.user_id, &cfg.trader_id)
+        .compute_account_totals(&cfg.trader_id)
         .await?;
 
     let total_balance = (cfg.initial_balance + realized_pnl + unrealized_pnl).max(0.0);
@@ -48,7 +48,6 @@ pub async fn insert_account_snapshot(
         .trading_repo
         .insert_account_snapshot(
             Uuid::now_v7().to_string(),
-            &cfg.user_id,
             &cfg.trader_id,
             &cfg.exchange_id,
             &TraderAccountRecord {
@@ -71,11 +70,10 @@ pub async fn insert_account_snapshot(
 pub async fn load_open_positions(
     state: &SharedState,
     trader_id: &str,
-    user_id: &str,
 ) -> Result<Vec<PositionView>, AppError> {
     let rows = state
         .trading_repo
-        .open_position_records(user_id, trader_id, None, None)
+        .open_position_records(trader_id, None, None)
         .await?;
 
     Ok(rows.into_iter().map(position_view_from_record).collect())
@@ -102,7 +100,7 @@ pub async fn mark_to_market_positions(
 
         state
             .trading_repo
-            .update_position_mark_to_market(&cfg.user_id, &cfg.trader_id, &p.id, price, upnl, ts)
+            .update_position_mark_to_market(&cfg.trader_id, &p.id, price, upnl, ts)
             .await?;
     }
     Ok(())

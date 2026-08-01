@@ -18,7 +18,6 @@ impl MigrationTrait for Migration {
                             .primary_key(),
                     )
                     .col(ColumnDef::new(TraderTrades::TraderId).string().not_null())
-                    .col(ColumnDef::new(TraderTrades::UserId).string().not_null())
                     .col(ColumnDef::new(TraderTrades::Symbol).string().not_null())
                     .col(ColumnDef::new(TraderTrades::Side).string().not_null())
                     .col(
@@ -86,17 +85,6 @@ impl MigrationTrait for Migration {
                     .col((TraderTrades::ClosedAt, IndexOrder::Desc))
                     .to_owned(),
             )
-            .await?;
-        manager
-            .create_index(
-                Index::create()
-                    .if_not_exists()
-                    .name("idx_trader_trades_user_closed")
-                    .table(TraderTrades::Table)
-                    .col(TraderTrades::UserId)
-                    .col((TraderTrades::ClosedAt, IndexOrder::Desc))
-                    .to_owned(),
-            )
             .await
     }
 
@@ -117,7 +105,6 @@ enum TraderTrades {
     Table,
     Id,
     TraderId,
-    UserId,
     Symbol,
     Side,
     EntryPrice,

@@ -36,7 +36,6 @@ mod tests {
         let row = crate::entity::trader_positions::Model {
             id: "position_1".to_string(),
             trader_id: "trader_1".to_string(),
-            user_id: "user_1".to_string(),
             symbol: "BTCUSDT".to_string(),
             side: "LONG".to_string(),
             quantity: Decimal::new(125, 2),

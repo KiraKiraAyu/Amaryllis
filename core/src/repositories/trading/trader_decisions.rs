@@ -16,7 +16,6 @@ impl TradingRepo {
         entity::trader_decisions::ActiveModel {
             id: Set(input.id),
             trader_id: Set(input.trader_id),
-            user_id: Set(input.user_id),
             symbol: Set(input.symbol),
             timeframe: Set(input.timeframe),
             decision: Set(input.decision),
@@ -32,13 +31,11 @@ impl TradingRepo {
 
     pub async fn system_decision_exists(
         &self,
-        user_id: &str,
         trader_id: &str,
         reason: &str,
     ) -> Result<bool, DbErr> {
         entity::trader_decisions::Entity::find()
             .filter(entity::trader_decisions::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::trader_decisions::Column::UserId.eq(user_id.trim()))
             .filter(entity::trader_decisions::Column::Decision.eq("SYSTEM"))
             .filter(entity::trader_decisions::Column::Reason.eq(reason.trim()))
             .one(&self.db)
@@ -48,7 +45,6 @@ impl TradingRepo {
 
     pub async fn decisions(
         &self,
-        user_id: &str,
         trader_id: &str,
         symbol: Option<&str>,
         limit: i64,
@@ -56,7 +52,6 @@ impl TradingRepo {
     ) -> Result<Vec<TraderDecisionRecord>, DbErr> {
         let mut query = entity::trader_decisions::Entity::find()
             .filter(entity::trader_decisions::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::trader_decisions::Column::UserId.eq(user_id.trim()))
             .order_by_desc(entity::trader_decisions::Column::CreatedAt)
             .limit(limit.max(0) as u64)
             .offset(offset.max(0) as u64);

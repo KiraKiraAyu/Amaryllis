@@ -2,7 +2,6 @@
 pub struct InsertTraderOrderRecord {
     pub id: String,
     pub trader_id: String,
-    pub user_id: String,
     pub exchange_order_id: String,
     pub client_order_id: String,
     pub symbol: String,
@@ -65,7 +64,6 @@ pub struct InsertOrderFillRecord {
     pub id: String,
     pub order_id: String,
     pub trader_id: String,
-    pub user_id: String,
     pub exchange_trade_id: String,
     pub symbol: String,
     pub side: String,

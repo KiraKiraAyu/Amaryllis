@@ -13,8 +13,6 @@ pub struct Model {
     #[sea_orm(column_type = "Text")]
     pub account_name: String,
     #[sea_orm(column_type = "Text")]
-    pub user_id: String,
-    #[sea_orm(column_type = "Text")]
     pub name: String,
     #[sea_orm(column_type = "Text")]
     pub r#type: String,

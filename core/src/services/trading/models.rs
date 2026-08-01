@@ -67,7 +67,6 @@ impl TraderPayloadExt for TraderRecord {
     fn into_payload(self) -> TraderPayload {
         TraderPayload {
             id: self.id,
-            user_id: self.user_id,
             name: self.name,
             ai_model_id: self.ai_model_id,
             exchange_id: self.exchange_id,

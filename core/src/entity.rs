@@ -1,5 +1,6 @@
 pub mod prelude;
 
+pub mod app_settings;
 pub mod backtest_decisions;
 pub mod backtest_equity;
 pub mod backtest_runs;
@@ -22,4 +23,3 @@ pub mod trader_orders;
 pub mod trader_positions;
 pub mod trader_trades;
 pub mod traders;
-pub mod users;

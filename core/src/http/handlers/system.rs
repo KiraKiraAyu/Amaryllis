@@ -5,7 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::{
     contracts::system::{HealthResponse, SystemConfigResponse},
     error::Result,
-    http::{extractors::AuthUser, response::ApiResponse},
+    http::response::ApiResponse,
     state,
 };
 
@@ -25,12 +25,10 @@ pub async fn health() -> Result<Json<ApiResponse<HealthResponse>>> {
 
 pub async fn config(
     State(shared_state): State<state::AppState>,
-    _user: AuthUser,
 ) -> Result<Json<ApiResponse<SystemConfigResponse>>> {
     let runtime_alerts = &shared_state.config.runtime_alerts;
 
     let payload = SystemConfigResponse {
-        registration_enabled: shared_state.config.auth.registration_enabled,
         btc_eth_leverage: env_u32("BTC_ETH_LEVERAGE", 10),
         altcoin_leverage: env_u32("ALTCOIN_LEVERAGE", 5),
 

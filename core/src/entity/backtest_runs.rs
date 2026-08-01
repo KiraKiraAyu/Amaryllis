@@ -9,8 +9,6 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false, column_type = "Text")]
     pub run_id: String,
     #[sea_orm(column_type = "Text")]
-    pub user_id: String,
-    #[sea_orm(column_type = "Text")]
     pub label: String,
     #[sea_orm(column_type = "Text")]
     pub last_error: String,

@@ -37,7 +37,6 @@ async fn test_state_and_cfg() -> (TestRuntimeState, TraderRuntimeConfig) {
     );
     let cfg = TraderRuntimeConfig {
         trader_id: "trader_test_1".to_string(),
-        user_id: "user_test_1".to_string(),
         name: "test-trader".to_string(),
         ai_model_id: "deepseek-chat".to_string(),
         ai_model_name: "deepseek-chat".to_string(),
@@ -82,7 +81,6 @@ async fn load_execution_intent_by_key(
 ) -> execution_intents::Model {
     execution_intents::Entity::find()
         .filter(execution_intents::Column::TraderId.eq(&cfg.trader_id))
-        .filter(execution_intents::Column::UserId.eq(&cfg.user_id))
         .filter(execution_intents::Column::IntentKey.eq(intent_key))
         .one(&state.db)
         .await
@@ -97,7 +95,6 @@ async fn load_execution_intent_by_exchange_order_id(
 ) -> execution_intents::Model {
     execution_intents::Entity::find()
         .filter(execution_intents::Column::TraderId.eq(&cfg.trader_id))
-        .filter(execution_intents::Column::UserId.eq(&cfg.user_id))
         .filter(execution_intents::Column::ExchangeOrderId.eq(exchange_order_id))
         .one(&state.db)
         .await
@@ -112,7 +109,6 @@ async fn load_latest_decision(
 ) -> trader_decisions::Model {
     trader_decisions::Entity::find()
         .filter(trader_decisions::Column::TraderId.eq(&cfg.trader_id))
-        .filter(trader_decisions::Column::UserId.eq(&cfg.user_id))
         .filter(trader_decisions::Column::Symbol.eq(symbol))
         .order_by_desc(trader_decisions::Column::CreatedAt)
         .one(&state.db)
@@ -138,7 +134,6 @@ async fn load_latest_trade(
 ) -> trader_trades::Model {
     trader_trades::Entity::find()
         .filter(trader_trades::Column::TraderId.eq(&cfg.trader_id))
-        .filter(trader_trades::Column::UserId.eq(&cfg.user_id))
         .order_by_desc(trader_trades::Column::CreatedAt)
         .one(&state.db)
         .await
@@ -161,7 +156,6 @@ async fn load_order_by_exchange_order_id(
 ) -> trader_orders::Model {
     trader_orders::Entity::find()
         .filter(trader_orders::Column::TraderId.eq(&cfg.trader_id))
-        .filter(trader_orders::Column::UserId.eq(&cfg.user_id))
         .filter(trader_orders::Column::ExchangeOrderId.eq(exchange_order_id))
         .one(&state.db)
         .await
@@ -176,7 +170,6 @@ async fn count_order_fills_by_exchange_trade_id(
 ) -> u64 {
     order_fills::Entity::find()
         .filter(order_fills::Column::TraderId.eq(&cfg.trader_id))
-        .filter(order_fills::Column::UserId.eq(&cfg.user_id))
         .filter(order_fills::Column::ExchangeTradeId.eq(exchange_trade_id))
         .count(&state.db)
         .await
@@ -190,7 +183,6 @@ async fn count_trades_by_symbol(
 ) -> u64 {
     trader_trades::Entity::find()
         .filter(trader_trades::Column::TraderId.eq(&cfg.trader_id))
-        .filter(trader_trades::Column::UserId.eq(&cfg.user_id))
         .filter(trader_trades::Column::Symbol.eq(symbol))
         .count(&state.db)
         .await
@@ -200,7 +192,6 @@ async fn count_trades_by_symbol(
 async fn count_orders(state: &TestRuntimeState, cfg: &TraderRuntimeConfig) -> u64 {
     trader_orders::Entity::find()
         .filter(trader_orders::Column::TraderId.eq(&cfg.trader_id))
-        .filter(trader_orders::Column::UserId.eq(&cfg.user_id))
         .count(&state.db)
         .await
         .expect("count trader orders")
@@ -224,7 +215,6 @@ async fn insert_test_execution_intent(
     execution_intents::Entity::insert(execution_intents::ActiveModel {
         id: Set(id.to_string()),
         trader_id: Set(cfg.trader_id.clone()),
-        user_id: Set(cfg.user_id.clone()),
         intent_key: Set(intent_key.to_string()),
         symbol: Set(symbol.to_string()),
         side: Set(side.to_string()),
@@ -263,7 +253,6 @@ async fn insert_test_position(
     trader_positions::Entity::insert(trader_positions::ActiveModel {
         id: Set(id.to_string()),
         trader_id: Set(cfg.trader_id.clone()),
-        user_id: Set(cfg.user_id.clone()),
         symbol: Set(symbol.to_string()),
         side: Set(side.to_string()),
         quantity: Set(decimal_from_f64(quantity)),
@@ -310,7 +299,6 @@ async fn insert_test_order(
     trader_orders::Entity::insert(trader_orders::ActiveModel {
         id: Set(id.to_string()),
         trader_id: Set(cfg.trader_id.clone()),
-        user_id: Set(cfg.user_id.clone()),
         exchange_order_id: Set(exchange_order_id.to_string()),
         client_order_id: Set(client_order_id.to_string()),
         symbol: Set(symbol.to_string()),
@@ -467,7 +455,6 @@ async fn insert_test_trader(state: &TestRuntimeState, cfg: &TraderRuntimeConfig,
     let ts = 1_700_000_000_i64;
     traders::Entity::insert(traders::ActiveModel {
         id: Set(cfg.trader_id.clone()),
-        user_id: Set(cfg.user_id.clone()),
         name: Set(cfg.name.clone()),
         ai_model_id: Set(cfg.ai_model_id.clone()),
         exchange_id: Set(cfg.exchange_id.clone()),
@@ -499,6 +486,9 @@ async fn test_startup_recovery_resumes_running_trader() {
     cfg.trader_id = "trader_recovery_1".to_string();
     cfg.exchange_id = "exchange_recovery_missing".to_string();
     cfg.trading_symbols = "BTCUSDT".to_string();
+    // Must reference a model that actually resolves (provider presets are seeded
+    // into the in-memory database by `ensure_defaults`).
+    cfg.ai_model_id = "deepseek-v4-pro".to_string();
 
     insert_test_trader(&state, &cfg, true).await;
 
@@ -518,7 +508,7 @@ async fn test_startup_recovery_resumes_running_trader() {
     assert!(engine.is_running(&cfg.trader_id).await);
 
     engine
-        .stop_trader_for_user(&cfg.user_id, &cfg.trader_id)
+        .stop_trader_for_user(&cfg.trader_id)
         .await
         .expect("stop recovered trader");
 }

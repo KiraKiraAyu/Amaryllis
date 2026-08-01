@@ -43,7 +43,6 @@ pub struct RuntimeAlertDeliveryRecord {
 pub struct InsertRuntimeAlertHistoryRecord {
     pub id: String,
     pub trader_id: String,
-    pub user_id: String,
     pub window_hours: i64,
     pub thresholds_json: String,
     pub rates_json: String,
@@ -57,7 +56,6 @@ pub struct InsertRuntimeAlertHistoryRecord {
 pub struct InsertRuntimeAlertDeliveryRecord {
     pub id: String,
     pub trader_id: String,
-    pub user_id: String,
     pub alert_history_id: String,
     pub destination: String,
     pub endpoint: String,

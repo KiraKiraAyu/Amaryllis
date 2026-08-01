@@ -2,10 +2,9 @@ use super::service::*;
 
 pub async fn sync_balance(
     app: &SharedState,
-    user_id: &str,
     id: &str,
 ) -> AppResult<TraderBalanceSyncPayload> {
-    let trader = match get_trader_by_owner(app, user_id, id).await {
+    let trader = match get_trader_by_owner(app, id).await {
         Ok(Some(t)) => t,
         Ok(None) => return Err(app_error(AppErrorKind::NotFound, "Trader does not exist")),
         Err(_) => {
@@ -42,7 +41,6 @@ pub async fn sync_balance(
         app.trading_repo
             .insert_account_snapshot(
                 Uuid::now_v7().to_string(),
-                user_id,
                 id,
                 &trader.exchange_id,
                 &account,
@@ -63,7 +61,7 @@ pub async fn sync_balance(
         });
     }
 
-    let account = match app.trading_repo.latest_account(user_id, id).await {
+    let account = match app.trading_repo.latest_account(id).await {
         Ok(Some(account)) => account,
         Ok(None) => TraderAccountRecord {
             trader_id: id.to_string(),
@@ -84,7 +82,7 @@ pub async fn sync_balance(
     let snapshot_id = Uuid::now_v7().to_string();
     let result = app
         .trading_repo
-        .insert_account_snapshot(snapshot_id, user_id, id, &trader.exchange_id, &account, now)
+        .insert_account_snapshot(snapshot_id, id, &trader.exchange_id, &account, now)
         .await;
 
     match result {
@@ -103,7 +101,6 @@ pub async fn sync_balance(
 pub async fn close_position(
     app: &SharedState,
     runtime: &TradingRuntimeService,
-    user_id: &str,
     id: &str,
     req: ClosePositionRequest,
 ) -> AppResult<ClosePositionPayload> {
@@ -116,7 +113,7 @@ pub async fn close_position(
         ));
     }
 
-    let trader = match get_trader_by_owner(app, user_id, id).await {
+    let trader = match get_trader_by_owner(app, id).await {
         Ok(Some(t)) => t,
         Ok(None) => {
             return Err(app_error(
@@ -131,7 +128,7 @@ pub async fn close_position(
 
     let open_positions = app
         .trading_repo
-        .open_position_records(user_id, id, Some(&symbol), Some(&side))
+        .open_position_records(id, Some(&symbol), Some(&side))
         .await;
     let open_positions = match open_positions {
         Ok(v) if !v.is_empty() => v,
@@ -169,7 +166,7 @@ pub async fn close_position(
         .collect();
     let closed = app
         .trading_repo
-        .close_open_positions(user_id, id, &symbol, &side, trade_ids, now_ts())
+        .close_open_positions(id, &symbol, &side, trade_ids, now_ts())
         .await;
 
     match closed {
@@ -193,7 +190,7 @@ async fn enabled_live_adapter(
 ) -> AppResult<Option<Box<dyn LiveExchangeAdapter>>> {
     let Some(row) = app
         .exchange_repo
-        .find_runtime_config(&trader.exchange_id, &trader.user_id)
+        .find_runtime_config(&trader.exchange_id)
         .await
         .map_err(|_| app_error(AppErrorKind::Internal, "Failed to load exchange config"))?
     else {
@@ -326,7 +323,6 @@ fn manual_runtime_config(trader: &TraderRecord) -> TraderRuntimeConfig {
 
     TraderRuntimeConfig {
         trader_id: trader.id.clone(),
-        user_id: trader.user_id.clone(),
         name: trader.name.clone(),
         ai_model_id: trader.ai_model_id.clone(),
         ai_model_name: String::new(),
@@ -349,10 +345,9 @@ fn manual_runtime_config(trader: &TraderRecord) -> TraderRuntimeConfig {
 
 pub async fn grid_risk_info(
     app: &SharedState,
-    user_id: &str,
     id: &str,
 ) -> AppResult<GridRiskInfoPayload> {
-    if trader_owner_missing(app, user_id, id).await {
+    if trader_owner_missing(app, id).await {
         return Err(app_error(
             AppErrorKind::NotFound,
             "Trader does not exist or no permission",
@@ -361,7 +356,7 @@ pub async fn grid_risk_info(
 
     let rows = app
         .trading_repo
-        .open_position_records(user_id, id, None, None)
+        .open_position_records(id, None, None)
         .await;
 
     match rows {
@@ -408,15 +403,14 @@ pub async fn grid_risk_info(
 
 pub async fn status(
     app: &SharedState,
-    user_id: &str,
     q: TraderQuery,
 ) -> AppResult<TraderStatusPayload> {
-    let trader_id = match resolve_trader_id(app, user_id, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, q.trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
 
-    let trader = match get_trader_by_owner(app, user_id, &trader_id).await {
+    let trader = match get_trader_by_owner(app, &trader_id).await {
         Ok(Some(t)) => t,
         _ => return Err(app_error(AppErrorKind::NotFound, "Trader not found")),
     };
@@ -445,15 +439,14 @@ pub async fn status(
 
 pub async fn account(
     app: &SharedState,
-    user_id: &str,
     q: TraderQuery,
 ) -> AppResult<TraderAccountPayload> {
-    let trader_id = match resolve_trader_id(app, user_id, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, q.trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
 
-    match app.trading_repo.latest_account(user_id, &trader_id).await {
+    match app.trading_repo.latest_account(&trader_id).await {
         Ok(Some(account)) => Ok(account_payload(trader_id, account)),
         Ok(None) => Err(app_error(
             AppErrorKind::NotFound,
@@ -465,10 +458,9 @@ pub async fn account(
 
 pub async fn positions(
     app: &SharedState,
-    user_id: &str,
     q: PositionQuery,
 ) -> AppResult<PositionListPayload> {
-    let trader_id = match resolve_trader_id(app, user_id, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, q.trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
@@ -481,7 +473,7 @@ pub async fn positions(
 
     match app
         .trading_repo
-        .positions_by_status(user_id, &trader_id, &status)
+        .positions_by_status(&trader_id, &status)
         .await
     {
         Ok(items) => {
@@ -501,10 +493,9 @@ pub async fn positions(
 
 pub async fn positions_history(
     app: &SharedState,
-    user_id: &str,
     q: PaginationQuery,
 ) -> AppResult<PositionListPayload> {
-    let trader_id = match resolve_trader_id(app, user_id, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, q.trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
@@ -514,7 +505,7 @@ pub async fn positions_history(
 
     match app
         .trading_repo
-        .closed_positions(user_id, &trader_id, limit, offset)
+        .closed_positions(&trader_id, limit, offset)
         .await
     {
         Ok(items) => {

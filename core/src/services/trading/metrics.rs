@@ -2,10 +2,9 @@ use super::service::*;
 
 pub async fn runtime_events(
     app: &SharedState,
-    user_id: &str,
     q: RuntimeEventsQuery,
 ) -> AppResult<RuntimeEventsPayload> {
-    let trader_id = match resolve_trader_id(app, user_id, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, q.trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
@@ -21,7 +20,6 @@ pub async fn runtime_events(
     match app
         .trading_repo
         .runtime_events(
-            user_id,
             &trader_id,
             from_ts,
             &event_type,
@@ -59,10 +57,9 @@ pub async fn runtime_events(
 
 pub async fn runtime_event_types(
     app: &SharedState,
-    user_id: &str,
     q: RuntimeEventTypesQuery,
 ) -> AppResult<RuntimeEventTypesPayload> {
-    let trader_id = match resolve_trader_id(app, user_id, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, q.trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
@@ -72,7 +69,7 @@ pub async fn runtime_event_types(
 
     match app
         .trading_repo
-        .runtime_events_since(user_id, &trader_id, from_ts)
+        .runtime_events_since(&trader_id, from_ts)
         .await
     {
         Ok(items) => {
@@ -134,10 +131,9 @@ pub async fn runtime_event_types(
 
 pub async fn runtime_metrics(
     app: &SharedState,
-    user_id: &str,
     q: RuntimeMetricsQuery,
 ) -> AppResult<RuntimeMetricsPayload> {
-    let trader_id = match resolve_trader_id(app, user_id, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, q.trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
@@ -146,11 +142,10 @@ pub async fn runtime_metrics(
     let from_ts = now_ts() - window_hours * 3600;
 
     let total_runtime_events =
-        count_runtime_events(app, &trader_id, user_id, None, None, from_ts).await;
+        count_runtime_events(app, &trader_id, None, None, from_ts).await;
     let replace_succeeded = count_runtime_events(
         app,
         &trader_id,
-        user_id,
         Some(EVENT_CANCEL_REPLACE_SUCCEEDED),
         None,
         from_ts,
@@ -159,7 +154,6 @@ pub async fn runtime_metrics(
     let replace_throttled = count_runtime_events(
         app,
         &trader_id,
-        user_id,
         Some(EVENT_CANCEL_REPLACE_THROTTLED),
         None,
         from_ts,
@@ -168,7 +162,6 @@ pub async fn runtime_metrics(
     let replace_market_fallback = count_runtime_events(
         app,
         &trader_id,
-        user_id,
         Some(EVENT_CANCEL_REPLACE_USED_MARKET_FALLBACK),
         None,
         from_ts,
@@ -177,7 +170,6 @@ pub async fn runtime_metrics(
     let open_market_fallback = count_runtime_events(
         app,
         &trader_id,
-        user_id,
         Some(EVENT_LIVE_OPEN_USED_MARKET_FALLBACK),
         None,
         from_ts,
@@ -186,7 +178,6 @@ pub async fn runtime_metrics(
     let open_submitted = count_runtime_events(
         app,
         &trader_id,
-        user_id,
         Some(EVENT_LIVE_ORDER_SUBMITTED),
         Some("submit-open"),
         from_ts,
@@ -195,7 +186,6 @@ pub async fn runtime_metrics(
     let stale_reconcile_terminal = count_runtime_events(
         app,
         &trader_id,
-        user_id,
         Some(EVENT_STALE_INTENT_RECONCILE_TERMINAL),
         None,
         from_ts,
@@ -204,7 +194,6 @@ pub async fn runtime_metrics(
     let stale_reconcile_pending = count_runtime_events(
         app,
         &trader_id,
-        user_id,
         Some(EVENT_STALE_INTENT_RECONCILE_PENDING),
         None,
         from_ts,
@@ -213,7 +202,6 @@ pub async fn runtime_metrics(
     let medium_risk_open_skips = count_runtime_events(
         app,
         &trader_id,
-        user_id,
         Some(EVENT_LIVE_OPEN_SKIPPED_MEDIUM_RISK),
         None,
         from_ts,
@@ -222,7 +210,6 @@ pub async fn runtime_metrics(
     let live_risk_snapshots = count_runtime_events(
         app,
         &trader_id,
-        user_id,
         Some(EVENT_LIVE_RISK_SNAPSHOT),
         None,
         from_ts,
@@ -242,7 +229,7 @@ pub async fn runtime_metrics(
     let mut risk_counts: HashMap<String, i64> = HashMap::new();
     for row in app
         .trading_repo
-        .runtime_events_since(user_id, &trader_id, from_ts)
+        .runtime_events_since(&trader_id, from_ts)
         .await
         .unwrap_or_default()
     {
@@ -287,10 +274,9 @@ pub async fn runtime_metrics(
 
 pub async fn runtime_metrics_series(
     app: &SharedState,
-    user_id: &str,
     q: RuntimeMetricsSeriesQuery,
 ) -> AppResult<RuntimeMetricsSeriesPayload> {
-    let trader_id = match resolve_trader_id(app, user_id, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, q.trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
@@ -309,7 +295,7 @@ pub async fn runtime_metrics_series(
 
     match app
         .trading_repo
-        .runtime_events_since(user_id, &trader_id, from_ts)
+        .runtime_events_since(&trader_id, from_ts)
         .await
     {
         Ok(items) => {

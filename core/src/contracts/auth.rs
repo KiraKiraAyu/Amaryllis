@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Claims {
-    pub sub: String,
     pub iss: String,
     pub iat: u64,
     pub exp: u64,
@@ -10,38 +9,33 @@ pub struct Claims {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct RegisterRequest {
-    pub email: String,
-    pub password: String,
+pub struct VerifyRequest {
+    pub code: String,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct LoginRequest {
-    pub email: String,
-    pub password: String,
+pub struct SetupConfirmRequest {
+    pub code: String,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct ChangePasswordRequest {
-    pub current_password: String,
-    pub new_password: String,
+#[derive(Debug, Clone, Serialize)]
+pub struct AuthStatusPayload {
+    pub configured: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SetupStartPayload {
+    pub secret: String,
+    pub otpauth_url: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct TokenPayload {
     pub token: String,
-    pub user_id: String,
-    pub email: String,
     pub message: &'static str,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct MessagePayload {
     pub message: &'static str,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct CurrentUserPayload {
-    pub user_id: String,
-    pub email: String,
 }

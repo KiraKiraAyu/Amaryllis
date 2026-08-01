@@ -17,11 +17,6 @@ impl MigrationTrait for Migration {
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(RuntimeAlertControls::UserId)
-                            .string()
-                            .not_null(),
-                    )
-                    .col(
                         ColumnDef::new(RuntimeAlertControls::IsMuted)
                             .integer()
                             .not_null()
@@ -68,23 +63,11 @@ impl MigrationTrait for Migration {
                     .primary_key(
                         Index::create()
                             .col(RuntimeAlertControls::TraderId)
-                            .col(RuntimeAlertControls::UserId),
                     )
                     .to_owned(),
             )
             .await?;
 
-        manager
-            .create_index(
-                Index::create()
-                    .if_not_exists()
-                    .name("idx_runtime_alert_controls_user_updated")
-                    .table(RuntimeAlertControls::Table)
-                    .col(RuntimeAlertControls::UserId)
-                    .col((RuntimeAlertControls::UpdatedAt, IndexOrder::Desc))
-                    .to_owned(),
-            )
-            .await?;
         manager
             .create_index(
                 Index::create()
@@ -114,7 +97,6 @@ impl MigrationTrait for Migration {
 enum RuntimeAlertControls {
     Table,
     TraderId,
-    UserId,
     IsMuted,
     MutedUntil,
     MuteReason,

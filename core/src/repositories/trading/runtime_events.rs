@@ -16,7 +16,6 @@ impl TradingRepo {
         entity::runtime_events::ActiveModel {
             id: Set(input.id),
             trader_id: Set(input.trader_id),
-            user_id: Set(input.user_id),
             event_type: Set(input.event_type),
             symbol: Set(input.symbol),
             side: Set(input.side),
@@ -34,7 +33,6 @@ impl TradingRepo {
 
     pub async fn count_runtime_events(
         &self,
-        user_id: &str,
         trader_id: &str,
         event_type: Option<&str>,
         action_taken: Option<&str>,
@@ -42,7 +40,6 @@ impl TradingRepo {
     ) -> Result<i64, DbErr> {
         let mut query = entity::runtime_events::Entity::find()
             .filter(entity::runtime_events::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::runtime_events::Column::UserId.eq(user_id.trim()))
             .filter(entity::runtime_events::Column::CreatedAt.gte(ts_to_dt(from_ts)));
         if let Some(event_type) = event_type {
             query = query.filter(entity::runtime_events::Column::EventType.eq(event_type));
@@ -55,7 +52,6 @@ impl TradingRepo {
 
     pub async fn runtime_events(
         &self,
-        user_id: &str,
         trader_id: &str,
         from_ts: i64,
         event_type: &str,
@@ -66,7 +62,6 @@ impl TradingRepo {
     ) -> Result<(i64, Vec<RuntimeEventRecord>), DbErr> {
         let mut query = entity::runtime_events::Entity::find()
             .filter(entity::runtime_events::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::runtime_events::Column::UserId.eq(user_id.trim()))
             .filter(entity::runtime_events::Column::CreatedAt.gte(ts_to_dt(from_ts)));
         if !event_type.trim().is_empty() {
             query = query.filter(entity::runtime_events::Column::EventType.eq(event_type.trim()));
@@ -94,13 +89,11 @@ impl TradingRepo {
 
     pub async fn runtime_events_since(
         &self,
-        user_id: &str,
         trader_id: &str,
         from_ts: i64,
     ) -> Result<Vec<RuntimeEventRecord>, DbErr> {
         entity::runtime_events::Entity::find()
             .filter(entity::runtime_events::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::runtime_events::Column::UserId.eq(user_id.trim()))
             .filter(entity::runtime_events::Column::CreatedAt.gte(ts_to_dt(from_ts)))
             .all(&self.db)
             .await

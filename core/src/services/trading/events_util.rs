@@ -3,13 +3,12 @@ use super::service::*;
 pub async fn count_runtime_events(
     app: &SharedState,
     trader_id: &str,
-    user_id: &str,
     event_type: Option<&str>,
     action_taken: Option<&str>,
     from_ts: i64,
 ) -> i64 {
     app.trading_repo
-        .count_runtime_events(user_id, trader_id, event_type, action_taken, from_ts)
+        .count_runtime_events(trader_id, event_type, action_taken, from_ts)
         .await
         .unwrap_or(0)
 }
@@ -21,7 +20,6 @@ pub fn app_error(kind: AppErrorKind, message: &str) -> AppError {
 pub fn runtime_engine_payload(value: &RuntimeEngineState) -> RuntimeEnginePayload {
     RuntimeEnginePayload {
         trader_id: value.trader_id.clone(),
-        user_id: value.user_id.clone(),
         exchange_id: value.exchange_id.clone(),
         ai_model_id: value.ai_model_id.clone(),
         started_at: value.started_at,

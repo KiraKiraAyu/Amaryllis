@@ -17,7 +17,6 @@ pub struct StrategyRepo {
 #[derive(Debug, Clone)]
 pub struct StrategyRecord {
     pub id: String,
-    pub user_id: String,
     pub name: String,
     pub description: String,
     pub is_active: bool,
@@ -30,7 +29,6 @@ pub struct StrategyRecord {
 #[derive(Debug, Clone)]
 pub struct CreateStrategyRecord {
     pub id: String,
-    pub user_id: String,
     pub name: String,
     pub description: String,
     pub config: String,
@@ -53,12 +51,10 @@ impl StrategyRepo {
 
     pub async fn list_for_user_with_defaults(
         &self,
-        user_id: &str,
     ) -> Result<Vec<StrategyRecord>, DbErr> {
         strategies::Entity::find()
             .filter(
                 Condition::any()
-                    .add(strategies::Column::UserId.eq(user_id.trim()))
                     .add(strategies::Column::IsDefault.eq(1)),
             )
             .order_by_desc(strategies::Column::IsDefault)
@@ -70,13 +66,11 @@ impl StrategyRepo {
 
     pub async fn get_accessible(
         &self,
-        user_id: &str,
         id: &str,
     ) -> Result<Option<StrategyRecord>, DbErr> {
         strategies::Entity::find_by_id(id.trim().to_string())
             .filter(
                 Condition::any()
-                    .add(strategies::Column::UserId.eq(user_id.trim()))
                     .add(strategies::Column::IsDefault.eq(1)),
             )
             .one(&self.db)
@@ -86,11 +80,9 @@ impl StrategyRepo {
 
     pub async fn get_owned(
         &self,
-        user_id: &str,
         id: &str,
     ) -> Result<Option<StrategyRecord>, DbErr> {
         strategies::Entity::find_by_id(id.trim().to_string())
-            .filter(strategies::Column::UserId.eq(user_id.trim()))
             .one(&self.db)
             .await
             .map(|row| row.map(map_strategy_row))
@@ -98,13 +90,11 @@ impl StrategyRepo {
 
     pub async fn get_duplicable(
         &self,
-        user_id: &str,
         id: &str,
     ) -> Result<Option<StrategyRecord>, DbErr> {
         strategies::Entity::find_by_id(id.trim().to_string())
             .filter(
                 Condition::any()
-                    .add(strategies::Column::UserId.eq(user_id.trim()))
                     .add(strategies::Column::IsDefault.eq(1)),
             )
             .one(&self.db)
@@ -115,7 +105,6 @@ impl StrategyRepo {
     pub async fn create(&self, input: CreateStrategyRecord) -> Result<(), DbErr> {
         strategies::ActiveModel {
             id: Set(input.id),
-            user_id: Set(input.user_id),
             name: Set(input.name),
             description: Set(input.description),
             is_active: Set(0),
@@ -131,7 +120,6 @@ impl StrategyRepo {
 
     pub async fn update_owned(
         &self,
-        user_id: &str,
         id: &str,
         patch: UpdateStrategyRecord,
     ) -> Result<u64, DbErr> {
@@ -147,16 +135,14 @@ impl StrategyRepo {
                 Expr::value(ts_to_dt(patch.updated_at)),
             )
             .filter(strategies::Column::Id.eq(id.trim()))
-            .filter(strategies::Column::UserId.eq(user_id.trim()))
             .exec(&self.db)
             .await
             .map(|res| res.rows_affected)
     }
 
-    pub async fn delete_owned(&self, user_id: &str, id: &str) -> Result<u64, DbErr> {
+    pub async fn delete_owned(&self, id: &str) -> Result<u64, DbErr> {
         strategies::Entity::delete_many()
             .filter(strategies::Column::Id.eq(id.trim()))
-            .filter(strategies::Column::UserId.eq(user_id.trim()))
             .exec(&self.db)
             .await
             .map(|res| res.rows_affected)
@@ -164,7 +150,6 @@ impl StrategyRepo {
 
     pub async fn deactivate_all_for_user(
         &self,
-        user_id: &str,
         updated_at: i64,
     ) -> Result<(), DbErr> {
         strategies::Entity::update_many()
@@ -173,7 +158,6 @@ impl StrategyRepo {
                 strategies::Column::UpdatedAt,
                 Expr::value(ts_to_dt(updated_at)),
             )
-            .filter(strategies::Column::UserId.eq(user_id.trim()))
             .exec(&self.db)
             .await
             .map(|_| ())
@@ -181,7 +165,6 @@ impl StrategyRepo {
 
     pub async fn activate_owned(
         &self,
-        user_id: &str,
         id: &str,
         updated_at: i64,
     ) -> Result<u64, DbErr> {
@@ -192,15 +175,13 @@ impl StrategyRepo {
                 Expr::value(ts_to_dt(updated_at)),
             )
             .filter(strategies::Column::Id.eq(id.trim()))
-            .filter(strategies::Column::UserId.eq(user_id.trim()))
             .exec(&self.db)
             .await
             .map(|res| res.rows_affected)
     }
 
-    pub async fn active_for_user(&self, user_id: &str) -> Result<Option<StrategyRecord>, DbErr> {
+    pub async fn active_for_user(&self) -> Result<Option<StrategyRecord>, DbErr> {
         strategies::Entity::find()
-            .filter(strategies::Column::UserId.eq(user_id.trim()))
             .filter(strategies::Column::IsActive.eq(1))
             .order_by_desc(strategies::Column::UpdatedAt)
             .one(&self.db)
@@ -216,7 +197,6 @@ fn map_strategy_rows(rows: Vec<strategies::Model>) -> Vec<StrategyRecord> {
 fn map_strategy_row(row: strategies::Model) -> StrategyRecord {
     StrategyRecord {
         id: row.id,
-        user_id: row.user_id,
         name: row.name,
         description: row.description,
         is_active: row.is_active != 0,

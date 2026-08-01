@@ -18,7 +18,6 @@ impl MigrationTrait for Migration {
                             .primary_key(),
                     )
                     .col(ColumnDef::new(BacktestTrades::RunId).string().not_null())
-                    .col(ColumnDef::new(BacktestTrades::UserId).string().not_null())
                     .col(
                         ColumnDef::new(BacktestTrades::Ts)
                             .timestamp_with_time_zone()
@@ -132,7 +131,6 @@ enum BacktestTrades {
     Table,
     Id,
     RunId,
-    UserId,
     Ts,
     Symbol,
     Action,

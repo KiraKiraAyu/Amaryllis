@@ -69,7 +69,6 @@ pub struct ToggleCompetitionRequest {
 #[derive(Debug, Clone, Serialize)]
 pub struct TraderPayload {
     pub id: String,
-    pub user_id: String,
     pub name: String,
     pub ai_model_id: String,
     pub exchange_id: String,
@@ -111,7 +110,6 @@ pub struct TraderMessagePayload {
 #[derive(Debug, Clone, Serialize)]
 pub struct RuntimeEnginePayload {
     pub trader_id: String,
-    pub user_id: String,
     pub exchange_id: String,
     pub ai_model_id: String,
     pub started_at: u64,

@@ -14,7 +14,6 @@ use super::{
 impl TradingRepo {
     pub async fn recent_runtime_alert_history_count(
         &self,
-        user_id: &str,
         trader_id: &str,
         breached: bool,
         severity: &str,
@@ -22,7 +21,6 @@ impl TradingRepo {
     ) -> Result<i64, DbErr> {
         entity::runtime_alert_history::Entity::find()
             .filter(entity::runtime_alert_history::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::runtime_alert_history::Column::UserId.eq(user_id.trim()))
             .filter(
                 entity::runtime_alert_history::Column::Breached.eq(if breached { 1 } else { 0 }),
             )
@@ -40,7 +38,6 @@ impl TradingRepo {
         entity::runtime_alert_history::ActiveModel {
             id: Set(input.id),
             trader_id: Set(input.trader_id),
-            user_id: Set(input.user_id),
             window_hours: Set(input.window_hours as i32),
             thresholds_json: Set(input.thresholds_json),
             rates_json: Set(input.rates_json),
@@ -56,7 +53,6 @@ impl TradingRepo {
 
     pub async fn runtime_alert_history(
         &self,
-        user_id: &str,
         trader_id: &str,
         from_ts: i64,
         breached: Option<bool>,
@@ -66,7 +62,6 @@ impl TradingRepo {
     ) -> Result<(i64, Vec<RuntimeAlertHistoryRecord>), DbErr> {
         let mut query = entity::runtime_alert_history::Entity::find()
             .filter(entity::runtime_alert_history::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::runtime_alert_history::Column::UserId.eq(user_id.trim()))
             .filter(entity::runtime_alert_history::Column::CreatedAt.gte(ts_to_dt(from_ts)));
         if let Some(breached) = breached {
             query = query.filter(

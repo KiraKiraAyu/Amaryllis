@@ -1,30 +1,25 @@
-export interface RegisterRequest {
-  email: string
-  password: string
+export interface VerifyRequest {
+  code: string
 }
 
-export interface LoginRequest {
-  email: string
-  password: string
+export interface SetupConfirmRequest {
+  code: string
 }
 
-export interface ChangePasswordRequest {
-  current_password: string
-  new_password: string
+export interface AuthStatusPayload {
+  configured: boolean
+}
+
+export interface SetupStartPayload {
+  secret: string
+  otpauth_url: string
 }
 
 export interface TokenPayload {
   token: string
-  user_id: string
-  email: string
   message: string
 }
 
 export interface MessagePayload {
   message: string
-}
-
-export interface CurrentUserPayload {
-  user_id: string
-  email: string
 }

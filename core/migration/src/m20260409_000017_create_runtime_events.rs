@@ -18,7 +18,6 @@ impl MigrationTrait for Migration {
                             .primary_key(),
                     )
                     .col(ColumnDef::new(RuntimeEvents::TraderId).string().not_null())
-                    .col(ColumnDef::new(RuntimeEvents::UserId).string().not_null())
                     .col(
                         ColumnDef::new(RuntimeEvents::EventType)
                             .string()
@@ -139,7 +138,6 @@ enum RuntimeEvents {
     Table,
     Id,
     TraderId,
-    UserId,
     EventType,
     Symbol,
     Side,

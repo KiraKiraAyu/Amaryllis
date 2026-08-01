@@ -8,7 +8,6 @@ pub struct HealthResponse {
 
 #[derive(Debug, Serialize)]
 pub struct SystemConfigResponse {
-    pub registration_enabled: bool,
     pub btc_eth_leverage: u32,
     pub altcoin_leverage: u32,
     pub runtime_alert_webhook_enabled: bool,

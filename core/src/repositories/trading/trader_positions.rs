@@ -27,7 +27,6 @@ use super::{
 impl TradingRepo {
     pub async fn close_open_positions(
         &self,
-        user_id: &str,
         trader_id: &str,
         symbol: &str,
         side: &str,
@@ -36,7 +35,6 @@ impl TradingRepo {
     ) -> Result<usize, DbErr> {
         let rows = entity::trader_positions::Entity::find()
             .filter(entity::trader_positions::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::trader_positions::Column::UserId.eq(user_id.trim()))
             .filter(entity::trader_positions::Column::Symbol.eq(symbol.trim()))
             .filter(entity::trader_positions::Column::Side.eq(side.trim()))
             .filter(entity::trader_positions::Column::Status.eq("open"))
@@ -91,7 +89,6 @@ impl TradingRepo {
             entity::trader_trades::ActiveModel {
                 id: Set(trade_id),
                 trader_id: Set(trader_id.to_string()),
-                user_id: Set(user_id.to_string()),
                 symbol: Set(symbol.to_string()),
                 side: Set(side.to_string()),
                 entry_price: Set(decimal_from_f64(entry)),
@@ -113,14 +110,12 @@ impl TradingRepo {
 
     pub async fn open_position_records(
         &self,
-        user_id: &str,
         trader_id: &str,
         symbol: Option<&str>,
         side: Option<&str>,
     ) -> Result<Vec<TraderPositionRecord>, DbErr> {
         let mut query = entity::trader_positions::Entity::find()
             .filter(entity::trader_positions::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::trader_positions::Column::UserId.eq(user_id.trim()))
             .filter(entity::trader_positions::Column::Status.eq("open"));
         if let Some(symbol) = symbol {
             query = query.filter(entity::trader_positions::Column::Symbol.eq(symbol.trim()));
@@ -136,7 +131,6 @@ impl TradingRepo {
 
     pub async fn close_open_positions_for_symbol_side(
         &self,
-        user_id: &str,
         trader_id: &str,
         symbol: &str,
         side: &str,
@@ -161,7 +155,6 @@ impl TradingRepo {
                 Expr::value(ts_to_dt(updated_at)),
             )
             .filter(entity::trader_positions::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::trader_positions::Column::UserId.eq(user_id.trim()))
             .filter(entity::trader_positions::Column::Symbol.eq(symbol.trim()))
             .filter(entity::trader_positions::Column::Side.eq(side.trim()))
             .filter(entity::trader_positions::Column::Status.eq("open"))
@@ -176,7 +169,6 @@ impl TradingRepo {
     ) -> Result<(), DbErr> {
         let existing = entity::trader_positions::Entity::find()
             .filter(entity::trader_positions::Column::TraderId.eq(input.trader_id.trim()))
-            .filter(entity::trader_positions::Column::UserId.eq(input.user_id.trim()))
             .filter(entity::trader_positions::Column::Symbol.eq(input.symbol.trim()))
             .filter(entity::trader_positions::Column::Side.eq(input.side.trim()))
             .filter(entity::trader_positions::Column::Status.eq("open"))
@@ -198,7 +190,6 @@ impl TradingRepo {
             self.insert_position(InsertTraderPositionRecord {
                 id: uuid::Uuid::now_v7().to_string(),
                 trader_id: input.trader_id,
-                user_id: input.user_id,
                 symbol: input.symbol,
                 side: input.side,
                 quantity: input.quantity,
@@ -224,7 +215,6 @@ impl TradingRepo {
         entity::trader_positions::ActiveModel {
             id: Set(input.id),
             trader_id: Set(input.trader_id),
-            user_id: Set(input.user_id),
             symbol: Set(input.symbol),
             side: Set(input.side),
             quantity: Set(decimal_from_f64(input.quantity)),
@@ -248,7 +238,6 @@ impl TradingRepo {
 
     pub async fn close_position(
         &self,
-        user_id: &str,
         trader_id: &str,
         position_id: &str,
         exit_price: f64,
@@ -282,7 +271,6 @@ impl TradingRepo {
             )
             .filter(entity::trader_positions::Column::Id.eq(position_id.trim()))
             .filter(entity::trader_positions::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::trader_positions::Column::UserId.eq(user_id.trim()))
             .filter(entity::trader_positions::Column::Status.eq("open"))
             .exec(&self.db)
             .await
@@ -291,14 +279,12 @@ impl TradingRepo {
 
     pub async fn close_open_positions_missing_from_exchange(
         &self,
-        user_id: &str,
         trader_id: &str,
         live_keys: &HashSet<String>,
         closed_at: i64,
     ) -> Result<(), DbErr> {
         let rows = entity::trader_positions::Entity::find()
             .filter(entity::trader_positions::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::trader_positions::Column::UserId.eq(user_id.trim()))
             .filter(entity::trader_positions::Column::Status.eq("open"))
             .all(&self.db)
             .await?;
@@ -325,7 +311,6 @@ impl TradingRepo {
                     )
                     .filter(entity::trader_positions::Column::Id.eq(row.id))
                     .filter(entity::trader_positions::Column::TraderId.eq(trader_id.trim()))
-                    .filter(entity::trader_positions::Column::UserId.eq(user_id.trim()))
                     .filter(entity::trader_positions::Column::Status.eq("open"))
                     .exec(&self.db)
                     .await?;
@@ -337,7 +322,6 @@ impl TradingRepo {
 
     pub async fn update_position_mark_to_market(
         &self,
-        user_id: &str,
         trader_id: &str,
         position_id: &str,
         mark_price: f64,
@@ -359,7 +343,6 @@ impl TradingRepo {
             )
             .filter(entity::trader_positions::Column::Id.eq(position_id.trim()))
             .filter(entity::trader_positions::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::trader_positions::Column::UserId.eq(user_id.trim()))
             .exec(&self.db)
             .await
             .map(|_| ())
@@ -367,7 +350,6 @@ impl TradingRepo {
 
     pub async fn apply_close_fill_to_open_positions(
         &self,
-        user_id: &str,
         trader_id: &str,
         symbol: &str,
         position_side: &str,
@@ -390,7 +372,6 @@ impl TradingRepo {
         while remaining_qty > 1e-9 {
             let Some(pos) = entity::trader_positions::Entity::find()
                 .filter(entity::trader_positions::Column::TraderId.eq(trader_id.trim()))
-                .filter(entity::trader_positions::Column::UserId.eq(user_id.trim()))
                 .filter(entity::trader_positions::Column::Symbol.eq(&symbol))
                 .filter(entity::trader_positions::Column::Side.eq(&position_side))
                 .filter(entity::trader_positions::Column::Status.eq("open"))
@@ -453,7 +434,6 @@ impl TradingRepo {
             self.insert_trade(InsertTraderTradeRecord {
                 id: uuid::Uuid::now_v7().to_string(),
                 trader_id: trader_id.to_string(),
-                user_id: user_id.to_string(),
                 symbol: symbol.clone(),
                 side: position_side.clone(),
                 entry_price,
@@ -478,13 +458,11 @@ impl TradingRepo {
 
     pub async fn positions_by_status(
         &self,
-        user_id: &str,
         trader_id: &str,
         status: &str,
     ) -> Result<Vec<TraderPositionRecord>, DbErr> {
         entity::trader_positions::Entity::find()
             .filter(entity::trader_positions::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::trader_positions::Column::UserId.eq(user_id.trim()))
             .filter(entity::trader_positions::Column::Status.eq(status.trim()))
             .order_by_desc(entity::trader_positions::Column::OpenedAt)
             .all(&self.db)
@@ -494,14 +472,12 @@ impl TradingRepo {
 
     pub async fn closed_positions(
         &self,
-        user_id: &str,
         trader_id: &str,
         limit: i64,
         offset: i64,
     ) -> Result<Vec<TraderPositionRecord>, DbErr> {
         entity::trader_positions::Entity::find()
             .filter(entity::trader_positions::Column::TraderId.eq(trader_id.trim()))
-            .filter(entity::trader_positions::Column::UserId.eq(user_id.trim()))
             .filter(entity::trader_positions::Column::Status.eq("closed"))
             .order_by_desc(entity::trader_positions::Column::ClosedAt)
             .order_by_desc(entity::trader_positions::Column::UpdatedAt)
