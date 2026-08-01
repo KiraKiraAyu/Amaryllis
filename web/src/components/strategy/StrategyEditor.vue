@@ -141,7 +141,7 @@ function changeCostMode(index: number, mode: 'fixed' | 'dynamic') {
       <!-- Symbols Settings list -->
       <div class="flex flex-col gap-3 mb-6">
         <label class="text-xs font-bold text-surface-500">Trading Target Symbols</label>
-        
+
         <div class="overflow-x-auto border border-surface-200 dark:border-surface-800 rounded-2xl">
           <table class="w-full text-left border-collapse min-w-150">
             <thead>
@@ -164,19 +164,19 @@ function changeCostMode(index: number, mode: 'fixed' | 'dynamic') {
                 <td class="p-3 text-sm font-bold text-surface-900 dark:text-white font-mono">
                   {{ item.symbol }}
                 </td>
-                
+
                 <!-- Leverage -->
                 <td class="p-3">
                   <InputNumber
                     v-model="item.leverage"
                     :min="1"
-                    :max="50"
+                    :max="200"
                     showButtons
                     class="h-8 rounded-lg w-22.5"
                     inputClass="text-center font-mono py-1"
                   />
                 </td>
-                
+
                 <!-- Cost Mode -->
                 <td class="p-3">
                   <Select
@@ -191,14 +191,16 @@ function changeCostMode(index: number, mode: 'fixed' | 'dynamic') {
                     class="h-8 rounded-lg w-27.5 text-xs flex items-center"
                   />
                 </td>
-                
+
                 <!-- Cost Settings -->
                 <td class="p-3">
                   <div v-if="getCostMode(item) === 'fixed'" class="flex items-center gap-1.5 max-w-37.5">
                     <span class="text-xs text-surface-400">$</span>
                     <InputNumber
                       v-model="item.fixed_cost"
-                      :min="1"
+                      :min="0.1"
+                      :minFractionDigits="1"
+                      :maxFractionDigits="2"
                       placeholder="Fixed Cost"
                       class="h-8 rounded-lg flex-1"
                       inputClass="py-1 font-mono text-sm"
@@ -209,7 +211,9 @@ function changeCostMode(index: number, mode: 'fixed' | 'dynamic') {
                     <InputNumber
                       v-model="item.min_cost"
                       placeholder="Min"
-                      :min="1"
+                      :min="0.1"
+                      :minFractionDigits="1"
+                      :maxFractionDigits="2"
                       class="h-8 rounded-lg w-20"
                       inputClass="py-1 font-mono text-sm text-center"
                     />
@@ -219,12 +223,14 @@ function changeCostMode(index: number, mode: 'fixed' | 'dynamic') {
                       v-model="item.max_cost"
                       placeholder="Max"
                       :min="1"
+                      :minFractionDigits="1"
+                      :maxFractionDigits="2"
                       class="h-8 rounded-lg w-24"
                       inputClass="py-1 font-mono text-sm text-center"
                     />
                   </div>
                 </td>
-                
+
                 <!-- Action Delete -->
                 <td class="p-3 text-center">
                   <Button
@@ -237,7 +243,7 @@ function changeCostMode(index: number, mode: 'fixed' | 'dynamic') {
                   />
                 </td>
               </tr>
-              
+
               <!-- Add new Symbol row -->
               <tr class="bg-surface-50/50 dark:bg-surface-950/10">
                 <td colspan="5" class="p-3">
