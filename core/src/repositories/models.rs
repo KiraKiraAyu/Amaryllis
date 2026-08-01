@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+use sea_orm::sea_query::OnConflict;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait, PaginatorTrait,
     QueryFilter, Set, TransactionTrait,
@@ -224,18 +225,12 @@ impl ModelRepo {
         Self { db }
     }
 
-    pub async fn list_for_user(
-        &self,
-    ) -> Result<Vec<ProviderConfigRecord>, crate::database::DbErr> {
+    pub async fn list_for_user(&self) -> Result<Vec<ProviderConfigRecord>, crate::database::DbErr> {
         self.ensure_defaults().await?;
 
-        let providers = llm_providers::Entity::find()
-            .all(&self.db)
-            .await?;
+        let providers = llm_providers::Entity::find().all(&self.db).await?;
 
-        let models = llm_models::Entity::find()
-            .all(&self.db)
-            .await?;
+        let models = llm_models::Entity::find().all(&self.db).await?;
 
         let mut models_by_provider: HashMap<String, Vec<ModelConfigRecord>> = HashMap::new();
         for row in models {
@@ -276,12 +271,8 @@ impl ModelRepo {
         &self,
         providers: Vec<UpsertProviderConfig>,
     ) -> Result<(), crate::database::DbErr> {
-        let existing_providers = llm_providers::Entity::find()
-            .all(&self.db)
-            .await?;
-        let existing_models = llm_models::Entity::find()
-            .all(&self.db)
-            .await?;
+        let existing_providers = llm_providers::Entity::find().all(&self.db).await?;
+        let existing_models = llm_models::Entity::find().all(&self.db).await?;
 
         let existing_provider_api_keys: HashMap<String, String> = existing_providers
             .iter()
@@ -333,6 +324,18 @@ impl ModelRepo {
                 created_at: Set(now),
                 updated_at: Set(now),
             })
+            .on_conflict(
+                OnConflict::column(llm_providers::Column::Id)
+                    .update_columns([
+                        llm_providers::Column::Name,
+                        llm_providers::Column::ProviderType,
+                        llm_providers::Column::Enabled,
+                        llm_providers::Column::ApiKey,
+                        llm_providers::Column::BaseUrl,
+                        llm_providers::Column::UpdatedAt,
+                    ])
+                    .to_owned(),
+            )
             .exec(&tx)
             .await?;
 
@@ -359,6 +362,16 @@ impl ModelRepo {
                     created_at: Set(now),
                     updated_at: Set(now),
                 })
+                .on_conflict(
+                    OnConflict::column(llm_models::Column::Id)
+                        .update_columns([
+                            llm_models::Column::ProviderId,
+                            llm_models::Column::Name,
+                            llm_models::Column::ModelId,
+                            llm_models::Column::UpdatedAt,
+                        ])
+                        .to_owned(),
+                )
                 .exec(&tx)
                 .await?;
             }
@@ -421,9 +434,7 @@ impl ModelRepo {
     }
 
     pub async fn ensure_defaults(&self) -> Result<(), crate::database::DbErr> {
-        let existing_count = llm_providers::Entity::find()
-            .count(&self.db)
-            .await?;
+        let existing_count = llm_providers::Entity::find().count(&self.db).await?;
 
         if existing_count > 0 {
             return Ok(());
@@ -656,10 +667,7 @@ mod tests {
             .expect("connect sqlite memory");
         let repo = ModelRepo::new(db);
 
-        let providers = repo
-            .list_for_user()
-            .await
-            .expect("list defaults");
+        let providers = repo.list_for_user().await.expect("list defaults");
 
         let provider_types: HashMap<_, _> = providers
             .iter()
@@ -712,10 +720,7 @@ mod tests {
         .await
         .expect("replace providers");
 
-        let providers = repo
-            .list_for_user()
-            .await
-            .expect("list providers");
+        let providers = repo.list_for_user().await.expect("list providers");
 
         let provider_types: HashMap<_, _> = providers
             .iter()
@@ -724,5 +729,60 @@ mod tests {
 
         assert_eq!(provider_types.get("legacy-deepseek"), Some(&"openai"));
         assert_eq!(provider_types.get("legacy-claude"), Some(&"anthropic"));
+    }
+
+    #[tokio::test]
+    async fn replace_for_user_updates_existing_rows_without_unique_conflict() {
+        let db = init_database("sqlite::memory:")
+            .await
+            .expect("connect sqlite memory");
+        let repo = ModelRepo::new(db);
+
+        // Mimic the real flow: list_for_user seeds the default providers first.
+        let before = repo.list_for_user().await.expect("seed defaults");
+
+        // The frontend echoes the full list back, modifying only one provider.
+        let mut updated = Vec::new();
+        for provider in &before {
+            let mut models = Vec::new();
+            for model in &provider.models {
+                models.push(UpsertModelConfig {
+                    id: Some(model.id.clone()),
+                    name: model.name.clone(),
+                    model_id: model.model_id.clone(),
+                });
+            }
+            let mut provider = provider.clone();
+            if provider.id == "deepseek" {
+                provider.name = "DeepSeek Custom".to_string();
+                provider.api_key = "updated-secret".to_string();
+                provider.enabled = 0;
+            }
+            updated.push(UpsertProviderConfig {
+                id: Some(provider.id.clone()),
+                name: provider.name.clone(),
+                provider_type: provider.provider_type.clone(),
+                enabled: provider.enabled != 0,
+                api_key: provider.api_key.clone(),
+                base_url: provider.base_url.clone(),
+                models,
+            });
+        }
+
+        // Re-saving against already-seeded rows must not collide.
+        repo.replace_for_user(updated)
+            .await
+            .expect("replace full list without unique conflict");
+
+        let after = repo.list_for_user().await.expect("list providers");
+        let deepseek_after = after
+            .iter()
+            .find(|provider| provider.id == "deepseek")
+            .expect("deepseek should still exist after replace");
+
+        assert_eq!(deepseek_after.name, "DeepSeek Custom");
+        assert_eq!(deepseek_after.api_key, "updated-secret");
+        assert_eq!(deepseek_after.enabled, 0);
+        assert_eq!(after.len(), before.len(), "all providers preserved");
     }
 }
