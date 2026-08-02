@@ -15,29 +15,30 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="flex items-center justify-between flex-wrap gap-4">
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
     <div>
-      <h1 class="text-2xl font-black text-surface-900 dark:text-white">System Monitor</h1>
-      <p class="text-sm mt-0.5 text-surface-500">
+      <h1 class="mt-1 text-3xl font-bold text-surface-900 dark:text-white">System Monitor</h1>
+      <p class="mt-1 text-sm text-surface-500 dark:text-surface-400">
         Runtime metrics, alerts, and system events
       </p>
     </div>
-    <div class="flex flex-wrap items-center gap-2">
+    <div class="flex items-center gap-3 shrink-0">
       <Select
         v-model="activeTrader"
         :options="[{ id: '', name: '(All System)' }, ...traders]"
+        placeholder="Select a Trader"
         optionLabel="name"
         optionValue="id"
-        class="w-48"
+        class="h-11 rounded-xl flex items-center w-48"
         @change="emit('refresh')"
       />
-      <Button 
-        label="Refresh" 
-        icon="pi pi-refresh" 
-        severity="secondary" 
-        variant="text" 
-        class="shrink-0"
-        @click="emit('refresh')" 
+      <Button
+        label="Refresh"
+        icon="pi pi-refresh"
+        severity="secondary"
+        variant="outlined"
+        class="rounded-xl h-11 px-4 cursor-pointer shrink-0"
+        @click="emit('refresh')"
       />
     </div>
   </div>

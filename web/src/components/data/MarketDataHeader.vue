@@ -42,8 +42,10 @@ const intervals = ["1m", "5m", "15m", "1h", "4h", "1d"]
       <Button
         icon="pi pi-refresh"
         label="Refresh"
+        severity="secondary"
+        variant="outlined"
         @click="emit('refresh')"
-        class="rounded-xl px-4 h-11 cursor-pointer shrink-0"
+        class="rounded-xl h-11 px-4 cursor-pointer shrink-0"
       />
     </div>
   </div>

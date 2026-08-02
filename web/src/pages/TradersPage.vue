@@ -58,7 +58,7 @@ function handleUpdated() {
       description="Manage your AI traders - create, edit, start and stop"
     >
       <template #actions>
-        <div class="flex items-center gap-4">
+        <div class="flex items-center gap-3">
           <div class="flex items-center gap-2">
             <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
             <span class="text-xs text-surface-500 font-medium">{{ lastUpdated }}</span>
@@ -66,15 +66,15 @@ function handleUpdated() {
           <Button
             label="Refresh"
             icon="pi pi-refresh"
-            size="small"
             severity="secondary"
             variant="outlined"
+            class="rounded-xl h-11 px-4 cursor-pointer"
             @click="load"
           />
           <Button
             label="New Trader"
             icon="pi pi-plus"
-            size="small"
+            class="rounded-xl h-11 px-4 cursor-pointer"
             @click="showCreateModal = true"
           />
         </div>

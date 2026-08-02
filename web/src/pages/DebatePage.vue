@@ -31,7 +31,7 @@ const {
       description="Multiple AI personalities debate trading decisions"
     >
       <template #actions>
-        <Button @click="showCreate = true" icon="pi pi-plus" label="New Debate" class="rounded-xl" />
+        <Button @click="showCreate = true" icon="pi pi-plus" label="New Debate" class="rounded-xl h-11 px-4 cursor-pointer" />
       </template>
     </PageHeader>
 

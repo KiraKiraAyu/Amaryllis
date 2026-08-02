@@ -49,7 +49,7 @@ const editingStrategy = computed<EditableStrategy>({
       description="Create and manage trading strategies"
     >
       <template #actions>
-        <Button label="New Strategy" icon="pi pi-plus" @click="createNew" />
+        <Button label="New Strategy" icon="pi pi-plus" class="rounded-xl h-11 px-4 cursor-pointer" @click="createNew" />
       </template>
     </PageHeader>
 

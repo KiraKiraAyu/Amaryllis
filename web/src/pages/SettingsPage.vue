@@ -12,8 +12,8 @@ import SecurityTab from "@/components/settings/SecurityTab.vue"
 <template>
   <div class="flex flex-col gap-6">
     <div>
-      <h1 class="text-2xl font-black text-surface-900 dark:text-white">Settings</h1>
-      <p class="text-sm mt-0.5 text-surface-500 font-medium tracking-wide">
+      <h1 class="mt-1 text-3xl font-bold text-surface-900 dark:text-white">Settings</h1>
+      <p class="mt-1 text-sm text-surface-500 dark:text-surface-400">
         Configure exchanges, AI models, and account security
       </p>
     </div>

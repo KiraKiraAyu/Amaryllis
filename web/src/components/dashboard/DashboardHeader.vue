@@ -18,8 +18,10 @@ const emit = defineEmits<{
       <Button
         icon="pi pi-refresh"
         label="Refresh"
+        severity="secondary"
+        variant="outlined"
         @click="emit('refresh')"
-        class="rounded-xl px-4 h-11"
+        class="rounded-xl h-11 px-4 cursor-pointer"
       />
     </div>
   </div>
