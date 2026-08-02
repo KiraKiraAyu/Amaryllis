@@ -21,6 +21,8 @@ pub const EVENT_CANCEL_REPLACE_USED_MARKET_FALLBACK: &str = "cancel_replace_used
 pub const EVENT_STALE_INTENT_RECONCILE_TERMINAL: &str = "stale_intent_reconcile_terminal";
 pub const EVENT_STALE_INTENT_RECONCILE_PENDING: &str = "stale_intent_reconcile_pending";
 
+pub const EVENT_BUDGET_CIRCUIT_BREAKER: &str = "budget_circuit_breaker";
+
 pub const CANONICAL_RUNTIME_EVENT_TYPES: &[RuntimeEventCatalogItem] = &[
     RuntimeEventCatalogItem {
         event_type: EVENT_LIVE_RISK_SNAPSHOT,
@@ -57,6 +59,10 @@ pub const CANONICAL_RUNTIME_EVENT_TYPES: &[RuntimeEventCatalogItem] = &[
     RuntimeEventCatalogItem {
         event_type: EVENT_STALE_INTENT_RECONCILE_PENDING,
         description: "Stale submitted intent observed non-terminal and touched.",
+    },
+    RuntimeEventCatalogItem {
+        event_type: EVENT_BUDGET_CIRCUIT_BREAKER,
+        description: "Budget circuit breaker triggered: unrealized loss exceeded the budget limit.",
     },
 ];
 

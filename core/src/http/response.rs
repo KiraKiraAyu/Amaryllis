@@ -142,6 +142,10 @@ impl IntoResponse for AppError {
                 tracing::error!("Internal server error. {}", message);
                 (StatusCode::INTERNAL_SERVER_ERROR, message)
             }
+            AppError::BudgetExhausted(message) => {
+                tracing::warn!("Budget exhausted: {}", message);
+                (StatusCode::OK, format!("Budget exhausted: {message}"))
+            }
             AppError::Database(err) => {
                 tracing::error!("Database error: {:?}", err);
                 (

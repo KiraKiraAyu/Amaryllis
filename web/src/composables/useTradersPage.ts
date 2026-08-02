@@ -15,6 +15,8 @@ export interface TradersPageTrader extends TraderPayload {
   total_equity: number
   total_pnl: number
   total_pnl_pct: number
+  unrealized_pnl: number
+  realized_pnl: number
   position_count: number
   margin_used_pct: number
 }
@@ -55,8 +57,8 @@ export function useTradersPage() {
     total: traders.value.length,
     running: traders.value.filter((t) => t.is_running).length,
     stopped: traders.value.filter((t) => !t.is_running).length,
-    totalEquity: traders.value.reduce(
-      (sum, t) => sum + (t.total_equity || 0),
+    totalPnl: traders.value.reduce(
+      (sum, t) => sum + (t.unrealized_pnl || 0) + (t.realized_pnl || 0),
       0,
     ),
   }))
@@ -96,6 +98,8 @@ export function useTradersPage() {
           total_equity: comp?.total_equity ?? 0,
           total_pnl: comp?.total_pnl ?? 0,
           total_pnl_pct: comp?.total_pnl_pct ?? 0,
+          unrealized_pnl: comp?.unrealized_pnl ?? 0,
+          realized_pnl: comp?.realized_pnl ?? 0,
           position_count: comp?.position_count ?? 0,
           margin_used_pct: comp?.margin_used_pct ?? 0,
         }

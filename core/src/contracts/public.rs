@@ -51,6 +51,8 @@ pub struct PublicCompetitionTraderPayload {
     pub total_equity: f64,
     pub total_pnl: f64,
     pub total_pnl_pct: f64,
+    pub unrealized_pnl: f64,
+    pub realized_pnl: f64,
     pub position_count: i64,
     pub margin_used_pct: f64,
     pub is_running: bool,

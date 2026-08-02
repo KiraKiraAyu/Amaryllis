@@ -24,6 +24,8 @@ pub struct CompetitionTraderRecord {
     pub total_equity: f64,
     pub total_pnl: f64,
     pub total_pnl_pct: f64,
+    pub unrealized_pnl: f64,
+    pub realized_pnl: f64,
     pub position_count: i64,
     pub margin_used_pct: f64,
     pub is_running: bool,
@@ -110,12 +112,16 @@ impl CompetitionRepo {
             let total_balance = latest
                 .map(|row| decimal_to_f64(&row.total_balance))
                 .unwrap_or(0.0);
-            let total_pnl = latest
+            let unrealized_pnl = latest
                 .map(|row| decimal_to_f64(&row.unrealized_pnl))
+                .unwrap_or(0.0);
+            let realized_pnl = latest
+                .map(|row| decimal_to_f64(&row.realized_pnl))
                 .unwrap_or(0.0);
             let used_margin = latest
                 .map(|row| decimal_to_f64(&row.used_margin))
                 .unwrap_or(0.0);
+            let total_pnl = unrealized_pnl;
             let total_pnl_pct = if total_balance.abs() > f64::EPSILON {
                 (total_pnl / total_balance) * 100.0
             } else {
@@ -135,6 +141,8 @@ impl CompetitionRepo {
                 total_equity: total_balance + total_pnl,
                 total_pnl,
                 total_pnl_pct,
+                unrealized_pnl,
+                realized_pnl,
                 position_count: position_counts.get(&trader.id).copied().unwrap_or(0),
                 margin_used_pct,
                 is_running: trader.is_running != 0,

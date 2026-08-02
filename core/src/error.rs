@@ -58,6 +58,9 @@ pub enum AppError {
     #[error("Failed to sign exchange request: {0}")]
     ExchangeCrypto(String),
 
+    #[error("Budget exhausted: {0}")]
+    BudgetExhausted(String),
+
     #[error("Internal server error: {0}")]
     Internal(String),
 

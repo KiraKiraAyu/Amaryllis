@@ -85,7 +85,7 @@ function handleUpdated() {
       :total="stats.total"
       :running="stats.running"
       :stopped="stats.stopped"
-      :total-equity="stats.totalEquity"
+      :total-pnl="stats.totalPnl"
       :loading="loading"
     />
 

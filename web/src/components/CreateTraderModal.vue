@@ -167,7 +167,7 @@ onMounted(async () => {
         </div>
 
         <div class="flex flex-col gap-1.5">
-          <label class="text-xs font-bold text-surface-500 dark:text-surface-400">Initial Balance (USDT)</label>
+          <label class="text-xs font-bold text-surface-500 dark:text-surface-400">Budget (USDT)</label>
           <InputNumber
             v-model="form.initial_balance"
             :min="10"

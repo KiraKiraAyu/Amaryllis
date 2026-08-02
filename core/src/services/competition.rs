@@ -177,6 +177,8 @@ fn competition_trader_payload(row: CompetitionTraderRecord) -> PublicCompetition
         total_equity: row.total_equity,
         total_pnl: row.total_pnl,
         total_pnl_pct: row.total_pnl_pct,
+        unrealized_pnl: row.unrealized_pnl,
+        realized_pnl: row.realized_pnl,
         position_count: row.position_count,
         margin_used_pct: row.margin_used_pct,
         is_running: row.is_running,

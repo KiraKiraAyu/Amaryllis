@@ -5,7 +5,7 @@ defineProps<{
   total: number
   running: number
   stopped: number
-  totalEquity: number
+  totalPnl: number
   loading: boolean
 }>()
 </script>
@@ -28,8 +28,8 @@ defineProps<{
       :loading="loading"
     />
     <StatCard
-      title="Total Equity"
-      :value="totalEquity"
+      title="Total PnL"
+      :value="totalPnl"
       prefix="$"
       :loading="loading"
     />

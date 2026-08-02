@@ -70,7 +70,7 @@ pub async fn run_trader_loop(
     }
 
     // immediate first cycle
-    process_cycle(
+    if let Err(err) = process_cycle(
         &engine.inner.state,
         &cfg,
         &symbols,
@@ -78,7 +78,17 @@ pub async fn run_trader_loop(
         &exec_ctx,
         live_adapter.as_deref(),
     )
-    .await?;
+    .await
+    {
+        if matches!(err, AppError::BudgetExhausted(_)) {
+            let _ = engine.inner.state.set_runtime_engine_running(
+                &cfg.trader_id,
+                false,
+                Some(format!("budget circuit breaker: {}", err)),
+            );
+        }
+        return Err(err);
+    }
 
     loop {
         tokio::select! {
@@ -104,6 +114,21 @@ pub async fn run_trader_loop(
                         let _ = engine.inner.state.set_runtime_engine_running(&cfg.trader_id, true, None);
                     }
                     Err(err) => {
+                        // Budget circuit breaker — stop immediately regardless of mode
+                        if matches!(err, AppError::BudgetExhausted(_)) {
+                            let breaker_msg = format!("budget circuit breaker: {}", err);
+                            let _ = engine.inner.state.set_runtime_engine_running(
+                                &cfg.trader_id,
+                                false,
+                                Some(breaker_msg.clone()),
+                            );
+                            warn!(
+                                "stopping loop by budget circuit breaker trader={} reason={}",
+                                cfg.trader_id, breaker_msg
+                            );
+                            break;
+                        }
+
                         if exec_ctx.mode == RuntimeExecutionMode::LiveExchange {
                             consecutive_live_failures = consecutive_live_failures.saturating_add(1);
                             let failure_msg = format!(
@@ -317,6 +342,87 @@ pub async fn process_cycle(
 
     // 4) account metrics
     let metrics = compute_account_metrics(state, cfg).await?;
+
+    // 4.5) budget circuit breaker — if unrealized loss exceeds the budget, close all positions and stop
+    if cfg.initial_balance > 0.0 && metrics.unrealized_pnl <= -cfg.initial_balance {
+        let budget = cfg.initial_balance;
+        let upnl = metrics.unrealized_pnl;
+        warn!(
+            "budget circuit breaker triggered trader={} budget={} unrealized_pnl={}",
+            cfg.trader_id, budget, upnl
+        );
+
+        let cycle_correlation_id = format!(
+            "budget-breaker:{}:{}:{}",
+            cfg.trader_id,
+            now,
+            Uuid::now_v7().simple()
+        );
+
+        // close all open positions
+        match (exec_ctx.mode, live_adapter) {
+            (RuntimeExecutionMode::LiveExchange, Some(adapter)) => {
+                close_worst_positions_live(
+                    state,
+                    cfg,
+                    &open_positions,
+                    adapter,
+                    now,
+                    open_positions.len(),
+                    "critical",
+                    &cycle_correlation_id,
+                )
+                .await?;
+            }
+            _ => {
+                for p in &open_positions {
+                    let px = market
+                        .get(&p.symbol)
+                        .map(|m| m.price)
+                        .unwrap_or(p.mark_price.max(1e-9));
+                    close_position(state, cfg, p, px, now, "budget circuit breaker").await?;
+                }
+            }
+        }
+
+        // emit runtime event
+        emit_runtime_event_best_effort(
+            state,
+            cfg,
+            EVENT_BUDGET_CIRCUIT_BREAKER,
+            "",
+            "",
+            "critical",
+            "budget-risk-guard",
+            "close-all-and-stop",
+            &cycle_correlation_id,
+            json!({
+                "budget": budget,
+                "unrealized_pnl": upnl,
+                "realized_pnl": metrics.realized_pnl,
+                "total_balance": metrics.total_balance,
+            }),
+            now,
+        )
+        .await;
+
+        // push realtime event
+        state
+            .realtime_hub
+            .publish(crate::realtime::RealtimeEvent::EngineStatus {
+                trader_id: cfg.trader_id.clone(),
+                status: "budget_exhausted".to_string(),
+                message: format!(
+                    "Budget circuit breaker: unrealized PnL {:.2} exceeded budget {:.2}",
+                    upnl, budget
+                ),
+            });
+
+        return Err(AppError::BudgetExhausted(format!(
+            "unrealized PnL {:.2} exceeded budget {:.2}",
+            upnl, budget
+        )));
+    }
 
     // 5) risk guard
     let drawdown_pct = if cfg.initial_balance > 0.0 {

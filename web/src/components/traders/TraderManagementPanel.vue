@@ -69,7 +69,7 @@ const emit = defineEmits<{
           </div>
         </template>
 
-        <Column header="Trader" style="width: 22%">
+        <Column header="Trader" style="width: 20%">
           <template #body="{ data }">
             <div class="flex items-center gap-3">
               <div
@@ -90,7 +90,7 @@ const emit = defineEmits<{
           </template>
         </Column>
 
-        <Column field="ai_model_id" header="Model" style="width: 14%">
+        <Column field="ai_model_id" header="Model" style="width: 13%">
           <template #body="{ data }">
             <span class="text-xs px-2 py-1 rounded bg-surface-100 dark:bg-surface-800 text-surface-700 dark:text-surface-300 font-medium">
               {{ data.ai_model_id }}
@@ -98,15 +98,29 @@ const emit = defineEmits<{
           </template>
         </Column>
 
-        <Column header="Equity" align="right" style="width: 13%">
+        <Column header="Unrealized PnL" align="right" style="width: 12%">
           <template #body="{ data }">
-            <span class="font-mono font-medium text-surface-900 dark:text-surface-100">
-              ${{ fmt(data.total_equity) }}
+            <span
+              class="font-mono font-medium"
+              :class="(data.unrealized_pnl || 0) >= 0 ? 'text-emerald-500 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400'"
+            >
+              {{ (data.unrealized_pnl || 0) >= 0 ? "+" : "" }}${{ fmt(data.unrealized_pnl || 0) }}
             </span>
           </template>
         </Column>
 
-        <Column header="Return" align="right" style="width: 12%">
+        <Column header="Realized PnL" align="right" style="width: 12%">
+          <template #body="{ data }">
+            <span
+              class="font-mono font-medium"
+              :class="(data.realized_pnl || 0) >= 0 ? 'text-emerald-500 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400'"
+            >
+              {{ (data.realized_pnl || 0) >= 0 ? "+" : "" }}${{ fmt(data.realized_pnl || 0) }}
+            </span>
+          </template>
+        </Column>
+
+        <Column header="Return" align="right" style="width: 10%">
           <template #body="{ data }">
             <span
               class="font-mono font-bold"
@@ -117,13 +131,13 @@ const emit = defineEmits<{
           </template>
         </Column>
 
-        <Column field="position_count" header="Positions" align="right" style="width: 9%">
+        <Column field="position_count" header="Positions" align="right" style="width: 8%">
           <template #body="{ data }">
             <span class="font-mono text-surface-700 dark:text-surface-300">{{ data.position_count }}</span>
           </template>
         </Column>
 
-        <Column header="Status" align="center" style="width: 9%">
+        <Column header="Status" align="center" style="width: 8%">
           <template #body="{ data }">
             <div class="flex items-center justify-center gap-1.5">
               <span
@@ -148,7 +162,7 @@ const emit = defineEmits<{
           </template>
         </Column>
 
-        <Column header="Actions" align="center" style="width: 21%">
+        <Column header="Actions" align="center" style="width: 17%">
           <template #body="{ data }">
             <div class="flex items-center justify-center gap-1.5">
               <!-- Start / Stop -->

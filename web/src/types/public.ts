@@ -40,6 +40,8 @@ export interface PublicCompetitionTraderPayload {
   total_equity: number
   total_pnl: number
   total_pnl_pct: number
+  unrealized_pnl: number
+  realized_pnl: number
   position_count: number
   margin_used_pct: number
   is_running: boolean
