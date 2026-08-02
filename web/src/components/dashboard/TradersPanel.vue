@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import Card from "primevue/card"
-import Button from "primevue/button"
 import TraderRow from "@/components/TraderRow.vue"
 import type { DashboardTrader } from "@/types/dashboard-ui"
 
@@ -11,7 +10,6 @@ defineProps<{
 }>()
 
 const emit = defineEmits<{
-  create: []
   start: [id: string]
   stop: [id: string]
   sync: [id: string]
@@ -23,12 +21,6 @@ const emit = defineEmits<{
     <template #content>
       <div class="flex items-center justify-between mb-4">
         <h2 class="font-bold text-lg text-surface-900 dark:text-white">Active Traders</h2>
-        <Button
-          icon="pi pi-plus"
-          label="New Trader"
-          @click="emit('create')"
-          class="rounded-xl px-4 h-10 cursor-pointer"
-        />
       </div>
 
       <div

@@ -41,9 +41,9 @@ const router = createRouter({
           component: () => import("@/pages/DebatePage.vue"),
         },
         {
-          path: "competition",
-          name: "competition",
-          component: () => import("@/pages/CompetitionPage.vue"),
+          path: "traders",
+          name: "traders",
+          component: () => import("@/pages/TradersPage.vue"),
         },
         {
           path: "data",

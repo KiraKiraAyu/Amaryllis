@@ -12,7 +12,7 @@ const nav = computed(() => [
   { label: "Strategy", to: "/strategy", icon: "pi pi-sliders-h" },
   { label: "Backtest", to: "/backtest", icon: "pi pi-history" },
   { label: "AI Debate", to: "/debate", icon: "pi pi-comments" },
-  { label: "Competition", to: "/competition", icon: "pi pi-trophy" },
+  { label: "Traders", to: "/traders", icon: "pi pi-users" },
   { label: "Monitor", to: "/monitor", icon: "pi pi-server" },
   { label: "Settings", to: "/settings", icon: "pi pi-cog" },
 ])

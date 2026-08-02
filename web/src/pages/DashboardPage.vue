@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import CreateTraderModal from "@/components/CreateTraderModal.vue"
 import DashboardHeader from "@/components/dashboard/DashboardHeader.vue"
 import DashboardStats from "@/components/dashboard/DashboardStats.vue"
 import EquityCurvePanel from "@/components/dashboard/EquityCurvePanel.vue"
@@ -14,13 +13,11 @@ const {
   equity,
   equityHistory,
   events,
-  handleTraderCreated,
   initialLoadDone,
   loadAll,
   loading,
   positions,
   selectEquityTrader,
-  showCreateTrader,
   startTrader,
   stopTrader,
   syncBalance,
@@ -53,7 +50,6 @@ const {
         :traders="traders"
         :loading="loading"
         :initial-load-done="initialLoadDone"
-        @create="showCreateTrader = true"
         @start="startTrader"
         @stop="stopTrader"
         @sync="syncBalance"
@@ -67,10 +63,4 @@ const {
 
     <LiveEventsPanel :events="events" />
   </div>
-
-  <CreateTraderModal
-    v-if="showCreateTrader"
-    @close="showCreateTrader = false"
-    @created="handleTraderCreated"
-  />
 </template>

@@ -24,7 +24,6 @@ export function useDashboardPage() {
   const toast = useToast()
   const loading = ref(true)
   const initialLoadDone = ref(false)
-  const showCreateTrader = ref(false)
 
   const traders = ref<DashboardTrader[]>([])
   const positions = ref<DashboardPosition[]>([])
@@ -131,11 +130,6 @@ export function useDashboardPage() {
     await loadEquityHistory(traderId)
   }
 
-  function handleTraderCreated() {
-    showCreateTrader.value = false
-    void loadAll()
-  }
-
   watch(
     () => realtime.positions,
     (value) => {
@@ -213,13 +207,11 @@ export function useDashboardPage() {
     equity,
     equityHistory,
     events,
-    handleTraderCreated,
     initialLoadDone,
     loadAll,
     loading,
     positions,
     selectEquityTrader,
-    showCreateTrader,
     startTrader,
     stopTrader,
     syncBalance,
