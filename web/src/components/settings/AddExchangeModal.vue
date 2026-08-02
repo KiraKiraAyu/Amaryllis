@@ -42,6 +42,14 @@ const isWalletBased = computed(() =>
 )
 const usesApiCredentials = computed(() => !isWalletBased.value)
 
+const asterHelpVisible = computed(() => newEx.value.exchange_type === "aster")
+
+const asterProApiUrl = computed(() =>
+  newEx.value.testnet
+    ? "https://www.asterdex-testnet.com/en/api-wallet"
+    : "https://www.asterdex.com/en/api-wallet",
+)
+
 const walletLabels = computed(() => {
   if (newEx.value.exchange_type === "aster") {
     return {
@@ -196,11 +204,14 @@ watch(
         <small v-if="privateKeyError" class="text-red-500 text-xs">{{ privateKeyError }}</small>
       </div>
 
-      <div v-if="newEx.exchange_type === 'aster'" class="text-xs text-surface-500 dark:text-surface-400 bg-surface-50 dark:bg-surface-800 rounded p-2">
+      <div v-if="asterHelpVisible" class="text-xs text-surface-500 dark:text-surface-400 bg-surface-50 dark:bg-surface-800 rounded p-2">
         Aster requires two values from
-        <a href="https://www.asterdex.com/en/api-wallet" target="_blank" class="text-primary underline">Pro API page</a>:<br />
+        <a :href="asterProApiUrl" target="_blank" class="text-primary underline">Pro API page</a>:<br />
         1. <strong>Main Wallet Address</strong>: your MetaMask login address (42 chars with 0x)<br />
         2. <strong>API Wallet Private Key</strong>: the private key of the API wallet you created (66 chars with 0x)
+        <span v-if="newEx.testnet" class="block mt-1 text-amber-500 font-semibold">
+          Testnet: make sure to create the API wallet on the testnet Pro API page, not the mainnet one.
+        </span>
       </div>
 
       <div class="flex items-center gap-2 mt-2">
