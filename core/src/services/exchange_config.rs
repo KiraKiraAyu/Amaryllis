@@ -60,6 +60,7 @@ impl ExchangeConfigService {
         };
 
         let (name, exchange_kind) = exchange_name_and_type(&exchange_type);
+        validate_exchange_credentials(&exchange_type, &request)?;
         let id = Uuid::now_v7().to_string();
         let now = now_ts();
 
@@ -99,15 +100,28 @@ impl ExchangeConfigService {
         for (exchange_id, patch) in request.exchanges {
             let existing = self
                 .repo
-                .find_secrets(&exchange_id)
+                .find_runtime_config(&exchange_id)
                 .await
                 .map_err(|err| {
-                    AppError::Internal(format!("Failed to load exchange secrets: {err}"))
+                    AppError::Internal(format!("Failed to load exchange config: {err}"))
                 })?;
 
             let Some(existing) = existing else {
                 continue;
             };
+
+            let effective_secret_key = keep_or_new(existing.secret_key, &patch.secret_key);
+            let effective_wallet_addr = if patch.hyperliquid_wallet_addr.trim().is_empty() {
+                existing.hyperliquid_wallet_addr
+            } else {
+                patch.hyperliquid_wallet_addr.trim().to_string()
+            };
+
+            validate_updated_credentials(
+                &existing.exchange_type,
+                &effective_wallet_addr,
+                &effective_secret_key,
+            )?;
 
             self.repo
                 .update(
@@ -115,10 +129,10 @@ impl ExchangeConfigService {
                     UpdateExchangeAccount {
                         enabled: patch.enabled,
                         api_key: keep_or_new(existing.api_key, &patch.api_key),
-                        secret_key: keep_or_new(existing.secret_key, &patch.secret_key),
+                        secret_key: effective_secret_key,
                         passphrase: keep_or_new(existing.passphrase, &patch.passphrase),
                         testnet: patch.testnet,
-                        hyperliquid_wallet_addr: patch.hyperliquid_wallet_addr.trim().to_string(),
+                        hyperliquid_wallet_addr: effective_wallet_addr,
                         updated_at: now,
                     },
                 )
@@ -205,6 +219,105 @@ fn exchange_name_and_type(exchange_type: &str) -> (&'static str, &'static str) {
     }
 }
 
+fn validate_exchange_credentials(
+    exchange_type: &str,
+    req: &CreateExchangeRequest,
+) -> Result<()> {
+    match exchange_type {
+        "aster" => {
+            let wallet_addr = req.hyperliquid_wallet_addr.trim();
+            if wallet_addr.is_empty() {
+                return Err(AppError::BadRequest(
+                    "Main wallet address is required for Aster".into(),
+                ));
+            }
+            let addr_hex = wallet_addr.trim_start_matches("0x");
+            if addr_hex.len() != 40 || !addr_hex.chars().all(|c| c.is_ascii_hexdigit()) {
+                return Err(AppError::BadRequest(format!(
+                    "Main wallet address must be 40 hex chars (20 bytes), got {} chars. \
+                     This is your MetaMask login wallet address, NOT the API wallet address.",
+                    addr_hex.len()
+                )));
+            }
+
+            let private_key = req.secret_key.trim();
+            if private_key.is_empty() {
+                return Err(AppError::BadRequest(
+                    "API wallet private key is required for Aster".into(),
+                ));
+            }
+            let pk_hex = private_key.trim_start_matches("0x");
+            if pk_hex.len() != 64 || !pk_hex.chars().all(|c| c.is_ascii_hexdigit()) {
+                return Err(AppError::BadRequest(format!(
+                    "API wallet private key must be 64 hex chars (32 bytes), got {} chars. \
+                     Make sure you copied the private key, not the API wallet address \
+                     (which is only 40 hex chars). You can find it at \
+                     https://www.asterdex.com/en/api-wallet under 'Pro API'.",
+                    pk_hex.len()
+                )));
+            }
+        }
+        "hyperliquid" => {
+            let private_key = req.secret_key.trim();
+            if private_key.is_empty() {
+                return Err(AppError::BadRequest(
+                    "Private key is required for Hyperliquid".into(),
+                ));
+            }
+            let pk_hex = private_key.trim_start_matches("0x");
+            if pk_hex.len() != 64 || !pk_hex.chars().all(|c| c.is_ascii_hexdigit()) {
+                return Err(AppError::BadRequest(format!(
+                    "Private key must be 64 hex chars (32 bytes), got {} chars",
+                    pk_hex.len()
+                )));
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn validate_updated_credentials(
+    exchange_type: &str,
+    wallet_addr: &str,
+    secret_key: &str,
+) -> Result<()> {
+    match exchange_type {
+        "aster" => {
+            let addr_hex = wallet_addr.trim().trim_start_matches("0x");
+            if addr_hex.len() != 40 || !addr_hex.chars().all(|c| c.is_ascii_hexdigit()) {
+                return Err(AppError::BadRequest(format!(
+                    "Main wallet address must be 40 hex chars (20 bytes), got {} chars. \
+                     This is your MetaMask login wallet address, NOT the API wallet address.",
+                    addr_hex.len()
+                )));
+            }
+
+            let pk_hex = secret_key.trim().trim_start_matches("0x");
+            if pk_hex.len() != 64 || !pk_hex.chars().all(|c| c.is_ascii_hexdigit()) {
+                return Err(AppError::BadRequest(format!(
+                    "API wallet private key must be 64 hex chars (32 bytes), got {} chars. \
+                     Make sure you copied the private key, not the API wallet address \
+                     (which is only 40 hex chars). You can find it at \
+                     https://www.asterdex.com/en/api-wallet under 'Pro API'.",
+                    pk_hex.len()
+                )));
+            }
+        }
+        "hyperliquid" => {
+            let pk_hex = secret_key.trim().trim_start_matches("0x");
+            if pk_hex.len() != 64 || !pk_hex.chars().all(|c| c.is_ascii_hexdigit()) {
+                return Err(AppError::BadRequest(format!(
+                    "Private key must be 64 hex chars (32 bytes), got {} chars",
+                    pk_hex.len()
+                )));
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -224,5 +337,71 @@ mod tests {
                 "{exchange_type} should not be supported"
             );
         }
+    }
+
+    #[test]
+    fn aster_validation_rejects_address_length_private_key() {
+        let req = CreateExchangeRequest {
+            exchange_type: "aster".into(),
+            account_name: "test".into(),
+            enabled: true,
+            api_key: "".into(),
+            secret_key: "0x21cf8ae13bb72632562c6ff438652ba1a151bb0".into(), // 40 hex chars - address
+            passphrase: "".into(),
+            testnet: false,
+            hyperliquid_wallet_addr: "0x63DD5aCC6b1aa0f563956C0e534DD30B6dcF7C4e".into(),
+        };
+        let err = validate_exchange_credentials("aster", &req).unwrap_err();
+        assert!(matches!(err, AppError::BadRequest(_)));
+        assert!(err.to_string().contains("64 hex chars"));
+    }
+
+    #[test]
+    fn aster_validation_accepts_correct_private_key() {
+        let req = CreateExchangeRequest {
+            exchange_type: "aster".into(),
+            account_name: "test".into(),
+            enabled: true,
+            api_key: "".into(),
+            secret_key: "4fd0a42218f3eae43a6ce26d22544e986139a01e5b34a62db53757ffca81bae1".into(),
+            passphrase: "".into(),
+            testnet: false,
+            hyperliquid_wallet_addr: "0x63DD5aCC6b1aa0f563956C0e534DD30B6dcF7C4e".into(),
+        };
+        assert!(validate_exchange_credentials("aster", &req).is_ok());
+    }
+
+    #[test]
+    fn update_validation_rejects_address_as_private_key() {
+        let err = validate_updated_credentials(
+            "aster",
+            "0x63DD5aCC6b1aa0f563956C0e534DD30B6dcF7C4e",
+            "21cf8ae13bb72632562c6ff438652ba1a151bb0", // 40 chars - address, not private key
+        )
+        .unwrap_err();
+        assert!(matches!(err, AppError::BadRequest(_)));
+        assert!(err.to_string().contains("64 hex chars"));
+    }
+
+    #[test]
+    fn update_validation_accepts_correct_credentials() {
+        assert!(validate_updated_credentials(
+            "aster",
+            "0x63DD5aCC6b1aa0f563956C0e534DD30B6dcF7C4e",
+            "4fd0a42218f3eae43a6ce26d22544e986139a01e5b34a62db53757ffca81bae1",
+        )
+        .is_ok());
+
+        assert!(validate_updated_credentials(
+            "hyperliquid",
+            "",
+            "4fd0a42218f3eae43a6ce26d22544e986139a01e5b34a62db53757ffca81bae1",
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn update_validation_skips_non_wallet_exchanges() {
+        assert!(validate_updated_credentials("binance", "", "any-secret").is_ok());
     }
 }

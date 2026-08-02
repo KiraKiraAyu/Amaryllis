@@ -2,11 +2,13 @@
 import { onMounted, ref } from "vue"
 import Button from "primevue/button"
 import AddExchangeModal from "@/components/settings/AddExchangeModal.vue"
+import EditExchangeModal from "@/components/settings/EditExchangeModal.vue"
 import { deleteExchangeApi, getExchangeConfigsApi } from "@/api/exchanges"
 import type { SafeExchangeConfig } from "@/types/exchanges"
 
 const exchanges = ref<SafeExchangeConfig[]>([])
 const showAddExchange = ref(false)
+const editingExchange = ref<SafeExchangeConfig | null>(null)
 
 async function loadExchanges() {
   try {
@@ -64,6 +66,14 @@ onMounted(loadExchanges)
                 {{ ex.enabled ? "Active" : "Disabled" }}
               </span>
               <Button
+                icon="pi pi-pencil"
+                severity="info"
+                variant="text"
+                rounded
+                aria-label="Edit"
+                @click="editingExchange = ex"
+              />
+              <Button
                 icon="pi pi-trash"
                 severity="danger"
                 variant="text"
@@ -88,5 +98,12 @@ onMounted(loadExchanges)
     v-if="showAddExchange"
     @close="showAddExchange = false"
     @created="loadExchanges"
+  />
+
+  <EditExchangeModal
+    v-if="editingExchange"
+    :exchange="editingExchange"
+    @close="editingExchange = null"
+    @updated="loadExchanges"
   />
 </template>
