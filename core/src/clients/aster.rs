@@ -31,6 +31,7 @@ pub struct AsterAdapter {
     private_key: String,
     base_url: String,
     ws_base_url: String,
+    chain_id: u64,
 }
 
 impl AsterAdapter {
@@ -56,13 +57,14 @@ impl AsterAdapter {
 
         let signer = derive_eth_address(&private_key)?;
 
-        let (base_url, ws_base_url) = if credentials.testnet {
+        let (base_url, ws_base_url, chain_id) = if credentials.testnet {
             (
                 "https://fapi.asterdex-testnet.com",
                 "wss://fstream5.asterdex-testnet.com",
+                714_u64,
             )
         } else {
-            ("https://fapi.asterdex.com", "wss://fstream.asterdex.com")
+            ("https://fapi.asterdex.com", "wss://fstream.asterdex.com", 1666_u64)
         };
 
         Ok(Self {
@@ -72,6 +74,7 @@ impl AsterAdapter {
             private_key,
             base_url: base_url.to_string(),
             ws_base_url: ws_base_url.to_string(),
+            chain_id,
         })
     }
 
@@ -107,7 +110,7 @@ impl AsterAdapter {
         params.push(("signer", self.signer.clone()));
 
         let query = build_query(params);
-        let signature = sign_eip712(&self.private_key, &query)?;
+        let signature = sign_eip712(&self.private_key, &query, self.chain_id)?;
         let url = format!("{}{}?{}&signature={}", self.base_url, path, query, signature);
 
         let resp = send_text(
@@ -813,15 +816,30 @@ fn next_nonce() -> String {
     next.to_string()
 }
 
-fn sign_eip712(private_key: &str, message: &str) -> Result<String, AppError> {
-    let digest = eip712_message_digest(message);
-    let pk_bytes = hex::decode(private_key.trim().trim_start_matches("0x"))
-        .map_err(|e| AppError::ExchangeCrypto(e.to_string()))?;
-    let signing_key = SigningKey::from_slice(&pk_bytes)
-        .map_err(|e| AppError::ExchangeCrypto(e.to_string()))?;
+fn sign_eip712(private_key: &str, message: &str, chain_id: u64) -> Result<String, AppError> {
+    let digest = eip712_message_digest(message, chain_id);
+    let pk_hex = private_key.trim().trim_start_matches("0x");
+    let pk_bytes = hex::decode(pk_hex).map_err(|e| {
+        AppError::ExchangeCrypto(format!(
+            "hex decode failed (len={}): {e}",
+            pk_hex.len()
+        ))
+    })?;
+    if pk_bytes.len() != 32 {
+        return Err(AppError::ExchangeCrypto(format!(
+            "private key must be 32 bytes, got {} bytes ({} hex chars)",
+            pk_bytes.len(),
+            pk_hex.len()
+        )));
+    }
+    let signing_key = SigningKey::from_slice(&pk_bytes).map_err(|e| {
+        AppError::ExchangeCrypto(format!("invalid secp256k1 private key: {e}"))
+    })?;
     let (signature, recovery_id) = signing_key
         .sign_prehash_recoverable(&digest)
-        .map_err(|e| AppError::ExchangeCrypto(e.to_string()))?;
+        .map_err(|e| {
+            AppError::ExchangeCrypto(format!("sign_prehash_recoverable failed: {e}"))
+        })?;
 
     let sig_bytes = signature.to_bytes();
     let v = recovery_id.to_byte() + 27;
@@ -831,8 +849,8 @@ fn sign_eip712(private_key: &str, message: &str) -> Result<String, AppError> {
     Ok(format!("0x{}", hex::encode(&out)))
 }
 
-fn eip712_message_digest(message: &str) -> [u8; 32] {
-    let domain_separator = aster_domain_separator();
+fn eip712_message_digest(message: &str, chain_id: u64) -> [u8; 32] {
+    let domain_separator = aster_domain_separator(chain_id);
     let message_typehash = keccak256(b"Message(string msg)");
     let message_hash = keccak256(message.as_bytes());
 
@@ -848,13 +866,13 @@ fn eip712_message_digest(message: &str) -> [u8; 32] {
     keccak256(&digest)
 }
 
-fn aster_domain_separator() -> [u8; 32] {
+fn aster_domain_separator(chain_id: u64) -> [u8; 32] {
     let domain_typehash = keccak256(
         b"EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)",
     );
     let name_hash = keccak256(b"AsterSignTransaction");
     let version_hash = keccak256(b"1");
-    let chain_id = to_uint256(1666);
+    let chain_id = to_uint256(chain_id);
     let verifying_contract = [0_u8; 32];
 
     let mut bytes = Vec::with_capacity(160);
@@ -873,10 +891,23 @@ fn to_uint256(value: u64) -> [u8; 32] {
 }
 
 fn derive_eth_address(private_key: &str) -> Result<String, AppError> {
-    let pk_bytes = hex::decode(private_key.trim().trim_start_matches("0x"))
-        .map_err(|e| AppError::ExchangeCrypto(e.to_string()))?;
-    let signing_key = SigningKey::from_slice(&pk_bytes)
-        .map_err(|e| AppError::ExchangeCrypto(e.to_string()))?;
+    let pk_hex = private_key.trim().trim_start_matches("0x");
+    let pk_bytes = hex::decode(pk_hex).map_err(|e| {
+        AppError::ExchangeCrypto(format!(
+            "hex decode failed (len={}): {e}",
+            pk_hex.len()
+        ))
+    })?;
+    if pk_bytes.len() != 32 {
+        return Err(AppError::ExchangeCrypto(format!(
+            "private key must be 32 bytes, got {} bytes ({} hex chars)",
+            pk_bytes.len(),
+            pk_hex.len()
+        )));
+    }
+    let signing_key = SigningKey::from_slice(&pk_bytes).map_err(|e| {
+        AppError::ExchangeCrypto(format!("invalid secp256k1 private key: {e}"))
+    })?;
     let verifying_key = signing_key.verifying_key();
     let encoded = verifying_key.to_encoded_point(false);
     let bytes: &[u8] = AsRef::<[u8]>::as_ref(&encoded);
@@ -899,7 +930,7 @@ mod tests {
         let private_key =
             "4fd0a42218f3eae43a6ce26d22544e986139a01e5b34a62db53757ffca81bae1";
         let signature =
-            sign_eip712(private_key, "nonce=1748310859508867&user=0x63dd5acc6b1aa0f563956c0e534dd30b6dcf7c4e&signer=0x21cf8ae13bb72632562c6ff438652ba1a151bb0")
+            sign_eip712(private_key, "nonce=1748310859508867&user=0x63dd5acc6b1aa0f563956c0e534dd30b6dcf7c4e&signer=0x21cf8ae13bb72632562c6ff438652ba1a151bb0", 1666)
                 .expect("signature");
         assert!(signature.starts_with("0x"));
         assert_eq!(signature.len(), 2 + 130);

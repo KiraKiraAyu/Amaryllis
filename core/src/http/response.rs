@@ -135,7 +135,7 @@ impl IntoResponse for AppError {
                 tracing::error!("Failed to sign exchange request: {}", message);
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    "Internal Server error".to_string(),
+                    format!("Failed to sign exchange request: {message}"),
                 )
             }
             AppError::Internal(message) => {
