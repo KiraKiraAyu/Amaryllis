@@ -12,11 +12,13 @@ const selected = defineModel<EditableStrategy>({ required: true })
 defineProps<{
   saving: boolean
   duplicating: boolean
+  testRunLoading?: boolean
 }>()
 
 const emit = defineEmits<{
   save: []
   cancel: []
+  test: []
 }>()
 
 const config = computed(() => {
@@ -293,10 +295,18 @@ function changeCostMode(index: number, mode: 'fixed' | 'dynamic') {
       <div class="flex gap-3 mt-6 border-t border-surface-200 dark:border-surface-800 pt-4">
         <Button
           icon="pi pi-save"
-          label="Save Settings"
+          label="Save"
           @click="emit('save')"
           :loading="saving"
           class="rounded-xl h-11 cursor-pointer flex-1"
+        />
+        <Button
+          icon="pi pi-sparkles"
+          label="Test Run (AI)"
+          severity="help"
+          @click="emit('test')"
+          :loading="testRunLoading"
+          class="rounded-xl h-11 cursor-pointer"
         />
         <Button
           icon="pi pi-times"

@@ -118,6 +118,7 @@ export function useStrategyPage() {
 
   async function saveStrategy() {
     if (!selected.value) return
+    const isNew = !selected.value.id
     saving.value = true
     try {
       if (selected.value.id) {
@@ -127,13 +128,20 @@ export function useStrategyPage() {
         selected.value.id = data.id
       }
       await load()
-      // Locate saved strategy in list to bind references
-      const matched = strategies.value.find(s => s.id === selected.value?.id)
-      if (matched) {
-        selected.value = matched
+      if (isNew) {
+        // After creating a new strategy, return to the list
+        selected.value = null
+      } else {
+        // After editing, show the detail view with refreshed data
+        const matched = strategies.value.find(s => s.id === selected.value?.id)
+        if (matched) {
+          selected.value = matched
+        }
       }
       isEditing.value = false
       originalStrategy.value = null
+      testResult.value = null
+      previewPromptText.value = null
     } finally {
       saving.value = false
     }

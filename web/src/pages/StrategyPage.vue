@@ -2,12 +2,14 @@
 import { computed } from "vue"
 import Button from "primevue/button"
 import PageHeader from "@/components/layout/PageHeader.vue"
+import SlideTransition from "@/components/SlideTransition.vue"
 import StrategyEditor from "@/components/strategy/StrategyEditor.vue"
 import StrategyDetail from "@/components/strategy/StrategyDetail.vue"
 import StrategyList from "@/components/strategy/StrategyList.vue"
 import StrategyPromptPreview from "@/components/strategy/StrategyPromptPreview.vue"
 import StrategyTestResult from "@/components/strategy/StrategyTestResult.vue"
 import { useStrategyPage } from "@/composables/useStrategyPage"
+import { useCarouselTransition } from "@/composables/useCarouselTransition"
 import type { EditableStrategy } from "@/types/strategy-ui"
 
 const {
@@ -33,6 +35,15 @@ const {
   backToList,
 } = useStrategyPage()
 
+// View indices for carousel direction tracking: 0 = list, 1 = detail, 2 = editor
+const step = computed(() => {
+  if (isEditing.value) return 2
+  if (selected.value) return 1
+  return 0
+})
+
+const { direction } = useCarouselTransition(step)
+
 // The editor is only rendered while `isEditing`, which implies a non-null selection.
 const editingStrategy = computed<EditableStrategy>({
   get: () => selected.value as EditableStrategy,
@@ -54,9 +65,9 @@ const editingStrategy = computed<EditableStrategy>({
     </PageHeader>
 
     <div class="relative w-full overflow-hidden min-h-125">
-      <Transition name="full-page-slide" mode="out-in">
+      <SlideTransition :direction="direction">
         <!-- View 1: Strategy List Screen (Full Screen Grid) -->
-        <div v-if="!selected && !isEditing" class="w-full" key="list-view">
+        <div v-if="step === 0" class="w-full" key="list-view">
           <StrategyList
             :strategies="strategies"
             :loading="loading"
@@ -65,7 +76,7 @@ const editingStrategy = computed<EditableStrategy>({
         </div>
 
         <!-- View 2: Strategy Detail Screen (Full Screen Detail Panel with Back Button) -->
-        <div v-else-if="selected && !isEditing" class="flex flex-col gap-4 w-full" key="detail-view">
+        <div v-else-if="step === 1" class="flex flex-col gap-4 w-full" key="detail-view">
           <div class="flex items-center">
             <Button
               icon="pi pi-arrow-left"
@@ -77,7 +88,7 @@ const editingStrategy = computed<EditableStrategy>({
             />
           </div>
           <StrategyDetail
-            :strategy="selected"
+            :strategy="selected!"
             :duplicating="duplicating"
             :test-run-loading="testRunLoading"
             :preview-loading="previewLoading"
@@ -97,31 +108,19 @@ const editingStrategy = computed<EditableStrategy>({
         </div>
 
         <!-- View 3: Strategy Editor Screen (Full Width Editor) -->
-        <div v-else-if="isEditing" class="w-full" key="edit-view">
+        <div v-else-if="step === 2" class="w-full" key="edit-view">
           <StrategyEditor
             v-model="editingStrategy"
             :saving="saving"
             :duplicating="duplicating"
+            :test-run-loading="testRunLoading"
             @save="saveStrategy"
             @cancel="cancelEdit"
+            @test="runTest"
           />
+          <StrategyTestResult v-if="testResult" :result="testResult" />
         </div>
-      </Transition>
+      </SlideTransition>
     </div>
   </div>
 </template>
-
-<style scoped>
-.full-page-slide-enter-active,
-.full-page-slide-leave-active {
-  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.full-page-slide-enter-from {
-  transform: translateX(100%);
-  opacity: 0;
-}
-.full-page-slide-leave-to {
-  transform: translateX(-100%);
-  opacity: 0;
-}
-</style>
