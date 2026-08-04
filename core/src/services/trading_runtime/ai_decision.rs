@@ -367,11 +367,49 @@ pub fn parse_ai_response(response: &str) -> TradingDecision {
         "HOLD"
     };
 
+    // Try to parse the response as JSON and extract the reason field.
+    // LLMs often wrap their output in a JSON object like:
+    //   {"action":"HOLD","confidence":0.5,"reason":"..."}
+    // If JSON parsing succeeds, use the extracted reason; otherwise fall back
+    // to the raw response text (without truncation).
+    let reason = extract_json_reason(response).unwrap_or_else(|| response.to_string());
+
     TradingDecision {
         action: action.to_string(),
         confidence: extract_confidence(&lower).unwrap_or(0.7),
-        reason: response.chars().take(240).collect(),
+        reason,
     }
+}
+
+/// Attempt to extract the "reason" field from a JSON response.
+/// Handles both standard JSON and JSON embedded in markdown code fences.
+fn extract_json_reason(response: &str) -> Option<String> {
+    let trimmed = response.trim();
+
+    // Strip markdown code fences if present (```json ... ``` or ``` ... ```)
+    let json_str = if trimmed.starts_with("```") {
+        let inner = trimmed
+            .trim_start_matches("```json")
+            .trim_start_matches("```")
+            .trim_end_matches("```")
+            .trim();
+        inner
+    } else {
+        trimmed
+    };
+
+    // Try parsing as a JSON object
+    let parsed: serde_json::Value = serde_json::from_str(json_str).ok()?;
+
+    if let Some(reason) = parsed.get("reason").and_then(|v| v.as_str()) {
+        return Some(reason.to_string());
+    }
+    // Also check "reasoning" as some models use that field name
+    if let Some(reasoning) = parsed.get("reasoning").and_then(|v| v.as_str()) {
+        return Some(reasoning.to_string());
+    }
+
+    None
 }
 
 fn extract_confidence(text: &str) -> Option<f64> {
