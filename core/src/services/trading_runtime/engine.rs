@@ -17,6 +17,9 @@ pub async fn run_trader_loop(
         (cfg.scan_interval_minutes.max(1) as u64) * 60,
     ));
     interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    // Consume the first tick (which completes immediately) so the next
+    // tick in the loop waits for the full scan interval.
+    interval.tick().await;
 
     let (exec_ctx, live_adapter) =
         load_runtime_execution_context(&engine.inner.state, &cfg).await?;
