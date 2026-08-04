@@ -26,6 +26,12 @@ pub enum RealtimeEvent {
         trader_id: String,
         trade: serde_json::Value,
     },
+    AiPrompt {
+        trader_id: String,
+        symbol: String,
+        prompt: String,
+        system_prompt: Option<String>,
+    },
     AiDecision {
         trader_id: String,
         decision: serde_json::Value,

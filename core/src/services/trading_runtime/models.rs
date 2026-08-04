@@ -158,4 +158,6 @@ pub struct DecisionSignal {
     pub trigger_source: String,
     pub action_taken: String,
     pub correlation_id: String,
+    pub prompt: String,
+    pub system_prompt: Option<String>,
 }

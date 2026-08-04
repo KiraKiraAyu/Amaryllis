@@ -1,4 +1,4 @@
-import { ref, watch, onUnmounted, type Ref } from "vue"
+import { ref, computed, watch, onUnmounted, type Ref } from "vue"
 import {
   getTraderApi,
   getDecisionsApi,
@@ -20,7 +20,12 @@ import type {
 /** A single chat-like message in the trader activity feed. */
 export interface FeedMessage {
   id: string
-  role: "system" | "trader" | "action" | "position"
+  /** "prompt" = system prompt to AI (right side);
+   *  "trader" = AI reasoning (left side);
+   *  "action" = trade execution (left side);
+   *  "position" = position update (left side);
+   *  "system" = system operation (left side, hidden by default). */
+  role: "prompt" | "system" | "trader" | "action" | "position"
   title: string
   content: string
   timestamp: number
@@ -41,6 +46,15 @@ export function useTraderDetail(traderId: Ref<string>) {
   const error = ref("")
   const feed = ref<FeedMessage[]>([])
   const typing = ref(false)
+  const showSystemOps = ref(false)
+
+  /** Feed filtered by the system-ops toggle. System Ops (action / system)
+   *  messages are hidden by default; the user can toggle them on in the UI. */
+  const filteredFeed = computed(() =>
+    showSystemOps.value
+      ? feed.value
+      : feed.value.filter((m) => m.role !== "system" && m.role !== "action"),
+  )
 
   // Typewriter state
   let typewriterTimer: ReturnType<typeof setInterval> | null = null
@@ -68,8 +82,33 @@ export function useTraderDetail(traderId: Ref<string>) {
       // Build chronological feed from decisions + events
       const messages: FeedMessage[] = []
 
-      // Add decisions as "trader" messages
+      // Add decisions as "trader" messages, with their prompts as "prompt" messages
       for (const d of (decisionsRes.items ?? []).reverse()) {
+        // Parse payload_json to extract the prompt
+        let payload: Record<string, unknown> = {}
+        try {
+          payload = JSON.parse(d.payload_json) as Record<string, unknown>
+        } catch {
+          /* ignore parse errors */
+        }
+
+        const promptText = payload.prompt as string | undefined
+        const systemPrompt = payload.system_prompt as string | undefined
+
+        // If a prompt exists, add it as a right-side "prompt" message
+        if (promptText && promptText.trim()) {
+          const content = systemPrompt
+            ? `[System Prompt]\n${systemPrompt}\n\n[User Message]\n${promptText}`
+            : promptText
+          messages.push({
+            id: `prompt-${d.id}`,
+            role: "prompt",
+            title: `Prompt → ${d.symbol}`,
+            content,
+            timestamp: d.created_at - 1, // 1ms before the decision so it appears above
+          })
+        }
+
         messages.push({
           id: `decision-${d.id}`,
           role: "trader",
@@ -160,6 +199,22 @@ export function useTraderDetail(traderId: Ref<string>) {
       if (!ev || ev.trader_id !== traderId.value) return
 
       switch (ev.type) {
+        case "ai_prompt": {
+          const prompt = ev.prompt as string | undefined
+          const systemPrompt = ev.system_prompt as string | undefined
+          const symbol = ev.symbol as string | undefined
+          const content = systemPrompt
+            ? `[System Prompt]\n${systemPrompt}\n\n[User Message]\n${prompt || ""}`
+            : prompt || ""
+          addMessage({
+            id: `prompt-${Date.now()}`,
+            role: "prompt",
+            title: symbol ? `Prompt → ${symbol}` : "System Prompt",
+            content,
+            timestamp: Date.now(),
+          })
+          break
+        }
         case "ai_decision": {
           const decision = ev.decision as Record<string, unknown> | undefined
           addMessage({
@@ -239,7 +294,7 @@ export function useTraderDetail(traderId: Ref<string>) {
     try {
       await startTraderApi(traderId.value)
       toast.success("Trader started")
-      await loadAll()
+      if (trader.value) trader.value.is_running = true
     } catch {
       /* handled by interceptor */
     }
@@ -249,7 +304,7 @@ export function useTraderDetail(traderId: Ref<string>) {
     try {
       await stopTraderApi(traderId.value)
       toast.success("Trader stopped")
-      await loadAll()
+      if (trader.value) trader.value.is_running = false
     } catch {
       /* handled by interceptor */
     }
@@ -267,7 +322,9 @@ export function useTraderDetail(traderId: Ref<string>) {
     loading,
     error,
     feed,
+    filteredFeed,
     typing,
+    showSystemOps,
     loadAll,
     startTrader,
     stopTrader,

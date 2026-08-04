@@ -427,6 +427,8 @@ async fn test_persist_decision_payload_includes_audit_metadata() {
         "soft",
         "market_signal",
         "corr_decision_1",
+        String::new(),
+        None,
     );
 
     let metrics = AccountMetrics {
