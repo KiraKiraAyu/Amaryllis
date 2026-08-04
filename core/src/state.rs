@@ -12,13 +12,12 @@ pub use crate::config::AppConfig;
 use crate::{
     database,
     repositories::{
-        AppSettingsRepo, BacktestRepo, CompetitionRepo, DebateRepo, ExchangeRepo, ModelRepo,
-        StrategyRepo, TradingRepo,
+        AppSettingsRepo, BacktestRepo, DebateRepo, ExchangeRepo, ModelRepo, StrategyRepo,
+        TradingRepo,
     },
     services::{
-        competition::CompetitionService, llm::LlmService, models::ModelService,
-        strategies::StrategyService, trading::service::TradingService,
-        trading_runtime::service::TradingRuntimeService,
+        llm::LlmService, models::ModelService, strategies::StrategyService,
+        trading::service::TradingService, trading_runtime::service::TradingRuntimeService,
     },
 };
 use crate::{
@@ -96,7 +95,6 @@ pub struct AppState {
 pub struct Services {
     pub auth_service: Arc<AuthService>,
     pub backtest_service: Arc<BacktestService>,
-    pub competition_service: Arc<CompetitionService>,
     pub debate_service: Arc<DebateService>,
     pub exchange_config_service: Arc<ExchangeConfigService>,
     pub llm_service: Arc<LlmService>,
@@ -128,8 +126,6 @@ impl Services {
             realtime_hub.clone(),
             llm_service.clone(),
         ));
-        let competition_repo = Arc::new(CompetitionRepo::new(db.clone()));
-        let competition_service = Arc::new(CompetitionService::new(competition_repo));
         let debate_repo = Arc::new(DebateRepo::new(db.clone()));
         let debate_service = Arc::new(DebateService::new(
             debate_repo,
@@ -164,7 +160,6 @@ impl Services {
         Self {
             auth_service,
             backtest_service,
-            competition_service,
             debate_service,
             exchange_config_service,
             llm_service,

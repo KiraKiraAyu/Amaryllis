@@ -9,7 +9,6 @@ pub struct TraderRecord {
     pub scan_interval_minutes: i64,
     pub is_running: i64,
     pub is_cross_margin: i64,
-    pub show_in_competition: i64,
     pub btc_eth_leverage: i64,
     pub altcoin_leverage: i64,
     pub trading_symbols: String,
@@ -33,7 +32,6 @@ pub struct CreateTraderRecord {
     pub initial_balance: f64,
     pub scan_interval_minutes: i64,
     pub is_cross_margin: bool,
-    pub show_in_competition: bool,
     pub btc_eth_leverage: i64,
     pub altcoin_leverage: i64,
     pub trading_symbols: String,
@@ -55,7 +53,6 @@ pub struct UpdateTraderRecord {
     pub initial_balance: f64,
     pub scan_interval_minutes: i64,
     pub is_cross_margin: bool,
-    pub show_in_competition: bool,
     pub btc_eth_leverage: i64,
     pub altcoin_leverage: i64,
     pub trading_symbols: String,
@@ -65,4 +62,16 @@ pub struct UpdateTraderRecord {
     pub override_base_prompt: bool,
     pub system_prompt_template: String,
     pub updated_at: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct EquityHistoryPointRecord {
+    pub timestamp: i64,
+    pub total_equity: f64,
+    pub available_balance: f64,
+    pub total_pnl: f64,
+    pub total_pnl_pct: f64,
+    pub position_count: i64,
+    pub margin_used_pct: f64,
+    pub balance: f64,
 }

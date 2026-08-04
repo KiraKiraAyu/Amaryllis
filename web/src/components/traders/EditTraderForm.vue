@@ -3,7 +3,6 @@ import Card from "primevue/card"
 import InputText from "primevue/inputtext"
 import InputNumber from "primevue/inputnumber"
 import Select from "primevue/select"
-import Checkbox from "primevue/checkbox"
 import Button from "primevue/button"
 import { ref, onMounted, watch } from "vue"
 import { getExchangeConfigsApi } from "@/api/exchanges"
@@ -33,7 +32,6 @@ const form = ref({
   strategy_id: "",
   scan_interval_minutes: 60,
   initial_balance: 1000,
-  show_in_competition: false,
 })
 
 function syncFormFromTrader() {
@@ -44,7 +42,6 @@ function syncFormFromTrader() {
     strategy_id: props.trader.strategy_id ?? "",
     scan_interval_minutes: props.trader.scan_interval_minutes ?? 60,
     initial_balance: props.trader.initial_balance ?? 1000,
-    show_in_competition: props.trader.show_in_competition ?? false,
   }
 }
 
@@ -64,7 +61,6 @@ async function submit() {
       strategy_id: form.value.strategy_id || null,
       scan_interval_minutes: form.value.scan_interval_minutes,
       initial_balance: form.value.initial_balance,
-      show_in_competition: form.value.show_in_competition,
     }
     await updateTraderApi(props.trader.id, payload)
     emit("updated")
@@ -207,17 +203,6 @@ onMounted(loadOptions)
               inputClass="font-mono"
             />
           </div>
-        </div>
-
-        <div class="flex items-center gap-2 mt-1">
-          <Checkbox
-            v-model="form.show_in_competition"
-            binary
-            inputId="edit_show_in_competition"
-          />
-          <label for="edit_show_in_competition" class="text-xs font-semibold text-surface-600 dark:text-surface-400 cursor-pointer select-none">
-            Show this trader in the competition leaderboard
-          </label>
         </div>
 
         <p v-if="error" class="text-xs text-rose-500 bg-rose-50 dark:bg-rose-950/20 px-3 py-2 rounded-xl">

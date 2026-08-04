@@ -1,7 +1,6 @@
 pub mod auth;
 pub mod backtest;
 pub mod catalog;
-pub mod competition;
 pub mod crypto;
 pub mod debate;
 pub mod exchange_config;

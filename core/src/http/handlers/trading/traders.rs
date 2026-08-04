@@ -4,12 +4,12 @@ use axum::{
 };
 
 use crate::{
+    contracts::public::{EquityHistoryPointPayload, EquityHistoryQuery},
     contracts::trading::{
         common::TraderQuery,
         traders::{
-            CreateTraderRequest, ToggleCompetitionRequest, TraderCreatedPayload, TraderListPayload,
-            TraderMessagePayload, TraderPayload, TraderStatusPayload, UpdatePromptRequest,
-            UpdateTraderRequest,
+            CreateTraderRequest, TraderCreatedPayload, TraderListPayload, TraderMessagePayload,
+            TraderPayload, TraderStatusPayload, UpdatePromptRequest, UpdateTraderRequest,
         },
     },
     error::Result,
@@ -100,14 +100,11 @@ pub async fn update_prompt(
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 
-pub async fn toggle_competition(
+pub async fn equity_history(
     State(app): State<state::AppState>,
-    Path(id): Path<String>,
-    Json(request): Json<ToggleCompetitionRequest>,
-) -> Result<Json<ApiResponse<TraderMessagePayload>>> {
-    let payload = trading_service(&app)
-        .toggle_competition(&id, request)
-        .await?;
+    Query(q): Query<EquityHistoryQuery>,
+) -> Result<Json<ApiResponse<Vec<EquityHistoryPointPayload>>>> {
+    let payload = trading_service(&app).equity_history(q).await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 

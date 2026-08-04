@@ -6,7 +6,6 @@ export interface CreateTraderRequest {
   initial_balance?: number
   scan_interval_minutes?: number
   is_cross_margin?: boolean | null
-  show_in_competition?: boolean | null
   btc_eth_leverage?: number
   altcoin_leverage?: number
   trading_symbols?: string
@@ -25,7 +24,6 @@ export interface UpdateTraderRequest {
   initial_balance?: number | null
   scan_interval_minutes?: number | null
   is_cross_margin?: boolean | null
-  show_in_competition?: boolean | null
   btc_eth_leverage?: number | null
   altcoin_leverage?: number | null
   trading_symbols?: string | null
@@ -39,10 +37,6 @@ export interface UpdateTraderRequest {
 export interface UpdatePromptRequest {
   custom_prompt?: string
   override_base_prompt?: boolean
-}
-
-export interface ToggleCompetitionRequest {
-  show_in_competition: boolean
 }
 
 export interface ClosePositionRequest {
@@ -161,7 +155,6 @@ export interface TraderPayload {
   scan_interval_minutes: number
   is_running: boolean
   is_cross_margin: boolean
-  show_in_competition: boolean
   btc_eth_leverage: number
   altcoin_leverage: number
   trading_symbols: string

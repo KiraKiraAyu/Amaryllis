@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -10,12 +8,6 @@ use crate::{
 #[derive(Debug, Deserialize)]
 pub struct EquityHistoryQuery {
     pub trader_id: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct EquityHistoryBatchRequest {
-    pub trader_ids: Option<Vec<String>>,
-    pub hours: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -43,28 +35,6 @@ pub struct CryptoPublicKeyPayload {
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct PublicCompetitionTraderPayload {
-    pub trader_id: String,
-    pub trader_name: String,
-    pub ai_model: String,
-    pub exchange: String,
-    pub total_equity: f64,
-    pub total_pnl: f64,
-    pub total_pnl_pct: f64,
-    pub unrealized_pnl: f64,
-    pub realized_pnl: f64,
-    pub position_count: i64,
-    pub margin_used_pct: f64,
-    pub is_running: bool,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct CompetitionListPayload {
-    pub traders: Vec<PublicCompetitionTraderPayload>,
-    pub count: usize,
-}
-
-#[derive(Debug, Clone, Serialize)]
 pub struct EquityHistoryPointPayload {
     pub timestamp: String,
     pub total_equity: f64,
@@ -74,34 +44,6 @@ pub struct EquityHistoryPointPayload {
     pub position_count: i64,
     pub margin_used_pct: f64,
     pub balance: f64,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct EquityHistoryBatchPayload {
-    pub histories: HashMap<String, Vec<EquityHistoryPointPayload>>,
-    pub errors: HashMap<String, String>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct PublicTraderConfigPayload {
-    pub trader_id: String,
-    pub trader_name: String,
-    pub ai_model: String,
-    pub exchange_id: String,
-    pub strategy_id: String,
-    pub is_cross_margin: bool,
-    pub show_in_competition: bool,
-    pub scan_interval_minutes: i32,
-    pub initial_balance: f64,
-    pub is_running: bool,
-    pub btc_eth_leverage: i32,
-    pub altcoin_leverage: i32,
-    pub trading_symbols: String,
-    pub custom_prompt: String,
-    pub override_base_prompt: bool,
-    pub system_prompt_template: String,
-    pub use_ai500: bool,
-    pub use_oi_top: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

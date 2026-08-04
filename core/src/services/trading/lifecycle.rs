@@ -97,7 +97,6 @@ pub async fn create_trader(
             initial_balance: req.initial_balance.max(0.0),
             scan_interval_minutes: req.scan_interval_minutes.max(1),
             is_cross_margin: req.is_cross_margin.unwrap_or(true),
-            show_in_competition: req.show_in_competition.unwrap_or(true),
             btc_eth_leverage: req.btc_eth_leverage,
             altcoin_leverage: req.altcoin_leverage,
             trading_symbols: req.trading_symbols.trim().to_string(),
@@ -201,9 +200,6 @@ pub async fn update_trader(
                     .unwrap_or(existing.scan_interval_minutes)
                     .max(1),
                 is_cross_margin: req.is_cross_margin.unwrap_or(existing.is_cross_margin != 0),
-                show_in_competition: req
-                    .show_in_competition
-                    .unwrap_or(existing.show_in_competition != 0),
                 btc_eth_leverage: btc_lev,
                 altcoin_leverage: alt_lev,
                 trading_symbols: req
@@ -348,30 +344,5 @@ pub async fn update_trader_prompt(
             "Trader does not exist or no permission",
         )),
         Err(_) => Err(app_error(AppErrorKind::Internal, "Failed to update prompt")),
-    }
-}
-
-pub async fn toggle_competition(
-    app: &SharedState,
-    id: &str,
-    req: ToggleCompetitionRequest,
-) -> AppResult<TraderMessagePayload> {
-    let result = app
-        .trading_repo
-        .toggle_competition(id, req.show_in_competition, now_ts())
-        .await;
-
-    match result {
-        Ok(rows_affected) if rows_affected > 0 => Ok(TraderMessagePayload {
-            message: "Competition visibility updated",
-        }),
-        Ok(_) => Err(app_error(
-            AppErrorKind::NotFound,
-            "Trader does not exist or no permission",
-        )),
-        Err(_) => Err(app_error(
-            AppErrorKind::Internal,
-            "Failed to update competition visibility",
-        )),
     }
 }

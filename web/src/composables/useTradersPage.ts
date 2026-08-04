@@ -1,7 +1,7 @@
 import { computed, onMounted, ref } from "vue"
-import { getCompetitionApi, getEquityHistoryApi } from "@/api/competition"
 import {
   deleteTraderApi,
+  getEquityHistoryApi,
   getTraderListApi,
   startTraderApi,
   stopTraderApi,
@@ -83,28 +83,18 @@ export function useTradersPage() {
   async function load() {
     loading.value = true
     try {
-      const [traderList, competitionData] = await Promise.all([
-        getTraderListApi(),
-        getCompetitionApi().catch(() => ({ traders: [], count: 0 })),
-      ])
+      const traderList = await getTraderListApi()
 
-      const competitionMap = new Map(
-        competitionData.traders.map((t) => [t.trader_id, t]),
-      )
-
-      traders.value = traderList.traders.map((trader) => {
-        const comp = competitionMap.get(trader.id)
-        return {
-          ...trader,
-          total_equity: comp?.total_equity ?? 0,
-          total_pnl: comp?.total_pnl ?? 0,
-          total_pnl_pct: comp?.total_pnl_pct ?? 0,
-          unrealized_pnl: comp?.unrealized_pnl ?? 0,
-          realized_pnl: comp?.realized_pnl ?? 0,
-          position_count: comp?.position_count ?? 0,
-          margin_used_pct: comp?.margin_used_pct ?? 0,
-        }
-      })
+      traders.value = traderList.traders.map((trader) => ({
+        ...trader,
+        total_equity: 0,
+        total_pnl: 0,
+        total_pnl_pct: 0,
+        unrealized_pnl: 0,
+        realized_pnl: 0,
+        position_count: 0,
+        margin_used_pct: 0,
+      }))
 
       lastUpdated.value = formatTime(Date.now())
     } catch {

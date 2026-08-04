@@ -46,12 +46,6 @@ impl MigrationTrait for Migration {
                             .default(1),
                     )
                     .col(
-                        ColumnDef::new(Traders::ShowInCompetition)
-                            .integer()
-                            .not_null()
-                            .default(1),
-                    )
-                    .col(
                         ColumnDef::new(Traders::BtcEthLeverage)
                             .integer()
                             .not_null()
@@ -133,7 +127,6 @@ enum Traders {
     ScanIntervalMinutes,
     IsRunning,
     IsCrossMargin,
-    ShowInCompetition,
     BtcEthLeverage,
     AltcoinLeverage,
     TradingSymbols,

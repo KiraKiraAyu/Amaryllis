@@ -32,26 +32,6 @@ export interface ServerIpPayload {
   message: string
 }
 
-export interface PublicCompetitionTraderPayload {
-  trader_id: string
-  trader_name: string
-  ai_model: string
-  exchange: string
-  total_equity: number
-  total_pnl: number
-  total_pnl_pct: number
-  unrealized_pnl: number
-  realized_pnl: number
-  position_count: number
-  margin_used_pct: number
-  is_running: boolean
-}
-
-export interface CompetitionListPayload {
-  traders: PublicCompetitionTraderPayload[]
-  count: number
-}
-
 export interface EquityHistoryPointPayload {
   timestamp: string
   total_equity: number
@@ -75,7 +55,6 @@ export interface PublicTraderConfigPayload {
   exchange_id: string
   strategy_id: string
   is_cross_margin: boolean
-  show_in_competition: boolean
   scan_interval_minutes: number
   initial_balance: number
   is_running: boolean

@@ -13,8 +13,6 @@ pub struct CreateTraderRequest {
     pub scan_interval_minutes: i64,
     #[serde(default)]
     pub is_cross_margin: Option<bool>,
-    #[serde(default)]
-    pub show_in_competition: Option<bool>,
     #[serde(default = "default_leverage")]
     pub btc_eth_leverage: i64,
     #[serde(default = "default_leverage")]
@@ -42,7 +40,6 @@ pub struct UpdateTraderRequest {
     pub initial_balance: Option<f64>,
     pub scan_interval_minutes: Option<i64>,
     pub is_cross_margin: Option<bool>,
-    pub show_in_competition: Option<bool>,
     pub btc_eth_leverage: Option<i64>,
     pub altcoin_leverage: Option<i64>,
     pub trading_symbols: Option<String>,
@@ -61,11 +58,6 @@ pub struct UpdatePromptRequest {
     pub override_base_prompt: bool,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct ToggleCompetitionRequest {
-    pub show_in_competition: bool,
-}
-
 #[derive(Debug, Clone, Serialize)]
 pub struct TraderPayload {
     pub id: String,
@@ -77,7 +69,6 @@ pub struct TraderPayload {
     pub scan_interval_minutes: i64,
     pub is_running: bool,
     pub is_cross_margin: bool,
-    pub show_in_competition: bool,
     pub btc_eth_leverage: i64,
     pub altcoin_leverage: i64,
     pub trading_symbols: String,

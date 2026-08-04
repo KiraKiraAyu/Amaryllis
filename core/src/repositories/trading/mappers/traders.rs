@@ -13,7 +13,6 @@ pub(in crate::repositories::trading) fn map_trader(row: entity::traders::Model) 
         scan_interval_minutes: i64::from(row.scan_interval_minutes),
         is_running: i64::from(row.is_running),
         is_cross_margin: i64::from(row.is_cross_margin),
-        show_in_competition: i64::from(row.show_in_competition),
         btc_eth_leverage: i64::from(row.btc_eth_leverage),
         altcoin_leverage: i64::from(row.altcoin_leverage),
         trading_symbols: row.trading_symbols,

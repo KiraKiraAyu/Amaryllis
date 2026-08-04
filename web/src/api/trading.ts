@@ -33,7 +33,6 @@ import type {
   RuntimeMetricsSeriesPayload,
   RuntimeMetricsSeriesQuery,
   StatisticsQuery,
-  ToggleCompetitionRequest,
   TradeListPayload,
   TraderAccountPayload,
   TraderBalanceSyncPayload,
@@ -47,6 +46,7 @@ import type {
   UpdatePromptRequest,
   UpdateTraderRequest,
 } from "@/types/trading"
+import type { EquityHistoryPointPayload, EquityHistoryQuery } from "@/types/public"
 import request from "@/utils/request"
 
 const Api = {
@@ -58,8 +58,8 @@ const Api = {
   TraderPrompt: "/api/trading/traders/{id}/prompt",
   TraderSyncBalance: "/api/trading/traders/{id}/sync-balance",
   TraderClosePosition: "/api/trading/traders/{id}/close-position",
-  TraderCompetition: "/api/trading/traders/{id}/competition",
   TraderGridRisk: "/api/trading/traders/{id}/grid-risk",
+  EquityHistory: "/api/trading/equity-history",
   Status: "/api/trading/status",
   Account: "/api/trading/account",
   Positions: "/api/trading/positions",
@@ -141,14 +141,8 @@ export function closeTraderPositionApi(id: string, data: ClosePositionRequest) {
   )
 }
 
-export function toggleTraderCompetitionApi(
-  id: string,
-  data: ToggleCompetitionRequest,
-) {
-  return request.put<TraderMessagePayload>(
-    Api.TraderCompetition.replace("{id}", id),
-    data,
-  )
+export function getEquityHistoryApi(params?: EquityHistoryQuery) {
+  return request.get<EquityHistoryPointPayload[]>(Api.EquityHistory, { params })
 }
 
 export function getTraderGridRiskApi(id: string) {

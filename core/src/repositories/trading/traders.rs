@@ -1,16 +1,18 @@
 use rust_decimal::Decimal;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set, TransactionTrait,
-    prelude::Expr,
+    ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect, Set,
+    TransactionTrait, prelude::Expr,
 };
 
-use crate::{database::DbErr, entity, time::ts_to_dt};
+use crate::{database::DbErr, entity, time::{dt_to_ts, ts_to_dt}};
 
 use super::{
     TradingRepo,
     mappers::traders::map_trader,
-    records::traders::{CreateTraderRecord, TraderRecord, UpdateTraderRecord},
-    values::decimal_from_f64,
+    records::traders::{
+        CreateTraderRecord, EquityHistoryPointRecord, TraderRecord, UpdateTraderRecord,
+    },
+    values::{decimal_from_f64, decimal_to_f64},
 };
 
 impl TradingRepo {
@@ -35,6 +37,14 @@ impl TradingRepo {
     pub async fn first_trader_id(&self) -> Result<Option<String>, DbErr> {
         entity::traders::Entity::find()
             .order_by_desc(entity::traders::Column::CreatedAt)
+            .one(&self.db)
+            .await
+            .map(|row| row.map(|v| v.id))
+    }
+
+    pub async fn latest_trader_id(&self) -> Result<Option<String>, DbErr> {
+        entity::traders::Entity::find()
+            .order_by_desc(entity::traders::Column::UpdatedAt)
             .one(&self.db)
             .await
             .map(|row| row.map(|v| v.id))
@@ -85,7 +95,6 @@ impl TradingRepo {
             scan_interval_minutes: Set(input.scan_interval_minutes.max(1) as i32),
             is_running: Set(0),
             is_cross_margin: Set(if input.is_cross_margin { 1 } else { 0 }),
-            show_in_competition: Set(if input.show_in_competition { 1 } else { 0 }),
             btc_eth_leverage: Set(input.btc_eth_leverage as i32),
             altcoin_leverage: Set(input.altcoin_leverage as i32),
             trading_symbols: Set(input.trading_symbols),
@@ -150,10 +159,6 @@ impl TradingRepo {
             .col_expr(
                 entity::traders::Column::IsCrossMargin,
                 Expr::value(if patch.is_cross_margin { 1 } else { 0 }),
-            )
-            .col_expr(
-                entity::traders::Column::ShowInCompetition,
-                Expr::value(if patch.show_in_competition { 1 } else { 0 }),
             )
             .col_expr(
                 entity::traders::Column::BtcEthLeverage,
@@ -262,24 +267,56 @@ impl TradingRepo {
             .map(|res| res.rows_affected)
     }
 
-    pub async fn toggle_competition(
+    pub async fn equity_history_points(
         &self,
         trader_id: &str,
-        show_in_competition: bool,
-        updated_at: i64,
-    ) -> Result<u64, DbErr> {
-        entity::traders::Entity::update_many()
-            .col_expr(
-                entity::traders::Column::ShowInCompetition,
-                Expr::value(if show_in_competition { 1 } else { 0 }),
-            )
-            .col_expr(
-                entity::traders::Column::UpdatedAt,
-                Expr::value(ts_to_dt(updated_at)),
-            )
-            .filter(entity::traders::Column::Id.eq(trader_id.trim()))
-            .exec(&self.db)
-            .await
-            .map(|res| res.rows_affected)
+        since_ts: Option<i64>,
+        limit: i64,
+    ) -> Result<Vec<EquityHistoryPointRecord>, DbErr> {
+        let mut query = entity::trader_accounts::Entity::find()
+            .filter(entity::trader_accounts::Column::TraderId.eq(trader_id.trim()))
+            .order_by_asc(entity::trader_accounts::Column::SnapshotAt)
+            .limit(limit.max(0) as u64);
+        if let Some(since) = since_ts {
+            query = query.filter(entity::trader_accounts::Column::SnapshotAt.gte(ts_to_dt(since)));
+        }
+
+        let mut rows = query.all(&self.db).await?;
+        if rows.is_empty() {
+            return Ok(vec![]);
+        }
+
+        rows.sort_by_key(|row| row.snapshot_at);
+        let first_total = rows
+            .first()
+            .map(|row| decimal_to_f64(&row.total_balance))
+            .unwrap_or(1.0)
+            .max(1e-9);
+
+        Ok(rows
+            .into_iter()
+            .map(|row| {
+                let total_balance = decimal_to_f64(&row.total_balance);
+                let available_balance = decimal_to_f64(&row.available_balance);
+                let total_pnl = decimal_to_f64(&row.unrealized_pnl);
+                let total_pnl_pct = ((total_balance - first_total) / first_total) * 100.0;
+                let used_margin = decimal_to_f64(&row.used_margin);
+                let margin_used_pct = if total_balance.abs() > f64::EPSILON {
+                    (used_margin / total_balance) * 100.0
+                } else {
+                    0.0
+                };
+                EquityHistoryPointRecord {
+                    timestamp: dt_to_ts(row.snapshot_at),
+                    total_equity: total_balance + total_pnl,
+                    available_balance,
+                    total_pnl,
+                    total_pnl_pct,
+                    position_count: 0,
+                    margin_used_pct,
+                    balance: total_balance,
+                }
+            })
+            .collect())
     }
 }

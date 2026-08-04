@@ -75,7 +75,6 @@ impl TraderPayloadExt for TraderRecord {
             scan_interval_minutes: self.scan_interval_minutes,
             is_running: self.is_running != 0,
             is_cross_margin: self.is_cross_margin != 0,
-            show_in_competition: self.show_in_competition != 0,
             btc_eth_leverage: self.btc_eth_leverage,
             altcoin_leverage: self.altcoin_leverage,
             trading_symbols: self.trading_symbols,

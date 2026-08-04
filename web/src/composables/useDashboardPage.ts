@@ -1,7 +1,7 @@
 import { computed, onMounted, ref, watch } from "vue"
-import { getEquityHistoryApi } from "@/api/competition"
 import {
   closeTraderPositionApi,
+  getEquityHistoryApi,
   getPositionsApi,
   getTraderListApi,
   startTraderApi,

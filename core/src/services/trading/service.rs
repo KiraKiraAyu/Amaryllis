@@ -21,6 +21,7 @@ pub use crate::{
             PlaceOrderRequest, PositionSide, create_exchange_adapter,
         },
     },
+    contracts::public::{EquityHistoryPointPayload, EquityHistoryQuery},
     contracts::trading::{
         accounts::{
             ClosePositionPayload, ClosePositionRequest, GridRiskInfoPayload,
@@ -53,9 +54,9 @@ pub use crate::{
             RuntimeMetricsSeriesQuery,
         },
         traders::{
-            CreateTraderRequest, RuntimeEnginePayload, ToggleCompetitionRequest,
-            TraderCreatedPayload, TraderListPayload, TraderMessagePayload, TraderPayload,
-            TraderStatusPayload, UpdatePromptRequest, UpdateTraderRequest,
+            CreateTraderRequest, RuntimeEnginePayload, TraderCreatedPayload, TraderListPayload,
+            TraderMessagePayload, TraderPayload, TraderStatusPayload, UpdatePromptRequest,
+            UpdateTraderRequest,
         },
     },
     error::{AppError, AppErrorKind, Result as AppResult},
@@ -69,7 +70,7 @@ pub use crate::{
         orders::{OrderFillRecord, TraderOrderRecord},
         positions::TraderPositionRecord,
         runtime_observability::RuntimeEventRecord,
-        traders::{CreateTraderRecord, TraderRecord, UpdateTraderRecord},
+        traders::{CreateTraderRecord, EquityHistoryPointRecord, TraderRecord, UpdateTraderRecord},
     },
     runtime_events::{
         EVENT_CANCEL_REPLACE_SUCCEEDED, EVENT_CANCEL_REPLACE_THROTTLED,
@@ -89,6 +90,8 @@ pub use super::{
     account::*, alerts::*, events_util::*, history::*, lifecycle::*, metrics::*, models::*,
     statistics::*, utils::*,
 };
+
+use crate::clients::market_data::ts_to_rfc3339;
 
 #[derive(Debug, Clone)]
 pub struct TradingService {
@@ -175,13 +178,37 @@ impl TradingService {
         update_trader_prompt(&state, id, req).await
     }
 
-    pub async fn toggle_competition(
+    pub async fn equity_history(
         &self,
-        id: &str,
-        req: ToggleCompetitionRequest,
-    ) -> AppResult<TraderMessagePayload> {
-        let state = self.state();
-        toggle_competition(&state, id, req).await
+        query: EquityHistoryQuery,
+    ) -> AppResult<Vec<EquityHistoryPointPayload>> {
+        let trader_id = if let Some(v) = query.trader_id {
+            v.trim().to_string()
+        } else {
+            match self
+                .state()
+                .trading_repo
+                .latest_trader_id()
+                .await
+                .map_err(|err| AppError::Internal(format!("Get historical data: {err}")))?
+            {
+                Some(id) => id,
+                None => return Ok(vec![]),
+            }
+        };
+
+        if trader_id.is_empty() {
+            return Err(AppError::BadRequest("Invalid trader ID".into()));
+        }
+
+        let rows = self
+            .state()
+            .trading_repo
+            .equity_history_points(&trader_id, None, 500)
+            .await
+            .map_err(|err| AppError::Internal(format!("Get historical data: {err}")))?;
+
+        Ok(rows.into_iter().map(equity_history_payload).collect())
     }
 
     pub async fn sync_balance(
@@ -391,3 +418,16 @@ impl TradingService {
 }
 
 // ====== trader lifecycle ======
+
+fn equity_history_payload(row: EquityHistoryPointRecord) -> EquityHistoryPointPayload {
+    EquityHistoryPointPayload {
+        timestamp: ts_to_rfc3339(row.timestamp),
+        total_equity: row.total_equity,
+        available_balance: row.available_balance,
+        total_pnl: row.total_pnl,
+        total_pnl_pct: row.total_pnl_pct,
+        position_count: row.position_count,
+        margin_used_pct: row.margin_used_pct,
+        balance: row.balance,
+    }
+}

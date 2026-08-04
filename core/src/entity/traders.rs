@@ -21,7 +21,6 @@ pub struct Model {
     pub scan_interval_minutes: i32,
     pub is_running: i32,
     pub is_cross_margin: i32,
-    pub show_in_competition: i32,
     pub btc_eth_leverage: i32,
     pub altcoin_leverage: i32,
     #[sea_orm(column_type = "Text")]

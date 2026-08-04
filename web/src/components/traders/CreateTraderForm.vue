@@ -3,7 +3,6 @@ import Card from "primevue/card"
 import InputText from "primevue/inputtext"
 import InputNumber from "primevue/inputnumber"
 import Select from "primevue/select"
-import Checkbox from "primevue/checkbox"
 import Button from "primevue/button"
 import { ref, onMounted } from "vue"
 import { getExchangeConfigsApi } from "@/api/exchanges"
@@ -29,7 +28,6 @@ const form = ref({
   strategy_id: "",
   scan_interval_minutes: 60,
   initial_balance: 1000,
-  show_in_competition: false,
 })
 
 async function submit() {
@@ -176,17 +174,6 @@ onMounted(async () => {
               inputClass="font-mono"
             />
           </div>
-        </div>
-
-        <div class="flex items-center gap-2 mt-1">
-          <Checkbox
-            v-model="form.show_in_competition"
-            binary
-            inputId="show_in_competition"
-          />
-          <label for="show_in_competition" class="text-xs font-semibold text-surface-600 dark:text-surface-400 cursor-pointer select-none">
-            Show this trader in the competition leaderboard
-          </label>
         </div>
 
         <p v-if="error" class="text-xs text-rose-500 bg-rose-50 dark:bg-rose-950/20 px-3 py-2 rounded-xl">
