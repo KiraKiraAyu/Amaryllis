@@ -7,24 +7,39 @@ const route = useRoute()
 const router = useRouter()
 const isDark = ref(false)
 
-// --- Route-level carousel transition ---
-// Tracks navigation depth to determine slide direction (forward/backward).
-// Routes with meta.depth > 0 (e.g. trader-detail) are treated as subpages.
-const slideDirection = ref<"forward" | "backward">("forward")
+// --- Route-level transition direction ---
+// First-level routes (both depth 0): vertical slide (up/down by nav order)
+// Second-level routes (any depth > 0): horizontal slide (forward/backward)
+const NAV_ORDER = ["/", "/data", "/strategy", "/backtest", "/debate", "/traders", "/monitor", "/settings"]
+
+function getSectionIndex(path: string): number {
+  if (path === "/") return 0
+  for (let i = NAV_ORDER.length - 1; i >= 0; i--) {
+    const prefix = NAV_ORDER[i]
+    if (prefix === "/") continue
+    if (path === prefix || path.startsWith(prefix + "/")) return i
+  }
+  return 0
+}
+
+const transitionName = ref("route-v-down")
 
 const removeGuard = router.beforeEach((to, from) => {
   const toDepth = (to.meta?.depth as number) ?? 0
   const fromDepth = (from.meta?.depth as number) ?? 0
-  slideDirection.value = toDepth >= fromDepth ? "forward" : "backward"
+
+  if (toDepth > 0 || fromDepth > 0) {
+    // Horizontal: any navigation involving subpages
+    transitionName.value = toDepth >= fromDepth ? "route-h-forward" : "route-h-backward"
+  } else {
+    // Vertical: first-level navigation
+    const toIdx = getSectionIndex(to.path)
+    const fromIdx = getSectionIndex(from.path)
+    transitionName.value = toIdx >= fromIdx ? "route-v-down" : "route-v-up"
+  }
 })
 
 onUnmounted(() => removeGuard())
-
-const transitionName = computed(() =>
-  slideDirection.value === "backward"
-    ? "route-slide-backward"
-    : "route-slide-forward",
-)
 
 const nav = computed(() => [
   { label: "Dashboard", to: "/", icon: "pi pi-chart-bar" },
@@ -99,43 +114,66 @@ onMounted(() => {
 
 <style>
 /*
- * Route-level carousel transition (mirrors SlideTransition.vue's effect).
- * Non-scoped so the classes apply to the <Transition> wrapper.
- * Uses a distinct `route-slide-*` prefix to avoid collision with
- * the in-page `carousel-*` classes from SlideTransition.vue.
+ * Route-level transitions.
+ * Non-scoped so classes apply to the <Transition> wrapper.
  *
- * The leaving view is absolutely positioned (inset:0) so the entering
- * view takes its natural place in the flex layout — both slide simultaneously.
+ * Vertical (first-level): new slides in from top or bottom
+ * Horizontal (second-level): new slides in from left or right
+ *
+ * The leaving view is absolutely positioned (inset:0) so both
+ * views slide simultaneously — carousel effect.
  */
 
-.route-slide-forward-enter-active,
-.route-slide-forward-leave-active,
-.route-slide-backward-enter-active,
-.route-slide-backward-leave-active {
+/* ── Shared ── */
+.route-v-down-enter-active,
+.route-v-down-leave-active,
+.route-v-up-enter-active,
+.route-v-up-leave-active,
+.route-h-forward-enter-active,
+.route-h-forward-leave-active,
+.route-h-backward-enter-active,
+.route-h-backward-leave-active {
   transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   will-change: transform;
 }
 
-/* Leaving view overlays so entering view takes layout space */
-.route-slide-forward-leave-active,
-.route-slide-backward-leave-active {
+.route-v-down-leave-active,
+.route-v-up-leave-active,
+.route-h-forward-leave-active,
+.route-h-backward-leave-active {
   position: absolute;
   inset: 0;
 }
 
-/* Forward: new enters from right, old exits to left */
-.route-slide-forward-enter-from {
+/* ── Vertical down: new from bottom, old to top ── */
+.route-v-down-enter-from {
+  transform: translateY(100%);
+}
+.route-v-down-leave-to {
+  transform: translateY(-100%);
+}
+
+/* ── Vertical up: new from top, old to bottom ── */
+.route-v-up-enter-from {
+  transform: translateY(-100%);
+}
+.route-v-up-leave-to {
+  transform: translateY(100%);
+}
+
+/* ── Horizontal forward: new from right, old to left ── */
+.route-h-forward-enter-from {
   transform: translateX(100%);
 }
-.route-slide-forward-leave-to {
+.route-h-forward-leave-to {
   transform: translateX(-100%);
 }
 
-/* Backward: new enters from left, old exits to right */
-.route-slide-backward-enter-from {
+/* ── Horizontal backward: new from left, old to right ── */
+.route-h-backward-enter-from {
   transform: translateX(-100%);
 }
-.route-slide-backward-leave-to {
+.route-h-backward-leave-to {
   transform: translateX(100%);
 }
 </style>
