@@ -81,7 +81,10 @@ onMounted(() => {
       >
         A
       </div>
-      <span class="text-xl font-bold tracking-wide text-surface-900 dark:text-surface-0">QuantAura</span>
+      <span
+        class="text-xl font-bold tracking-wide text-surface-900 dark:text-surface-0"
+        >QuantAura</span
+      >
     </div>
 
     <!-- Nav Items -->
@@ -115,13 +118,16 @@ onMounted(() => {
         class="cursor-pointer h-11 w-full px-4 flex items-center gap-3 rounded-xl text-surface-600 dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-800 hover:text-surface-900 dark:hover:text-surface-0 transition-colors font-medium text-sm"
         @click="emit('toggle-theme')"
       >
-        <span class="pi text-lg w-6 text-center" :class="isDark ? 'pi-sun' : 'pi-moon'"></span>
-        <span>{{ isDark ? 'Light Mode' : 'Dark Mode' }}</span>
+        <span
+          class="pi text-lg w-6 text-center"
+          :class="isDark ? 'pi-sun' : 'pi-moon'"
+        ></span>
+        <span>{{ isDark ? "Light Mode" : "Dark Mode" }}</span>
       </button>
 
       <!-- Lock Session -->
       <button
-        class="cursor-pointer h-11 w-full px-4 flex items-center gap-3 rounded-xl text-surface-600 dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-800 hover:text-surface-900 dark:hover:text-surface-0 transition-colors font-medium text-sm border-t border-surface-200 dark:border-surface-800 pt-4 mt-1"
+        class="cursor-pointer h-11 w-full px-4 flex items-center gap-3 rounded-xl text-surface-600 dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-800 hover:text-surface-900 dark:hover:text-surface-0 transition-colors font-medium text-sm border-t border-surface-200 dark:border-surface-800"
         title="Lock"
         @click="authStore.logout()"
       >
@@ -146,7 +152,9 @@ onMounted(() => {
 .sidebar-nav .nav-link {
   position: relative;
   z-index: 1;
-  transition: background-color 0.3s ease, color 0.3s ease;
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease;
 }
 
 /* Override .is-active background — it's handled by the sliding indicator */
