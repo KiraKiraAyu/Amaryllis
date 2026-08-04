@@ -1,10 +1,13 @@
 <script setup lang="ts">
+import { computed } from "vue"
 import Button from "primevue/button"
 import CreateDebateModal from "@/components/debate/CreateDebateModal.vue"
 import DebateDetail from "@/components/debate/DebateDetail.vue"
 import DebateSessionsList from "@/components/debate/DebateSessionsList.vue"
 import PageHeader from "@/components/layout/PageHeader.vue"
+import SlideTransition from "@/components/SlideTransition.vue"
 import { useDebatePage } from "@/composables/useDebatePage"
+import { useCarouselTransition } from "@/composables/useCarouselTransition"
 
 const {
   activeDebate,
@@ -22,6 +25,10 @@ const {
   startDebate,
   togglePersonality,
 } = useDebatePage()
+
+// 0 = empty placeholder, 1 = debate detail
+const step = computed(() => (activeDebate.value ? 1 : 0))
+const { direction } = useCarouselTransition(step)
 </script>
 
 <template>
@@ -43,20 +50,23 @@ const {
         @select="selectDebate"
       />
 
-      <div class="lg:col-span-2">
-        <div v-if="!activeDebate" class="flex items-center justify-center h-64">
-          <p class="text-sm text-text-muted">
-            Select a debate session to view
-          </p>
-        </div>
+      <div class="lg:col-span-2 relative overflow-hidden">
+        <SlideTransition :direction="direction">
+          <div v-if="step === 0" key="empty" class="flex items-center justify-center h-64">
+            <p class="text-sm text-text-muted">
+              Select a debate session to view
+            </p>
+          </div>
 
-        <DebateDetail
-          v-else
-          :debate="activeDebate"
-          :messages="messages"
-          @start="startDebate"
-          @cancel="cancelDebate"
-        />
+          <DebateDetail
+            v-else
+            key="detail"
+            :debate="activeDebate!"
+            :messages="messages"
+            @start="startDebate"
+            @cancel="cancelDebate"
+          />
+        </SlideTransition>
       </div>
     </div>
   </div>
