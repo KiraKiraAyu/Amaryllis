@@ -207,12 +207,11 @@ const emit = defineEmits<{
               <Button
                 v-if="!data.is_running"
                 icon="pi pi-play"
-                severity="success"
                 rounded
                 size="small"
                 @click.stop="emit('start', data.id)"
                 title="Start trader"
-                class="h-8 w-8 cursor-pointer bg-emerald-500! border-emerald-500! hover:bg-emerald-600! hover:border-emerald-600! text-white!"
+                class="h-8 w-8"
               />
               <Button
                 v-else
@@ -222,7 +221,7 @@ const emit = defineEmits<{
                 size="small"
                 @click.stop="emit('stop', data.id)"
                 title="Stop trader"
-                class="h-8 w-8 cursor-pointer bg-rose-500! border-rose-500! hover:bg-rose-600! hover:border-rose-600! text-white!"
+                class="h-8 w-8"
               />
 
               <!-- Sync balance -->
@@ -258,7 +257,7 @@ const emit = defineEmits<{
                 size="small"
                 @click.stop="emit('delete', data.id)"
                 title="Delete trader"
-                class="h-8 w-8 cursor-pointer text-rose-500!"
+                class="h-8 w-8"
               />
             </div>
           </template>
