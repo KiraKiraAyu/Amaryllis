@@ -1,12 +1,17 @@
 <script setup lang="ts">
+import { ref, computed } from "vue"
 import Tabs from "primevue/tabs"
 import TabList from "primevue/tablist"
 import Tab from "primevue/tab"
-import TabPanels from "primevue/tabpanels"
-import TabPanel from "primevue/tabpanel"
 import AIModelsTab from "@/components/settings/AIModelsTab.vue"
 import ExchangeAccountsTab from "@/components/settings/ExchangeAccountsTab.vue"
 import SecurityTab from "@/components/settings/SecurityTab.vue"
+import SlideTransition from "@/components/SlideTransition.vue"
+import { useCarouselTransition } from "@/composables/useCarouselTransition"
+
+const activeTab = ref("0")
+const step = computed(() => Number(activeTab.value))
+const { direction } = useCarouselTransition(step)
 </script>
 
 <template>
@@ -18,23 +23,26 @@ import SecurityTab from "@/components/settings/SecurityTab.vue"
       </p>
     </div>
 
-    <Tabs value="0">
+    <Tabs v-model:value="activeTab">
       <TabList>
         <Tab value="0">AI Models</Tab>
         <Tab value="1">Exchanges</Tab>
         <Tab value="2">Security</Tab>
       </TabList>
-      <TabPanels>
-        <TabPanel value="0">
-          <AIModelsTab />
-        </TabPanel>
-        <TabPanel value="1">
-          <ExchangeAccountsTab />
-        </TabPanel>
-        <TabPanel value="2">
-          <SecurityTab />
-        </TabPanel>
-      </TabPanels>
+
+      <div class="relative overflow-hidden mt-4">
+        <SlideTransition :direction="direction">
+          <div v-if="step === 0" key="ai-models" class="w-full">
+            <AIModelsTab />
+          </div>
+          <div v-else-if="step === 1" key="exchanges" class="w-full">
+            <ExchangeAccountsTab />
+          </div>
+          <div v-else-if="step === 2" key="security" class="w-full">
+            <SecurityTab />
+          </div>
+        </SlideTransition>
+      </div>
     </Tabs>
   </div>
 </template>
