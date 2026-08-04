@@ -9,6 +9,15 @@ interface FormatDateOptions {
 const DEFAULT_LOCALE = "en-US"
 const TIMESTAMP_MS_THRESHOLD = 1_000_000_000_000
 
+/** Format a USD amount with 2 decimal places and thousands separators. */
+export function fmtUsd(value: number | null | undefined): string {
+  if (value == null || Number.isNaN(value)) return "0.00"
+  return value.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+}
+
 export function formatDate(value: DateInput, options?: FormatDateOptions) {
   return formatDateInput(
     value,

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue"
+import { useRouter } from "vue-router"
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import PageHeader from "@/components/layout/PageHeader.vue"
@@ -25,12 +26,17 @@ const {
   search,
   selectedEquity,
   selectedTrader,
-  showDetail,
   startTrader,
   stats,
   stopTrader,
   syncBalance,
 } = useTradersPage()
+
+const router = useRouter()
+
+function goToDetail(trader: TradersPageTrader) {
+  router.push({ name: "trader-detail", params: { id: trader.id } })
+}
 
 // Sub-page state: 0 = list, 1 = create, 2 = edit
 const showCreate = ref(false)
@@ -111,7 +117,7 @@ function handleUpdated() {
             :avatar-style="avatarStyle"
             :fmt="fmt"
             :return-pct="returnPct"
-            @select="showDetail"
+            @select="goToDetail"
             @start="startTrader"
             @stop="stopTrader"
             @sync="syncBalance"

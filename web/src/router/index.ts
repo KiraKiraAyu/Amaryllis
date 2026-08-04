@@ -46,6 +46,12 @@ const router = createRouter({
           component: () => import("@/pages/TradersPage.vue"),
         },
         {
+          path: "traders/:id",
+          name: "trader-detail",
+          component: () => import("@/pages/TraderDetailPage.vue"),
+          meta: { depth: 1 },
+        },
+        {
           path: "data",
           name: "data",
           component: () => import("@/pages/DataPage.vue"),
