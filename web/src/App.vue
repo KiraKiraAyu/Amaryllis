@@ -3,12 +3,14 @@ import { RouterView } from "vue-router"
 import { onMounted, watch } from "vue"
 import { useAuthStore } from "@/stores/auth"
 import { useRealtimeStore } from "@/stores/realtime"
+import { useSettingsStore } from "@/stores/settings"
 import Toast from "primevue/toast"
 import { useToast } from "@/stores/toast"
 import { useToast as usePrimeToast } from "primevue/usetoast"
 
 const auth = useAuthStore()
 const realtime = useRealtimeStore()
+const settings = useSettingsStore()
 const toastStore = useToast()
 const primeToast = usePrimeToast()
 
@@ -32,6 +34,7 @@ watch(
 onMounted(() => {
   if (auth.isLoggedIn) {
     realtime.connect()
+    void settings.load()
   }
 
   // Theme initialization
@@ -50,6 +53,9 @@ watch(
   (token) => {
     if (token) {
       realtime.connect()
+      if (!settings.initialized) {
+        void settings.load()
+      }
     } else {
       realtime.disconnect()
     }

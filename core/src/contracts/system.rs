@@ -1,9 +1,19 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize)]
 pub struct HealthResponse {
     pub status: &'static str,
     pub time_ms: u128,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SettingsResponse {
+    pub timezone: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateSettingsRequest {
+    pub timezone: Option<String>,
 }
 
 #[derive(Debug, Serialize)]

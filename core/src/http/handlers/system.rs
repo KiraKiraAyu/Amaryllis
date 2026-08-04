@@ -3,9 +3,10 @@ use std::env;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{
-    contracts::system::{HealthResponse, SystemConfigResponse},
+    contracts::system::{HealthResponse, SettingsResponse, SystemConfigResponse, UpdateSettingsRequest},
     error::Result,
     http::response::ApiResponse,
+    repositories::AppSettingsRepo,
     state,
 };
 
@@ -52,4 +53,39 @@ fn env_u32(key: &str, default: u32) -> u32 {
         .ok()
         .and_then(|v| v.trim().parse::<u32>().ok())
         .unwrap_or(default)
+}
+
+const TIMEZONE_KEY: &str = "timezone";
+
+pub async fn get_settings(
+    State(shared_state): State<state::AppState>,
+) -> Result<Json<ApiResponse<SettingsResponse>>> {
+    let repo = AppSettingsRepo::new(shared_state.db.clone());
+    let timezone = repo.get(TIMEZONE_KEY).await.unwrap_or(None);
+
+    let payload = SettingsResponse { timezone };
+
+    Ok(Json(ApiResponse::success(Some(payload), None)))
+}
+
+pub async fn update_settings(
+    State(shared_state): State<state::AppState>,
+    Json(body): Json<UpdateSettingsRequest>,
+) -> Result<Json<ApiResponse<SettingsResponse>>> {
+    let repo = AppSettingsRepo::new(shared_state.db.clone());
+
+    if let Some(ref tz) = body.timezone {
+        let tz = tz.trim();
+        if tz.is_empty() {
+            repo.delete(TIMEZONE_KEY).await?;
+        } else {
+            repo.set(TIMEZONE_KEY, tz).await?;
+        }
+    }
+
+    let timezone = repo.get(TIMEZONE_KEY).await.unwrap_or(None);
+
+    let payload = SettingsResponse { timezone };
+
+    Ok(Json(ApiResponse::success(Some(payload), None)))
 }

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { FeedMessage } from "@/composables/useTraderDetail"
+import { formatTime } from "@/utils/format"
 import FeedMessageTrader from "./FeedMessageTrader.vue"
 import FeedMessagePrompt from "./FeedMessagePrompt.vue"
 import FeedMessageCard from "./FeedMessageCard.vue"
@@ -13,14 +14,6 @@ const props = defineProps<{
  *  AI Trader and Position are on the left. */
 function isRightSide(role: string): boolean {
   return role === "prompt" || role === "action" || role === "system"
-}
-
-function formatTime(ts: number): string {
-  return new Date(ts).toLocaleTimeString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  })
 }
 </script>
 

@@ -10,6 +10,7 @@ import {
 } from "@/api/trading"
 import { useRealtimeStore } from "@/stores/realtime"
 import { useToast } from "@/stores/toast"
+import { formatTime } from "@/utils/format"
 import type {
   DashboardEquitySnapshot,
   DashboardLiveEvent,
@@ -156,7 +157,7 @@ export function useDashboardPage() {
       events.value.unshift({
         type: event.type,
         summary: event.trader_id ? `trader:${event.trader_id as string}` : "",
-        time: new Date().toLocaleTimeString(),
+        time: formatTime(Date.now()),
       })
       if (events.value.length > 50) events.value.pop()
     },

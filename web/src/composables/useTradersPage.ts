@@ -8,6 +8,7 @@ import {
   syncTraderBalanceApi,
 } from "@/api/trading"
 import { useToast } from "@/stores/toast"
+import { formatTime } from "@/utils/format"
 import type { TraderPayload } from "@/types/trading"
 import type { EquityHistoryPointPayload } from "@/types/public"
 
@@ -105,7 +106,7 @@ export function useTradersPage() {
         }
       })
 
-      lastUpdated.value = new Date().toLocaleTimeString()
+      lastUpdated.value = formatTime(Date.now())
     } catch {
       toast.error("Failed to load traders")
     } finally {

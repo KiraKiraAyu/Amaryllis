@@ -9,6 +9,28 @@ interface FormatDateOptions {
 const DEFAULT_LOCALE = "en-US"
 const TIMESTAMP_MS_THRESHOLD = 1_000_000_000_000
 
+/** Global default timezone, set by the settings store on app init. */
+let defaultTimeZone: string | undefined
+
+/** Set the global default timezone used by all format* functions. */
+export function setDefaultTimeZone(tz: string | undefined): void {
+  defaultTimeZone = tz
+}
+
+/** Get the current global default timezone. */
+export function getDefaultTimeZone(): string | undefined {
+  return defaultTimeZone
+}
+
+/** Detect the browser's local IANA timezone (e.g. "Asia/Shanghai"). */
+export function detectBrowserTimeZone(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone
+  } catch {
+    return undefined
+  }
+}
+
 /** Format a USD amount with 2 decimal places and thousands separators. */
 export function fmtUsd(value: number | null | undefined): string {
   if (value == null || Number.isNaN(value)) return "0.00"
@@ -64,9 +86,11 @@ function formatDateInput(
   const date = toDate(value)
   if (!date) return options.fallback ?? "-"
 
+  const tz = options.timeZone ?? defaultTimeZone
+
   return new Intl.DateTimeFormat(options.locale ?? DEFAULT_LOCALE, {
     ...dateOptions,
-    timeZone: options.timeZone,
+    ...(tz ? { timeZone: tz } : {}),
   }).format(date)
 }
 
