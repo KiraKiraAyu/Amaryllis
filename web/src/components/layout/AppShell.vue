@@ -2,15 +2,26 @@
 import { ref, onMounted, computed, onUnmounted } from "vue"
 import { RouterView, RouterLink, useRoute, useRouter } from "vue-router"
 import AppSidebar from "@/components/layout/AppSidebar.vue"
+import { useRealtimeStore } from "@/stores/realtime"
 
 const route = useRoute()
 const router = useRouter()
 const isDark = ref(false)
+const realtime = useRealtimeStore()
 
 // --- Route-level transition direction ---
 // First-level routes (both depth 0): vertical slide (up/down by nav order)
 // Second-level routes (any depth > 0): horizontal slide (forward/backward)
-const NAV_ORDER = ["/", "/data", "/strategy", "/backtest", "/debate", "/traders", "/monitor", "/settings"]
+const NAV_ORDER = [
+  "/",
+  "/data",
+  "/strategy",
+  "/backtest",
+  "/debate",
+  "/traders",
+  "/monitor",
+  "/settings",
+]
 
 function getSectionIndex(path: string): number {
   if (path === "/") return 0
@@ -30,7 +41,8 @@ const removeGuard = router.beforeEach((to, from) => {
 
   if (toDepth > 0 || fromDepth > 0) {
     // Horizontal: any navigation involving subpages
-    transitionName.value = toDepth >= fromDepth ? "route-h-forward" : "route-h-backward"
+    transitionName.value =
+      toDepth >= fromDepth ? "route-h-forward" : "route-h-backward"
   } else {
     // Vertical: first-level navigation
     const toIdx = getSectionIndex(to.path)
@@ -66,7 +78,8 @@ function toggleDarkMode() {
 onMounted(() => {
   const savedTheme = localStorage.getItem("quantaura.theme")
   const prefersDark =
-    window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+    window.matchMedia &&
+    window.matchMedia("(prefers-color-scheme: dark)").matches
   if (savedTheme === "dark" || (!savedTheme && prefersDark)) {
     isDark.value = true
     document.documentElement.classList.add("dark")
@@ -79,14 +92,53 @@ onMounted(() => {
 
 <template>
   <!-- Bottom nav is 4.5rem tall on mobile, pb-22 avoids overlaps -->
-  <div class="h-screen overflow-hidden p-3 md:p-5 pb-22 md:pb-5 transition-colors duration-300 bg-surface-0 dark:bg-surface-950 flex flex-col">
+  <div
+    class="h-screen overflow-hidden p-3 md:p-5 pb-22 md:pb-5 transition-colors duration-300 bg-surface-0 dark:bg-surface-950 flex flex-col"
+  >
     <AppSidebar :is-dark="isDark" @toggle-theme="toggleDarkMode" />
 
     <div class="lg:pl-74 flex-1 flex flex-col min-h-0">
       <main class="flex-1 flex flex-col min-h-0 relative overflow-hidden">
+        <!-- Offline overlay: covers the route page whenever the SSE
+             connection is not established. The wifi icon and "Connection
+             lost." text stay fixed; only the Reconnect button transitions
+             to show a loading spinner when a reconnect is in progress. -->
+        <div
+          v-if="!realtime.isConnected && realtime.initialized"
+          class="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-surface-0 dark:bg-surface-950"
+        >
+          <span
+            class="pi pi-wifi text-5xl text-surface-400 dark:text-surface-600"
+          ></span>
+          <p class="text-lg font-medium text-surface-400 dark:text-surface-600">
+            Connection lost.
+          </p>
+          <button
+            class="inline-flex items-center justify-center rounded-xl bg-primary-500 px-6 py-2.5 font-medium text-white shadow-lg shadow-primary-500/20 transition-colors hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-80"
+            :disabled="realtime.connecting"
+            @click="realtime.reconnect()"
+          >
+            <!-- Spinner: width + opacity + margin transition for smooth fade-in/out -->
+            <span
+              class="inline-flex items-center justify-center overflow-hidden transition-all duration-300 ease-out"
+              :class="
+                realtime.connecting
+                  ? 'w-5 opacity-100 mr-2'
+                  : 'w-0 opacity-0 mr-0'
+              "
+            >
+              <span class="pi pi-spin pi-spinner text-white text-base"></span>
+            </span>
+            <span>Reconnect</span>
+          </button>
+        </div>
+
         <RouterView v-slot="{ Component, route: currentRoute }">
           <Transition :name="transitionName">
-            <div :key="currentRoute.path" class="flex-1 min-h-0 overflow-y-auto py-3 md:py-6">
+            <div
+              :key="currentRoute.path"
+              class="flex-1 min-h-0 overflow-y-auto py-3 md:py-6"
+            >
               <component :is="Component" />
             </div>
           </Transition>

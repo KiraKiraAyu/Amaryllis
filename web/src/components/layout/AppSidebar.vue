@@ -2,14 +2,12 @@
 import { computed, ref, watch, nextTick, onMounted } from "vue"
 import { useRoute, RouterLink } from "vue-router"
 import { useAuthStore } from "@/stores/auth"
-import { useRealtimeStore } from "@/stores/realtime"
 
 defineProps<{ isDark: boolean }>()
 const emit = defineEmits<{ (e: "toggle-theme"): void }>()
 
 const route = useRoute()
 const authStore = useAuthStore()
-const realtime = useRealtimeStore()
 
 const nav = computed(() => [
   { label: "Dashboard", to: "/", icon: "pi pi-chart-bar" },
@@ -112,23 +110,6 @@ onMounted(() => {
 
     <!-- Bottom Actions -->
     <div class="mt-auto flex flex-col gap-3">
-      <!-- Connection Status Indicator -->
-      <div
-        class="h-11 w-full px-4 flex items-center gap-3 rounded-xl transition-all"
-        :class="
-          realtime.isConnected
-            ? 'text-emerald-500 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/30'
-            : 'text-surface-400 bg-surface-100 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 animate-pulse'
-        "
-        :title="realtime.isConnected ? 'Connection: Live' : 'Connection: Offline'"
-      >
-        <span
-          class="pi text-sm"
-          :class="realtime.isConnected ? 'pi-wifi' : 'pi-exclamation-triangle'"
-        ></span>
-        <span class="font-medium text-sm">{{ realtime.isConnected ? 'Connected' : 'Offline' }}</span>
-      </div>
-
       <!-- Dark Mode Switcher -->
       <button
         class="cursor-pointer h-11 w-full px-4 flex items-center gap-3 rounded-xl text-surface-600 dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-800 hover:text-surface-900 dark:hover:text-surface-0 transition-colors font-medium text-sm"

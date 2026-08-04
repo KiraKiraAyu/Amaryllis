@@ -3,6 +3,7 @@ import { computed, ref } from "vue"
 import type { PositionPayload } from "@/types/trading"
 import { SseClient } from "@/utils/sse-client"
 import { useAuthStore } from "./auth"
+import { useToast } from "./toast"
 
 export interface RealtimeEvent {
   type: string
@@ -12,6 +13,8 @@ export interface RealtimeEvent {
 
 export const useRealtimeStore = defineStore("realtime", () => {
   const connected = ref(false)
+  const connecting = ref(false)
+  const initialized = ref(false)
   const lastEvent = ref<RealtimeEvent | null>(null)
   const equitySnapshot = ref<Record<string, unknown> | null>(null)
   const positionsByTrader = ref<Record<string, PositionPayload[]>>({})
@@ -26,13 +29,24 @@ export const useRealtimeStore = defineStore("realtime", () => {
     const auth = useAuthStore()
     if (!auth.token || client) return
 
+    initialized.value = true
+    connecting.value = true
     client = new SseClient({
       onMessage: (data) => dispatchEventData(data),
       onOpen: () => {
+        connecting.value = false
         connected.value = true
       },
       onClose: () => {
+        const wasConnecting = connecting.value
+        connecting.value = false
         connected.value = false
+        if (wasConnecting) {
+          useToast().error(
+            "Failed to connect to the server. Please try again.",
+            "Connection Error",
+          )
+        }
       },
       onResponse: (status) => {
         if (status === 401) {
@@ -47,7 +61,18 @@ export const useRealtimeStore = defineStore("realtime", () => {
   function disconnect() {
     client?.disconnect()
     client = null
+    connecting.value = false
     connected.value = false
+  }
+
+  function reconnect() {
+    // Clean up the old client silently without triggering state changes
+    // (disconnect() would set connecting=false, causing a brief overlay flicker).
+    if (client) {
+      client.disconnect()
+      client = null
+    }
+    connect()
   }
 
   function dispatchEventData(data: string) {
@@ -142,6 +167,8 @@ export const useRealtimeStore = defineStore("realtime", () => {
 
   return {
     connected,
+    connecting,
+    initialized,
     isConnected,
     lastEvent,
     equitySnapshot,
@@ -150,6 +177,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
     connect,
     clearPositions,
     disconnect,
+    reconnect,
     removePosition,
     replacePositionsByTrader,
     setPositionsForTrader,
