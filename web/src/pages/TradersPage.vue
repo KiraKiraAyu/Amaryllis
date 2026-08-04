@@ -3,12 +3,14 @@ import { computed, ref } from "vue"
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import PageHeader from "@/components/layout/PageHeader.vue"
+import SlideTransition from "@/components/SlideTransition.vue"
 import TraderStats from "@/components/traders/TraderStats.vue"
 import TraderManagementPanel from "@/components/traders/TraderManagementPanel.vue"
+import CreateTraderForm from "@/components/traders/CreateTraderForm.vue"
+import EditTraderForm from "@/components/traders/EditTraderForm.vue"
 import EquityChart from "@/components/EquityChart.vue"
-import CreateTraderModal from "@/components/CreateTraderModal.vue"
-import EditTraderModal from "@/components/EditTraderModal.vue"
 import { useTradersPage } from "@/composables/useTradersPage"
+import { useCarouselTransition } from "@/composables/useCarouselTransition"
 import type { TradersPageTrader } from "@/composables/useTradersPage"
 
 const {
@@ -30,8 +32,17 @@ const {
   syncBalance,
 } = useTradersPage()
 
-const showCreateModal = ref(false)
+// Sub-page state: 0 = list, 1 = create, 2 = edit
+const showCreate = ref(false)
 const editingTrader = ref<TradersPageTrader | null>(null)
+
+const step = computed(() => {
+  if (editingTrader.value) return 2
+  if (showCreate.value) return 1
+  return 0
+})
+
+const { direction } = useCarouselTransition(step)
 
 const showDialog = computed({
   get: () => selectedTrader.value !== null,
@@ -41,7 +52,7 @@ const showDialog = computed({
 })
 
 function handleCreated() {
-  showCreateModal.value = false
+  showCreate.value = false
   load()
 }
 
@@ -75,34 +86,58 @@ function handleUpdated() {
             label="New Trader"
             icon="pi pi-plus"
             class="rounded-xl h-11 px-4 cursor-pointer"
-            @click="showCreateModal = true"
+            @click="showCreate = true"
           />
         </div>
       </template>
     </PageHeader>
 
-    <TraderStats
-      :total="stats.total"
-      :running="stats.running"
-      :stopped="stats.stopped"
-      :total-pnl="stats.totalPnl"
-      :loading="loading"
-    />
+    <div class="relative w-full overflow-hidden">
+      <SlideTransition :direction="direction">
+        <!-- View 0: Trader List -->
+        <div v-if="step === 0" key="list" class="w-full flex flex-col gap-6">
+          <TraderStats
+            :total="stats.total"
+            :running="stats.running"
+            :stopped="stats.stopped"
+            :total-pnl="stats.totalPnl"
+            :loading="loading"
+          />
 
-    <TraderManagementPanel
-      v-model="search"
-      :traders="filtered"
-      :loading="loading"
-      :avatar-style="avatarStyle"
-      :fmt="fmt"
-      :return-pct="returnPct"
-      @select="showDetail"
-      @start="startTrader"
-      @stop="stopTrader"
-      @sync="syncBalance"
-      @edit="editingTrader = $event"
-      @delete="deleteTrader"
-    />
+          <TraderManagementPanel
+            v-model="search"
+            :traders="filtered"
+            :loading="loading"
+            :avatar-style="avatarStyle"
+            :fmt="fmt"
+            :return-pct="returnPct"
+            @select="showDetail"
+            @start="startTrader"
+            @stop="stopTrader"
+            @sync="syncBalance"
+            @edit="editingTrader = $event"
+            @delete="deleteTrader"
+          />
+        </div>
+
+        <!-- View 1: Create Trader -->
+        <div v-else-if="step === 1" key="create" class="w-full">
+          <CreateTraderForm
+            @close="showCreate = false"
+            @created="handleCreated"
+          />
+        </div>
+
+        <!-- View 2: Edit Trader -->
+        <div v-else-if="step === 2" key="edit" class="w-full">
+          <EditTraderForm
+            :trader="editingTrader!"
+            @close="editingTrader = null"
+            @updated="handleUpdated"
+          />
+        </div>
+      </SlideTransition>
+    </div>
 
     <Dialog
       v-model:visible="showDialog"
@@ -114,18 +149,5 @@ function handleUpdated() {
         <EquityChart :data="selectedEquity" :height="320" />
       </div>
     </Dialog>
-
-    <CreateTraderModal
-      v-if="showCreateModal"
-      @close="showCreateModal = false"
-      @created="handleCreated"
-    />
-
-    <EditTraderModal
-      v-if="editingTrader"
-      :trader="editingTrader"
-      @close="editingTrader = null"
-      @updated="handleUpdated"
-    />
   </div>
 </template>
