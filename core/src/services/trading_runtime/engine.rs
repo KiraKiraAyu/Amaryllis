@@ -1,16 +1,53 @@
 use super::service::*;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// Allowed scan intervals in minutes.
 pub const ALLOWED_SCAN_INTERVALS: [i64; 12] = [1, 5, 10, 15, 20, 30, 60, 120, 240, 480, 720, 1440];
 
 /// Calculate the next aligned scan timestamp (Unix seconds).
 /// Scans are aligned to epoch boundaries divisible by `interval_secs`.
-fn next_aligned_scan(now_secs: u64, interval_secs: u64) -> u64 {
+fn next_aligned_scan(now: Duration, interval_secs: u64) -> u64 {
+    let now_secs = now.as_secs();
     let remainder = now_secs % interval_secs;
-    if remainder == 0 {
+    if remainder == 0 && now.subsec_nanos() == 0 {
         now_secs
     } else {
-        now_secs + (interval_secs - remainder)
+        now_secs - remainder + interval_secs
+    }
+}
+
+/// Return the exact delay until the next epoch-aligned scan boundary.
+fn next_aligned_scan_delay(now: Duration, interval_secs: u64) -> Duration {
+    let seconds_into_interval = now.as_secs() % interval_secs;
+    if seconds_into_interval == 0 && now.subsec_nanos() == 0 {
+        Duration::ZERO
+    } else {
+        Duration::from_secs(interval_secs - seconds_into_interval)
+            .saturating_sub(Duration::from_nanos(u64::from(now.subsec_nanos())))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn aligned_scan_delay_preserves_subsecond_precision() {
+        assert_eq!(
+            next_aligned_scan_delay(Duration::from_millis(299_200), 300),
+            Duration::from_millis(800)
+        );
+        assert_eq!(next_aligned_scan(Duration::from_millis(299_200), 300), 300);
+    }
+
+    #[test]
+    fn aligned_scan_delay_is_zero_at_an_exact_boundary() {
+        assert_eq!(
+            next_aligned_scan_delay(Duration::from_secs(300), 300),
+            Duration::ZERO
+        );
+        assert_eq!(next_aligned_scan(Duration::from_secs(300), 300), 300);
     }
 }
 
@@ -105,20 +142,24 @@ pub async fn run_trader_loop(
     // Aligned scan loop: wait until the next epoch-aligned boundary, then scan.
     loop {
         // Calculate next aligned scan time and publish it for the frontend countdown.
-        let now = now_u64();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or(Duration::ZERO);
         let next_scan = next_aligned_scan(now, interval_secs);
-        let sleep_secs = next_scan.saturating_sub(now);
+        let scan_delay = next_aligned_scan_delay(now, interval_secs);
+        let scan_deadline = time::Instant::now() + scan_delay;
         update_next_scan_at(&engine.inner.state, &cfg.trader_id, Some(next_scan));
 
         info!(
-            "trader={} waiting {}s until next aligned scan at {}",
-            cfg.trader_id, sleep_secs, next_scan
+            "trader={} waiting {:?} until next aligned scan at {}",
+            cfg.trader_id, scan_delay, next_scan
         );
 
         // Wait until the aligned time (or stop signal / user stream events)
-        if sleep_secs > 0 {
+        if !scan_delay.is_zero() {
             tokio::select! {
-                _ = time::sleep(Duration::from_secs(sleep_secs)) => {}
+                biased;
+                _ = time::sleep_until(scan_deadline) => {}
                 _ = user_stream_keepalive.tick() => {
                     handle_user_stream_keepalive(
                         &exec_ctx,
