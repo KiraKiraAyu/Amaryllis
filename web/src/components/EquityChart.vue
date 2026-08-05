@@ -64,10 +64,13 @@ onUnmounted(() => {
 
 function feed(arr: { time: number; value: number }[]) {
   if (!series) return
-  const sorted = [...arr]
-    .filter((d) => d.time > 0)
-    .sort((a, b) => a.time - b.time)
-    .map((d) => ({ time: d.time as UTCTimestamp, value: d.value }))
+  const dedup = new Map<number, number>()
+  for (const d of arr) {
+    if (d.time > 0) dedup.set(d.time, d.value)
+  }
+  const sorted = [...dedup]
+    .sort((a, b) => a[0] - b[0])
+    .map(([time, value]) => ({ time: time as UTCTimestamp, value }))
   series.setData(sorted)
   chart?.timeScale().fitContent()
 }
