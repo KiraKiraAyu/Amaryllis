@@ -10,6 +10,8 @@ function roleIcon(role: string): string {
   switch (role) {
     case "action":
       return "pi pi-bolt"
+    case "warning":
+      return "pi pi-exclamation-triangle"
     case "position":
       return "pi pi-chart-line"
     default:
@@ -21,6 +23,8 @@ function roleLabel(role: string): string {
   switch (role) {
     case "action":
       return "System Ops"
+    case "warning":
+      return "Warning"
     case "position":
       return "Position"
     default:
@@ -32,6 +36,8 @@ function bubbleClass(role: string): string {
   switch (role) {
     case "action":
       return "bg-surface-100 dark:bg-surface-800/50 border border-surface-200 dark:border-surface-700"
+    case "warning":
+      return "bg-amber-50/80 dark:bg-amber-950/30"
     case "position":
       return "bg-blue-50/80 dark:bg-blue-500/5 border border-blue-200 dark:border-blue-800"
     default:

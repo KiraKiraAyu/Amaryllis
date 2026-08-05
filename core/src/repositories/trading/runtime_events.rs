@@ -77,6 +77,7 @@ impl TradingRepo {
         let total = query.clone().count(&self.db).await? as i64;
         let rows = query
             .order_by_desc(entity::runtime_events::Column::CreatedAt)
+            .order_by_desc(entity::runtime_events::Column::Id)
             .limit(limit.max(0) as u64)
             .offset(offset.max(0) as u64)
             .all(&self.db)

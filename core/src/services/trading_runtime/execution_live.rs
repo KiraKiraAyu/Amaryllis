@@ -186,6 +186,57 @@ pub fn evaluate_live_risk(
     }
 }
 
+async fn emit_live_open_skipped_constraints(
+    state: &SharedState,
+    cfg: &TraderRuntimeConfig,
+    decision: &DecisionSignal,
+    desired_side: &str,
+    risk_level: &str,
+    cycle_correlation_id: &str,
+    reason: &str,
+    configured_cost: f64,
+    leverage: i64,
+    reference_price: f64,
+    raw_quantity: f64,
+    normalized_quantity: f64,
+    constraints: &ExchangeSymbolConstraints,
+    ts: i64,
+) {
+    let minimum_quantity = constraints.min_qty.max(0.0);
+    let minimum_notional = constraints.min_notional.max(0.0);
+    let required_minimum_notional = (minimum_quantity * reference_price).max(minimum_notional);
+    let minimum_required_cost = required_minimum_notional / leverage.max(1) as f64;
+
+    emit_runtime_event_best_effort(
+        state,
+        cfg,
+        EVENT_LIVE_OPEN_SKIPPED_CONSTRAINTS,
+        &decision.symbol,
+        desired_side,
+        risk_level,
+        "exchange-constraints",
+        "skip-open-constraints",
+        cycle_correlation_id,
+        json!({
+            "reason": reason,
+            "decision_action": decision.action,
+            "configured_cost": configured_cost,
+            "leverage": leverage,
+            "reference_price": reference_price,
+            "raw_quantity": raw_quantity,
+            "normalized_quantity": normalized_quantity,
+            "minimum_quantity": minimum_quantity,
+            "step_size": constraints.step_size,
+            "normalized_notional": normalized_quantity * reference_price,
+            "minimum_notional": minimum_notional,
+            "required_minimum_notional": required_minimum_notional,
+            "minimum_required_cost": minimum_required_cost,
+        }),
+        ts,
+    )
+    .await;
+}
+
 pub async fn execute_decisions_live(
     state: &SharedState,
     cfg: &TraderRuntimeConfig,
@@ -501,6 +552,23 @@ pub async fn execute_decisions_live(
                 "skip live open due to normalized qty<=0 symbol={} raw_qty={} step_size={}",
                 d.symbol, raw_qty, constraints.step_size
             );
+            emit_live_open_skipped_constraints(
+                state,
+                cfg,
+                d,
+                desired_side,
+                risk_decision.level.as_str(),
+                cycle_correlation_id,
+                "quantity_below_minimum",
+                risk_budget,
+                leverage,
+                price,
+                raw_qty,
+                qty,
+                &constraints,
+                ts,
+            )
+            .await;
             continue;
         }
 
@@ -509,6 +577,23 @@ pub async fn execute_decisions_live(
                 "skip live open due to min_notional symbol={} est_notional={} min_notional={}",
                 d.symbol, est_notional, constraints.min_notional
             );
+            emit_live_open_skipped_constraints(
+                state,
+                cfg,
+                d,
+                desired_side,
+                risk_decision.level.as_str(),
+                cycle_correlation_id,
+                "notional_below_minimum",
+                risk_budget,
+                leverage,
+                price,
+                raw_qty,
+                qty,
+                &constraints,
+                ts,
+            )
+            .await;
             continue;
         }
 

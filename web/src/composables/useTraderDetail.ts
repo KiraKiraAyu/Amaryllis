@@ -11,12 +11,19 @@ import {
 } from "@/api/trading"
 import { useRealtimeStore } from "@/stores/realtime"
 import { useToast } from "@/stores/toast"
+import { fmtUsd } from "@/utils/format"
 import type {
   TraderPayload,
   PositionPayload,
   TraderAccountPayload,
+  DecisionPayload,
   RuntimeEventPayload,
 } from "@/types/trading"
+
+const LIVE_OPEN_SKIPPED_CONSTRAINTS_EVENT = "live_open_skipped_constraints"
+const ACTIVITY_POLL_INTERVAL_MS = 5_000
+const ACTIVITY_LIMIT = 100
+const ACTIVITY_WINDOW_HOURS = 24 * 365
 
 /** A single chat-like message in the trader activity feed. */
 export interface FeedMessage {
@@ -25,8 +32,9 @@ export interface FeedMessage {
    *  "trader" = AI reasoning (left side);
    *  "action" = trade execution (left side);
    *  "position" = position update (left side);
-   *  "system" = system operation (left side, hidden by default). */
-  role: "prompt" | "system" | "trader" | "action" | "position"
+   *  "system" = system operation (left side, hidden by default);
+   *  "warning" = action blocked by an exchange constraint (left side, always visible). */
+  role: "prompt" | "system" | "trader" | "action" | "position" | "warning"
   title: string
   content: string
   timestamp: number
@@ -34,6 +42,208 @@ export interface FeedMessage {
   streaming?: boolean
   /** Additional structured data to render (e.g. positions, decisions). */
   data?: Record<string, unknown>
+}
+
+function payloadNumber(payload: Record<string, unknown>, key: string): number | null {
+  const value = payload[key]
+  return typeof value === "number" && Number.isFinite(value) ? value : null
+}
+
+function formatQuantity(value: number | null): string {
+  if (value == null) return "unknown"
+  return value.toLocaleString("en-US", { maximumFractionDigits: 8 })
+}
+
+function formatConstraintSkipContent(event: RuntimeEventPayload): string {
+  const payload = event.payload
+  const symbol = event.symbol || "Order"
+  const side = event.side || ""
+  const action = side ? `${symbol} ${side}` : symbol
+  const configuredCost = payloadNumber(payload, "configured_cost")
+  const configuredCostText =
+    configuredCost == null
+      ? "Calculated"
+      : `Configured cost $${fmtUsd(configuredCost)} yields calculated`
+  const minimumCost = payloadNumber(payload, "minimum_required_cost")
+  const minimumCostText =
+    minimumCost == null ? "" : ` Required minimum cost is $${fmtUsd(minimumCost)}.`
+
+  if (payload.reason === "quantity_below_minimum") {
+    return `${action} was not submitted. ${configuredCostText} quantity ${formatQuantity(
+      payloadNumber(payload, "raw_quantity"),
+    )} is below the exchange minimum ${formatQuantity(
+      payloadNumber(payload, "minimum_quantity"),
+    )}.${minimumCostText}`
+  }
+
+  if (payload.reason === "notional_below_minimum") {
+    const notional = payloadNumber(payload, "normalized_notional")
+    const minimumNotional = payloadNumber(payload, "minimum_notional")
+    return `${action} was not submitted. ${configuredCostText} notional $${fmtUsd(
+      notional ?? 0,
+    )} is below the exchange minimum $${fmtUsd(minimumNotional ?? 0)}.${minimumCostText}`
+  }
+
+  return `${action} was not submitted because the calculated order did not meet the exchange minimum requirements.${minimumCostText}`
+}
+
+function formatEventTitle(event: RuntimeEventPayload): string {
+  const parts = [event.event_type]
+  if (event.symbol) parts.push(event.symbol)
+  if (event.side) parts.push(event.side)
+  return parts.join(" - ")
+}
+
+function runtimeEventToFeedMessage(event: RuntimeEventPayload): FeedMessage {
+  const isConstraintWarning =
+    event.event_type === LIVE_OPEN_SKIPPED_CONSTRAINTS_EVENT
+
+  return {
+    id: `event-${event.id}`,
+    role: isConstraintWarning
+      ? "warning"
+      : event.action_taken
+        ? "action"
+        : "system",
+    title: isConstraintWarning
+      ? `Order not submitted: ${event.symbol} ${event.side}`.trim()
+      : formatEventTitle(event),
+    content: isConstraintWarning
+      ? formatConstraintSkipContent(event)
+      : event.action_taken || event.event_type,
+    timestamp: event.created_at,
+    data: {
+      event_type: event.event_type,
+      symbol: event.symbol,
+      side: event.side,
+      risk_level: event.risk_level,
+      payload: event.payload,
+    },
+  }
+}
+
+function isRuntimeEventPayload(value: unknown): value is RuntimeEventPayload {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false
+  const event = value as Record<string, unknown>
+
+  return (
+    typeof event.id === "string" &&
+    typeof event.event_type === "string" &&
+    typeof event.symbol === "string" &&
+    typeof event.side === "string" &&
+    typeof event.risk_level === "string" &&
+    typeof event.trigger_source === "string" &&
+    typeof event.action_taken === "string" &&
+    typeof event.correlation_id === "string" &&
+    typeof event.created_at === "number" &&
+    !!event.payload &&
+    typeof event.payload === "object" &&
+    !Array.isArray(event.payload)
+  )
+}
+
+function decisionToFeedMessages(decision: DecisionPayload): FeedMessage[] {
+  let payload: Record<string, unknown> = {}
+  try {
+    const parsed: unknown = JSON.parse(decision.payload_json)
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      payload = parsed as Record<string, unknown>
+    }
+  } catch {
+    /* ignore malformed historical payloads */
+  }
+
+  const messages: FeedMessage[] = []
+  const promptText = payload.prompt as string | undefined
+  const systemPrompt = payload.system_prompt as string | undefined
+
+  if (promptText && promptText.trim()) {
+    messages.push({
+      id: `prompt-${decision.id}`,
+      role: "prompt",
+      title: `Prompt -> ${decision.symbol}`,
+      content: systemPrompt
+        ? `[System Prompt]\n${systemPrompt}\n\n[User Message]\n${promptText}`
+        : promptText,
+      timestamp: decision.created_at,
+    })
+  }
+
+  messages.push({
+    id: `decision-${decision.id}`,
+    role: "trader",
+    title: `AI Decision: ${decision.symbol} -> ${decision.decision}`,
+    content: decision.reason || "",
+    timestamp: decision.created_at,
+    data: {
+      symbol: decision.symbol,
+      decision: decision.decision,
+      confidence: decision.confidence,
+      timeframe: decision.timeframe,
+      correlation_id: payload.correlation_id,
+    },
+  })
+
+  return messages
+}
+
+function feedRoleOrder(role: FeedMessage["role"]): number {
+  switch (role) {
+    case "prompt":
+      return 0
+    case "trader":
+      return 1
+    case "warning":
+      return 2
+    case "position":
+      return 3
+    case "action":
+      return 4
+    case "system":
+      return 5
+    default:
+      return 6
+  }
+}
+
+export function buildPersistedFeed(
+  decisions: DecisionPayload[],
+  events: RuntimeEventPayload[],
+): FeedMessage[] {
+  const messages = [
+    ...decisions.flatMap(decisionToFeedMessages),
+    ...events.map(runtimeEventToFeedMessage),
+  ]
+
+  return messages.sort(
+    (left, right) =>
+      left.timestamp - right.timestamp ||
+      feedRoleOrder(left.role) - feedRoleOrder(right.role) ||
+      left.id.localeCompare(right.id),
+  )
+}
+
+function sameFeed(left: FeedMessage[], right: FeedMessage[]): boolean {
+  return (
+    left.length === right.length &&
+    left.every(
+      (message, index) => {
+        const other = right[index]
+        return (
+          other !== undefined &&
+          message.id === other.id &&
+          message.role === other.role &&
+          message.title === other.title &&
+          message.content === other.content &&
+          message.timestamp === other.timestamp
+        )
+      },
+    )
+  )
+}
+
+function nowSeconds(): number {
+  return Math.floor(Date.now() / 1_000)
 }
 
 export function useTraderDetail(traderId: Ref<string>) {
@@ -91,22 +301,79 @@ export function useTraderDetail(traderId: Ref<string>) {
 
   // Typewriter state
   let typewriterTimer: ReturnType<typeof setInterval> | null = null
+  let activityPollTimer: ReturnType<typeof setInterval> | null = null
+  let activityRefreshTimer: ReturnType<typeof setTimeout> | null = null
+  let activityRequestId = 0
+
+  async function refreshActivityFeed() {
+    const requestId = ++activityRequestId
+    const id = traderId.value
+    const [decisionsRes, eventsRes] = await Promise.all([
+      getDecisionsApi({ trader_id: id, limit: ACTIVITY_LIMIT }),
+      getRuntimeEventsApi({
+        trader_id: id,
+        limit: ACTIVITY_LIMIT,
+        window_hours: ACTIVITY_WINDOW_HOURS,
+      }),
+    ])
+
+    if (requestId !== activityRequestId || id !== traderId.value) return
+
+    const nextFeed = buildPersistedFeed(
+      decisionsRes.items ?? [],
+      eventsRes.items ?? [],
+    )
+    if (sameFeed(feed.value, nextFeed)) return
+
+    if (typewriterTimer) {
+      clearInterval(typewriterTimer)
+      typewriterTimer = null
+    }
+    typing.value = false
+    feed.value = nextFeed
+  }
+
+  function scheduleActivityRefresh() {
+    if (activityRefreshTimer) return
+
+    activityRefreshTimer = setTimeout(() => {
+      activityRefreshTimer = null
+      void refreshActivityFeed().catch(() => undefined)
+    }, 250)
+  }
+
+  function startActivityPolling() {
+    stopActivityPolling()
+    activityPollTimer = setInterval(() => {
+      void refreshActivityFeed().catch(() => undefined)
+    }, ACTIVITY_POLL_INTERVAL_MS)
+  }
+
+  function stopActivityPolling() {
+    if (activityPollTimer) {
+      clearInterval(activityPollTimer)
+      activityPollTimer = null
+    }
+    if (activityRefreshTimer) {
+      clearTimeout(activityRefreshTimer)
+      activityRefreshTimer = null
+    }
+  }
 
   /** Load trader info, account, positions, historical decisions and events. */
   async function loadAll() {
+    stopActivityPolling()
+    activityRequestId++
     loading.value = true
     error.value = ""
     try {
       const id = traderId.value
 
-      const [traderRes, positionsRes, decisionsRes, eventsRes, accountRes] =
-        await Promise.all([
-          getTraderApi(id),
-          getPositionsApi({ trader_id: id, status: "open" }),
-          getDecisionsApi({ trader_id: id, limit: 20 }),
-          getRuntimeEventsApi({ trader_id: id, limit: 50 }),
-          getTraderAccountApi({ trader_id: id }).catch(() => null),
-        ])
+      const [traderRes, positionsRes, accountRes] = await Promise.all([
+        getTraderApi(id),
+        getPositionsApi({ trader_id: id, status: "open" }),
+        getTraderAccountApi({ trader_id: id }).catch(() => null),
+      ])
 
       trader.value = traderRes
       positions.value = positionsRes.items ?? []
@@ -125,85 +392,13 @@ export function useTraderDetail(traderId: Ref<string>) {
         nextScanAt.value = null
       }
 
-      // Build chronological feed from decisions + events
-      const messages: FeedMessage[] = []
-
-      // Add decisions as "trader" messages, with their prompts as "prompt" messages
-      for (const d of (decisionsRes.items ?? []).reverse()) {
-        // Parse payload_json to extract the prompt
-        let payload: Record<string, unknown> = {}
-        try {
-          payload = JSON.parse(d.payload_json) as Record<string, unknown>
-        } catch {
-          /* ignore parse errors */
-        }
-
-        const promptText = payload.prompt as string | undefined
-        const systemPrompt = payload.system_prompt as string | undefined
-
-        // If a prompt exists, add it as a right-side "prompt" message
-        if (promptText && promptText.trim()) {
-          const content = systemPrompt
-            ? `[System Prompt]\n${systemPrompt}\n\n[User Message]\n${promptText}`
-            : promptText
-          messages.push({
-            id: `prompt-${d.id}`,
-            role: "prompt",
-            title: `Prompt → ${d.symbol}`,
-            content,
-            timestamp: d.created_at - 1, // 1ms before the decision so it appears above
-          })
-        }
-
-        messages.push({
-          id: `decision-${d.id}`,
-          role: "trader",
-          title: `AI Decision: ${d.symbol} → ${d.decision}`,
-          content: d.reason || "",
-          timestamp: d.created_at,
-          data: {
-            symbol: d.symbol,
-            decision: d.decision,
-            confidence: d.confidence,
-            timeframe: d.timeframe,
-          },
-        })
-      }
-
-      // Add runtime events as "system" or "action" messages
-      for (const e of (eventsRes.items ?? []).reverse()) {
-        const isAction = e.action_taken && e.action_taken !== ""
-        messages.push({
-          id: `event-${e.id}`,
-          role: isAction ? "action" : "system",
-          title: formatEventTitle(e),
-          content: e.action_taken || e.event_type,
-          timestamp: e.created_at,
-          data: {
-            event_type: e.event_type,
-            symbol: e.symbol,
-            side: e.side,
-            risk_level: e.risk_level,
-            payload: e.payload,
-          },
-        })
-      }
-
-      // Sort by timestamp ascending
-      messages.sort((a, b) => a.timestamp - b.timestamp)
-      feed.value = messages
+      await refreshActivityFeed()
+      startActivityPolling()
     } catch (e: unknown) {
       error.value = e instanceof Error ? e.message : "Failed to load trader"
     } finally {
       loading.value = false
     }
-  }
-
-  function formatEventTitle(e: RuntimeEventPayload): string {
-    const parts = [e.event_type]
-    if (e.symbol) parts.push(e.symbol)
-    if (e.side) parts.push(e.side)
-    return parts.join(" · ")
   }
 
   /** Start typewriter animation for a new message. */
@@ -257,7 +452,7 @@ export function useTraderDetail(traderId: Ref<string>) {
             role: "prompt",
             title: symbol ? `Prompt → ${symbol}` : "System Prompt",
             content,
-            timestamp: Date.now(),
+            timestamp: nowSeconds(),
           })
           break
         }
@@ -289,7 +484,7 @@ export function useTraderDetail(traderId: Ref<string>) {
               role: "trader",
               title: `AI Thinking: ${symbol}…`,
               content: chunk,
-              timestamp: Date.now(),
+              timestamp: nowSeconds(),
               streaming: true,
               data: {
                 symbol,
@@ -339,7 +534,7 @@ export function useTraderDetail(traderId: Ref<string>) {
                 (decision?.reasoning as string) ||
                 (decision?.reason as string) ||
                 "",
-              timestamp: Date.now(),
+              timestamp: nowSeconds(),
               data: {
                 symbol: decision?.symbol,
                 decision: decision?.action,
@@ -348,6 +543,7 @@ export function useTraderDetail(traderId: Ref<string>) {
               },
             })
           }
+          scheduleActivityRefresh()
           break
         }
         case "trade_execution": {
@@ -357,9 +553,20 @@ export function useTraderDetail(traderId: Ref<string>) {
             role: "action",
             title: `Trade: ${trade?.side ?? "?"} ${trade?.symbol ?? "?"}`,
             content: `Order ${trade?.side ?? ""} ${trade?.quantity ?? ""} ${trade?.symbol ?? ""} @ ${trade?.price ?? ""}`,
-            timestamp: Date.now(),
+            timestamp: nowSeconds(),
             data: trade,
           })
+          scheduleActivityRefresh()
+          break
+        }
+        case "runtime_event": {
+          if (isRuntimeEventPayload(ev.event)) {
+            const message = runtimeEventToFeedMessage(ev.event)
+            if (!feed.value.some((existing) => existing.id === message.id)) {
+              addMessage(message)
+            }
+          }
+          scheduleActivityRefresh()
           break
         }
         case "position_update": {
@@ -375,7 +582,7 @@ export function useTraderDetail(traderId: Ref<string>) {
                     `${p.symbol} ${p.side} qty=${p.quantity} uPnL=${p.unrealized_pnl.toFixed(2)}`,
                 )
                 .join("; "),
-              timestamp: Date.now(),
+              timestamp: nowSeconds(),
               data: { positions },
             })
           }
@@ -393,7 +600,7 @@ export function useTraderDetail(traderId: Ref<string>) {
             role: "system",
             title: `Engine: ${status}`,
             content: message || `Engine status: ${status}`,
-            timestamp: Date.now(),
+            timestamp: nowSeconds(),
           })
           // Start/stop polling based on engine status changes
           if (status === "running") {
@@ -447,6 +654,7 @@ export function useTraderDetail(traderId: Ref<string>) {
 
   onUnmounted(() => {
     if (typewriterTimer) clearInterval(typewriterTimer)
+    stopActivityPolling()
     stopStatusPolling()
     stopWatch()
   })

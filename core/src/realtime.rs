@@ -9,7 +9,9 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 use tracing::{debug, warn};
 
-use crate::contracts::trading::positions::PositionPayload;
+use crate::contracts::trading::{
+    positions::PositionPayload, runtime_observability::RuntimeEventPayload,
+};
 use crate::state::AppState;
 
 pub const REALTIME_CHANNEL_CAPACITY: usize = 512;
@@ -50,6 +52,10 @@ pub enum RealtimeEvent {
     ScanSchedule {
         trader_id: String,
         next_scan_at: Option<u64>,
+    },
+    RuntimeEvent {
+        trader_id: String,
+        event: RuntimeEventPayload,
     },
     EquitySnapshot {
         trader_id: String,

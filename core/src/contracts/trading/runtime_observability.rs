@@ -31,7 +31,7 @@ pub struct RuntimeEventTypesQuery {
     pub window_hours: Option<i64>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RuntimeEventPayload {
     pub id: String,
     pub event_type: String,

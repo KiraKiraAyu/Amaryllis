@@ -11,7 +11,7 @@ const props = defineProps<{
 
 /** Whether a message should be right-aligned.
  *  Prompt (user → AI) and System Ops (action / system) are on the right;
- *  AI Trader and Position are on the left. */
+ *  AI Trader, Position, and warnings are on the left. */
 function isRightSide(role: string): boolean {
   return role === "prompt" || role === "action" || role === "system"
 }

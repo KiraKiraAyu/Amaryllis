@@ -11,6 +11,7 @@ pub struct RuntimeEventCatalogItem {
 
 pub const EVENT_LIVE_RISK_SNAPSHOT: &str = "live_risk_snapshot";
 pub const EVENT_LIVE_ORDER_SUBMITTED: &str = "live_order_submitted";
+pub const EVENT_LIVE_OPEN_SKIPPED_CONSTRAINTS: &str = "live_open_skipped_constraints";
 pub const EVENT_LIVE_OPEN_SKIPPED_MEDIUM_RISK: &str = "live_open_skipped_medium_risk";
 pub const EVENT_LIVE_OPEN_USED_MARKET_FALLBACK: &str = "live_open_used_market_fallback";
 
@@ -31,6 +32,10 @@ pub const CANONICAL_RUNTIME_EVENT_TYPES: &[RuntimeEventCatalogItem] = &[
     RuntimeEventCatalogItem {
         event_type: EVENT_LIVE_ORDER_SUBMITTED,
         description: "Live order submitted to exchange (open/close/replace).",
+    },
+    RuntimeEventCatalogItem {
+        event_type: EVENT_LIVE_OPEN_SKIPPED_CONSTRAINTS,
+        description: "Open decision skipped because the calculated order missed exchange minimum constraints.",
     },
     RuntimeEventCatalogItem {
         event_type: EVENT_LIVE_OPEN_SKIPPED_MEDIUM_RISK,

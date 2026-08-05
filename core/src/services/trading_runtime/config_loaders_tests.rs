@@ -3,9 +3,13 @@ use crate::clients::exchanges::{
     ExchangeBalance, ExchangeOpenOrder, ExchangeOrderDetail, ExchangePosition,
     ExchangeSymbolConstraints, PlaceOrderResponse,
 };
+use crate::entity::runtime_events;
 use crate::error::AppError;
 use crate::services::trading_runtime::test_support::*;
-use crate::{repositories::ModelRepo, services::llm::LlmService};
+use crate::{
+    repositories::{ModelRepo, trading::records::runtime_observability::InsertRuntimeEventRecord},
+    services::llm::LlmService,
+};
 use envconfig::Envconfig;
 use serde_json::Value;
 use std::{
@@ -1071,6 +1075,187 @@ impl LiveExchangeAdapter for FakeLiveExchangeAdapter {
             "fake adapter does not support user stream".to_string(),
         ))
     }
+}
+
+#[tokio::test]
+async fn test_activity_records_use_stable_id_tiebreaker_with_same_timestamp() {
+    let (state, cfg) = test_state_and_cfg().await;
+    let ts = 1_700_610_000_i64;
+
+    for id in ["event_z", "event_a", "event_m"] {
+        state
+            .trading_repo
+            .insert_runtime_event(InsertRuntimeEventRecord {
+                id: id.to_string(),
+                trader_id: cfg.trader_id.clone(),
+                event_type: "test_event".to_string(),
+                symbol: "BTCUSDT".to_string(),
+                side: "LONG".to_string(),
+                risk_level: "normal".to_string(),
+                trigger_source: "test".to_string(),
+                action_taken: String::new(),
+                correlation_id: String::new(),
+                payload_json: "{}".to_string(),
+                created_at: ts,
+            })
+            .await
+            .expect("insert runtime event");
+    }
+
+    for id in ["decision_z", "decision_a", "decision_m"] {
+        trader_decisions::Entity::insert(trader_decisions::ActiveModel {
+            id: Set(id.to_string()),
+            trader_id: Set(cfg.trader_id.clone()),
+            symbol: Set("BTCUSDT".to_string()),
+            timeframe: Set("5m".to_string()),
+            decision: Set("LONG".to_string()),
+            confidence: Set(decimal_from_f64(0.8)),
+            reason: Set("test decision".to_string()),
+            payload_json: Set("{}".to_string()),
+            created_at: Set(ts_to_i32(ts)),
+        })
+        .exec(&state.db)
+        .await
+        .expect("insert decision");
+    }
+
+    let (_, events) = state
+        .trading_repo
+        .runtime_events(&cfg.trader_id, ts - 1, "", "", "", 10, 0)
+        .await
+        .expect("query runtime events");
+    let decisions = state
+        .trading_repo
+        .decisions(&cfg.trader_id, None, 10, 0)
+        .await
+        .expect("query decisions");
+
+    assert_eq!(
+        events
+            .iter()
+            .map(|event| event.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["event_z", "event_m", "event_a"]
+    );
+    assert_eq!(
+        decisions
+            .iter()
+            .map(|decision| decision.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["decision_z", "decision_m", "decision_a"]
+    );
+}
+
+#[tokio::test]
+async fn test_live_open_constraint_skip_persists_feedback_without_execution_intent() {
+    let (state, mut cfg) = test_state_and_cfg().await;
+    let ts = 1_700_600_000_i64;
+    cfg.symbols_config = vec![SymbolConfig {
+        symbol: "BTCUSDT".to_string(),
+        leverage: 5,
+        min_cost: None,
+        max_cost: None,
+        fixed_cost: Some(0.1),
+    }];
+
+    let adapter = FakeLiveExchangeAdapter::default();
+    adapter
+        .set_symbol_constraints(
+            "BTCUSDT",
+            ExchangeSymbolConstraints {
+                symbol: "BTCUSDT".to_string(),
+                base_asset: "BTC".to_string(),
+                quote_asset: "USDT".to_string(),
+                min_qty: 0.01,
+                max_qty: 1000.0,
+                step_size: 0.01,
+                min_notional: 5.0,
+                tick_size: 0.1,
+            },
+        )
+        .await;
+
+    let decisions = vec![DecisionSignal {
+        symbol: "BTCUSDT".to_string(),
+        action: "LONG".to_string(),
+        confidence: 0.9,
+        reason: "test decision".to_string(),
+        timeframe: "5m",
+        price: 100.0,
+        momentum: 0.0,
+        risk_level: "normal".to_string(),
+        trigger_source: "test".to_string(),
+        action_taken: "open".to_string(),
+        correlation_id: "cycle_constraint_skip".to_string(),
+        prompt: String::new(),
+        system_prompt: None,
+    }];
+    let market = HashMap::from([(
+        "BTCUSDT".to_string(),
+        MarketState {
+            price: 100.0,
+            prev_price: 99.0,
+            volatility: 0.01,
+        },
+    )]);
+    let metrics = AccountMetrics {
+        total_balance: 1_000.0,
+        available_balance: 1_000.0,
+        used_margin: 0.0,
+        unrealized_pnl: 0.0,
+        realized_pnl: 0.0,
+        margin_used_ratio: 0.0,
+    };
+    let risk_decision = LiveRiskDecision {
+        level: LiveRiskLevel::Normal,
+        drawdown_pct: 0.0,
+        open_order_cooldown_secs: 0,
+        medium_reduce_count: 0,
+        hard_close_count: 0,
+    };
+
+    execute_decisions_live(
+        &state,
+        &cfg,
+        &decisions,
+        &[],
+        &metrics,
+        &market,
+        &adapter,
+        ts,
+        false,
+        &risk_decision,
+        "cycle_constraint_skip",
+    )
+    .await
+    .expect("constraint skip should not fail the live cycle");
+
+    assert_eq!(count_orders(&state, &cfg).await, 0);
+    assert_eq!(
+        execution_intents::Entity::find()
+            .filter(execution_intents::Column::TraderId.eq(&cfg.trader_id))
+            .count(&state.db)
+            .await
+            .expect("count execution intents"),
+        0
+    );
+
+    let event = runtime_events::Entity::find()
+        .filter(runtime_events::Column::TraderId.eq(&cfg.trader_id))
+        .filter(runtime_events::Column::EventType.eq("live_open_skipped_constraints"))
+        .one(&state.db)
+        .await
+        .expect("query constraint skip event")
+        .expect("constraint skip should be persisted");
+    let payload: Value = serde_json::from_str(&event.payload_json)
+        .expect("constraint skip payload should be valid JSON");
+
+    assert_eq!(event.symbol, "BTCUSDT");
+    assert_eq!(event.side, "LONG");
+    assert_eq!(payload["reason"], "quantity_below_minimum");
+    assert_eq!(payload["normalized_quantity"], 0.0);
+    assert_eq!(payload["minimum_quantity"], 0.01);
+    assert_eq!(payload["minimum_required_cost"], 1.0);
 }
 
 #[tokio::test]

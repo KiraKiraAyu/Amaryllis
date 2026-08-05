@@ -53,6 +53,7 @@ impl TradingRepo {
         let mut query = entity::trader_decisions::Entity::find()
             .filter(entity::trader_decisions::Column::TraderId.eq(trader_id.trim()))
             .order_by_desc(entity::trader_decisions::Column::CreatedAt)
+            .order_by_desc(entity::trader_decisions::Column::Id)
             .limit(limit.max(0) as u64)
             .offset(offset.max(0) as u64);
         if let Some(symbol) = symbol {
