@@ -20,11 +20,11 @@ function decisionClass(decision: string): string {
   <div class="w-full flex flex-col gap-1.5 py-1">
     <!-- Header row -->
     <div class="flex items-center gap-2">
-      <span class="pi text-xs pi-brain"></span>
+      <span class="pi pi-user text-xs"></span>
       <span
         class="text-xs font-bold uppercase tracking-wider text-surface-500 dark:text-surface-400"
       >
-        AI Trader
+        Trader
       </span>
     </div>
 
