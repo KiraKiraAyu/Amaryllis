@@ -3,6 +3,7 @@ import {
   closeTraderPositionApi,
   getEquityHistoryApi,
   getPositionsApi,
+  getTraderAccountApi,
   getTraderListApi,
   startTraderApi,
   stopTraderApi,
@@ -67,6 +68,36 @@ export function useDashboardPage() {
     }
   }
 
+  async function loadEquity() {
+    try {
+      const accounts = await Promise.all(
+        traders.value.map((t) =>
+          getTraderAccountApi({ trader_id: t.id }).catch(() => null),
+        ),
+      )
+      const valid = accounts.filter((a): a is NonNullable<typeof a> => !!a)
+      equity.value = {
+        equity: valid.reduce((sum, a) => sum + (a.total_balance ?? 0), 0),
+        available_cash: valid.reduce(
+          (sum, a) => sum + (a.available_balance ?? 0),
+          0,
+        ),
+        unrealized_pnl: valid.reduce(
+          (sum, a) => sum + (a.unrealized_pnl ?? 0),
+          0,
+        ),
+        loaded: true,
+      }
+    } catch {
+      equity.value = {
+        equity: 0,
+        available_cash: 0,
+        unrealized_pnl: 0,
+        loaded: true,
+      }
+    }
+  }
+
   async function loadAll() {
     loading.value = true
     try {
@@ -86,6 +117,7 @@ export function useDashboardPage() {
       }
 
       await loadOpenPositions(traders.value.map((trader) => trader.id))
+      await loadEquity()
 
       if (!activeChart.value) {
         const traderId = traders.value[0]!.id
