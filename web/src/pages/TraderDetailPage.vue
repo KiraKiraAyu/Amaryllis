@@ -5,6 +5,7 @@ import Button from "primevue/button"
 import ProgressSpinner from "primevue/progressspinner"
 import PageHeader from "@/components/layout/PageHeader.vue"
 import TraderFeed from "@/components/traders/feed/TraderFeed.vue"
+import ScanCountdown from "@/components/traders/ScanCountdown.vue"
 import { useTraderDetail } from "@/composables/useTraderDetail"
 import { fmtUsd } from "@/utils/format"
 
@@ -22,6 +23,7 @@ const {
   filteredFeed,
   typing,
   showSystemOps,
+  nextScanAt,
   loadAll,
   startTrader,
   stopTrader,
@@ -202,6 +204,12 @@ function pnlClass(val: number): string {
             >{{ trader.scan_interval_minutes }}m</span
           >
         </div>
+
+        <!-- Next Scan Countdown -->
+        <ScanCountdown
+          :next-scan-at="nextScanAt"
+          :is-running="trader.is_running"
+        />
       </div>
 
       <!-- Open positions summary -->

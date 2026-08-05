@@ -37,6 +37,9 @@ pub struct RuntimeEngineState {
     pub updated_at: u64,
     pub is_running: bool,
     pub last_error: Option<String>,
+    /// Unix timestamp (seconds) of the next scheduled scan.
+    /// `None` when the trader is stopped or a scan is in progress.
+    pub next_scan_at: Option<u64>,
 }
 
 #[derive(Debug, Default)]
@@ -74,6 +77,24 @@ impl RuntimeEngineManager {
             if let Some(err) = last_error {
                 v.last_error = Some(err);
             }
+            if !is_running {
+                v.next_scan_at = None;
+            }
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn set_next_scan_at(
+        &mut self,
+        trader_id: &str,
+        next_scan_at: Option<u64>,
+        updated_at: u64,
+    ) -> bool {
+        if let Some(v) = self.engines.get_mut(trader_id) {
+            v.next_scan_at = next_scan_at;
+            v.updated_at = updated_at;
             true
         } else {
             false

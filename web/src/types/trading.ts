@@ -217,7 +217,24 @@ export interface RuntimeEnginePayload {
   updated_at: number
   is_running: boolean
   last_error: string | null
+  next_scan_at: number | null
 }
+
+/** Allowed scan interval options in minutes. */
+export const SCAN_INTERVAL_OPTIONS: { label: string; value: number }[] = [
+  { label: "1m", value: 1 },
+  { label: "5m", value: 5 },
+  { label: "10m", value: 10 },
+  { label: "15m", value: 15 },
+  { label: "20m", value: 20 },
+  { label: "30m", value: 30 },
+  { label: "1h", value: 60 },
+  { label: "2h", value: 120 },
+  { label: "4h", value: 240 },
+  { label: "8h", value: 480 },
+  { label: "12h", value: 720 },
+  { label: "24h", value: 1440 },
+]
 
 export interface TraderStatusPayload {
   trader_id: string

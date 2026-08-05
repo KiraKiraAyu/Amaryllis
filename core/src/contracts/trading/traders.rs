@@ -95,6 +95,7 @@ pub struct RuntimeEnginePayload {
     pub updated_at: u64,
     pub is_running: bool,
     pub last_error: Option<String>,
+    pub next_scan_at: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -26,6 +26,7 @@ pub fn runtime_engine_payload(value: &RuntimeEngineState) -> RuntimeEnginePayloa
         updated_at: value.updated_at,
         is_running: value.is_running,
         last_error: value.last_error.clone(),
+        next_scan_at: value.next_scan_at,
     }
 }
 

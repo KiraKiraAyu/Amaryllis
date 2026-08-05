@@ -41,6 +41,10 @@ pub enum RealtimeEvent {
         status: String,
         message: String,
     },
+    ScanSchedule {
+        trader_id: String,
+        next_scan_at: Option<u64>,
+    },
     EquitySnapshot {
         trader_id: String,
         equity: f64,

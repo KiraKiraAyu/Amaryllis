@@ -137,6 +137,15 @@ impl TradingRuntimeService {
             ));
         }
 
+        // Validate against allowed scan intervals
+        const ALLOWED_INTERVALS: [i64; 12] = [1, 5, 10, 15, 20, 30, 60, 120, 240, 480, 720, 1440];
+        if !ALLOWED_INTERVALS.contains(&cfg.scan_interval_minutes) {
+            return Err(AppError::InvalidConfig(format!(
+                "scan_interval_minutes must be one of: {:?}",
+                ALLOWED_INTERVALS
+            )));
+        }
+
         let _ = load_runtime_execution_context(&state, &cfg).await?;
 
         {
@@ -155,6 +164,7 @@ impl TradingRuntimeService {
             updated_at: now,
             is_running: true,
             last_error: None,
+            next_scan_at: None,
         })?;
 
         set_trader_running(&state, &cfg.trader_id, true).await?;

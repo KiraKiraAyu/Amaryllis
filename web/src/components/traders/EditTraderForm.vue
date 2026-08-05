@@ -13,6 +13,7 @@ import type { SafeExchangeConfig } from "@/types/exchanges"
 import type { ModelConfigPayload } from "@/types/models"
 import type { StrategyListPayload, StrategyPayload } from "@/types/strategies"
 import type { TraderPayload, UpdateTraderRequest } from "@/types/trading"
+import { SCAN_INTERVAL_OPTIONS } from "@/types/trading"
 
 const props = defineProps<{
   trader: TraderPayload
@@ -179,15 +180,13 @@ onMounted(loadOptions)
           </div>
 
           <div class="flex flex-col gap-1.5">
-            <label class="text-xs font-bold text-surface-500 dark:text-surface-400">Scan Interval (minutes)</label>
-            <InputNumber
+            <label class="text-xs font-bold text-surface-500 dark:text-surface-400">Scan Interval</label>
+            <Select
               v-model="form.scan_interval_minutes"
-              :min="1"
-              :max="1440"
-              showButtons
-              buttonLayout="horizontal"
-              class="h-10 rounded-xl"
-              inputClass="text-center font-mono"
+              :options="SCAN_INTERVAL_OPTIONS"
+              optionLabel="label"
+              optionValue="value"
+              class="h-10 rounded-xl flex items-center"
             />
           </div>
 

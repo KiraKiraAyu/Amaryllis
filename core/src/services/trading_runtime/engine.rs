@@ -1,5 +1,34 @@
 use super::service::*;
 
+/// Allowed scan intervals in minutes.
+pub const ALLOWED_SCAN_INTERVALS: [i64; 12] = [1, 5, 10, 15, 20, 30, 60, 120, 240, 480, 720, 1440];
+
+/// Calculate the next aligned scan timestamp (Unix seconds).
+/// Scans are aligned to epoch boundaries divisible by `interval_secs`.
+fn next_aligned_scan(now_secs: u64, interval_secs: u64) -> u64 {
+    let remainder = now_secs % interval_secs;
+    if remainder == 0 {
+        now_secs
+    } else {
+        now_secs + (interval_secs - remainder)
+    }
+}
+
+/// Update `next_scan_at` in the runtime engine state and push an SSE event
+/// so the frontend countdown updates in real time without relying on polling.
+fn update_next_scan_at(state: &SharedState, trader_id: &str, next_scan: Option<u64>) {
+    if let Ok(mut manager) = state.runtime_engine_manager.write() {
+        manager.set_next_scan_at(trader_id, next_scan, now_u64());
+    }
+    // Push real-time update to all SSE clients
+    state
+        .realtime_hub
+        .publish(crate::realtime::RealtimeEvent::ScanSchedule {
+            trader_id: trader_id.to_string(),
+            next_scan_at: next_scan,
+        });
+}
+
 pub async fn run_trader_loop(
     engine: TradingRuntimeService,
     cfg: TraderRuntimeConfig,
@@ -13,13 +42,7 @@ pub async fn run_trader_loop(
     }
 
     let mut market = seed_market(&cfg, &symbols).await?;
-    let mut interval = time::interval(Duration::from_secs(
-        (cfg.scan_interval_minutes.max(1) as u64) * 60,
-    ));
-    interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
-    // Consume the first tick (which completes immediately) so the next
-    // tick in the loop waits for the full scan interval.
-    interval.tick().await;
+    let interval_secs = (cfg.scan_interval_minutes.max(1) as u64) * 60;
 
     let (exec_ctx, live_adapter) =
         load_runtime_execution_context(&engine.inner.state, &cfg).await?;
@@ -42,7 +65,14 @@ pub async fn run_trader_loop(
     let mut user_stream_session: Option<ExchangeUserStreamSession> = None;
     let mut user_stream_keepalive = time::interval(Duration::from_secs(30 * 60));
     user_stream_keepalive.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    // Consume the immediate first tick so it doesn't fire instantly in select!
+    user_stream_keepalive.tick().await;
     let user_stream_reconnect_backoff = Duration::from_secs(2);
+
+    // Mark the initial watch value as "seen" so changed() doesn't fire
+    // immediately (Tokio watch receivers start with seen_version=0 while the
+    // state version is 1, so changed() would return Ready right away).
+    let _ = stop_rx.borrow_and_update();
 
     if exec_ctx.mode == RuntimeExecutionMode::LiveExchange {
         if let Some(adapter) = live_adapter.as_deref() {
@@ -72,216 +102,142 @@ pub async fn run_trader_loop(
         }
     }
 
-    // immediate first cycle
-    if let Err(err) = process_cycle(
-        &engine.inner.state,
-        &cfg,
-        &symbols,
-        &mut market,
-        &exec_ctx,
-        live_adapter.as_deref(),
-    )
-    .await
-    {
-        if matches!(err, AppError::BudgetExhausted(_)) {
-            let _ = engine.inner.state.set_runtime_engine_running(
-                &cfg.trader_id,
-                false,
-                Some(format!("budget circuit breaker: {}", err)),
-            );
-        }
-        return Err(err);
-    }
-
+    // Aligned scan loop: wait until the next epoch-aligned boundary, then scan.
     loop {
-        tokio::select! {
-            _ = interval.tick() => {
-                let result = process_cycle(
-                    &engine.inner.state,
-                    &cfg,
-                    &symbols,
-                    &mut market,
-                    &exec_ctx,
-                    live_adapter.as_deref(),
-                )
-                .await;
-                match result {
-                    Ok(_) => {
-                        if consecutive_live_failures > 0 {
-                            info!(
-                                "live cycle recovered trader={} failures_before_recover={}",
-                                cfg.trader_id, consecutive_live_failures
-                            );
-                        }
-                        consecutive_live_failures = 0;
-                        let _ = engine.inner.state.set_runtime_engine_running(&cfg.trader_id, true, None);
-                    }
-                    Err(err) => {
-                        // Budget circuit breaker — stop immediately regardless of mode
-                        if matches!(err, AppError::BudgetExhausted(_)) {
-                            let breaker_msg = format!("budget circuit breaker: {}", err);
-                            let _ = engine.inner.state.set_runtime_engine_running(
-                                &cfg.trader_id,
-                                false,
-                                Some(breaker_msg.clone()),
-                            );
-                            warn!(
-                                "stopping loop by budget circuit breaker trader={} reason={}",
-                                cfg.trader_id, breaker_msg
-                            );
-                            break;
-                        }
+        // Calculate next aligned scan time and publish it for the frontend countdown.
+        let now = now_u64();
+        let next_scan = next_aligned_scan(now, interval_secs);
+        let sleep_secs = next_scan.saturating_sub(now);
+        update_next_scan_at(&engine.inner.state, &cfg.trader_id, Some(next_scan));
 
-                        if exec_ctx.mode == RuntimeExecutionMode::LiveExchange {
-                            consecutive_live_failures = consecutive_live_failures.saturating_add(1);
-                            let failure_msg = format!(
-                                "live exchange failure {}/{}: {}",
-                                consecutive_live_failures, live_circuit_breaker_limit, err
-                            );
-                            let _ = engine.inner.state.set_runtime_engine_running(
-                                &cfg.trader_id,
-                                true,
-                                Some(failure_msg.clone()),
-                            );
-                            error!(
-                                "cycle failed trader={} live_failure_count={} err={}",
-                                cfg.trader_id, consecutive_live_failures, err
-                            );
+        info!(
+            "trader={} waiting {}s until next aligned scan at {}",
+            cfg.trader_id, sleep_secs, next_scan
+        );
 
-                            if consecutive_live_failures >= live_circuit_breaker_limit {
-                                let breaker_msg = format!(
-                                    "live circuit breaker opened after {} consecutive failures",
-                                    consecutive_live_failures
-                                );
-                                let _ = engine.inner.state.set_runtime_engine_running(
-                                    &cfg.trader_id,
-                                    false,
-                                    Some(breaker_msg.clone()),
-                                );
-                                warn!(
-                                    "stopping live loop by circuit breaker trader={} reason={}",
-                                    cfg.trader_id, breaker_msg
-                                );
+        // Wait until the aligned time (or stop signal / user stream events)
+        if sleep_secs > 0 {
+            tokio::select! {
+                _ = time::sleep(Duration::from_secs(sleep_secs)) => {}
+                _ = user_stream_keepalive.tick() => {
+                    handle_user_stream_keepalive(
+                        &exec_ctx,
+                        live_adapter.as_deref(),
+                        &mut user_stream_session,
+                        &mut user_stream_rx,
+                        &cfg,
+                        &mut stop_rx,
+                        user_stream_reconnect_backoff,
+                    ).await;
+                    continue; // re-calculate sleep and try again
+                }
+                event = recv_user_stream_event(&mut user_stream_rx) => {
+                    handle_user_stream_event_safe(
+                        &engine.inner.state,
+                        &cfg,
+                        event,
+                        &exec_ctx,
+                        live_adapter.as_deref(),
+                        &mut user_stream_session,
+                        &mut user_stream_rx,
+                        &mut stop_rx,
+                        user_stream_reconnect_backoff,
+                    ).await;
+                    continue; // re-calculate sleep and try again
+                }
+                changed = stop_rx.changed() => {
+                    match changed {
+                        Ok(_) => {
+                            if *stop_rx.borrow() {
                                 break;
                             }
-                        } else {
-                            let _ = engine.inner.state.set_runtime_engine_running(
-                                &cfg.trader_id,
-                                true,
-                                Some(err.to_string()),
-                            );
-                            error!("cycle failed trader={} err={}", cfg.trader_id, err);
+                            // Stop flag is false — re-calculate sleep and wait again.
+                            continue;
                         }
+                        Err(_) => break,
                     }
                 }
             }
-            _ = user_stream_keepalive.tick() => {
+        }
+
+        // Clear next_scan_at while scanning
+        update_next_scan_at(&engine.inner.state, &cfg.trader_id, None);
+
+        let result = process_cycle(
+            &engine.inner.state,
+            &cfg,
+            &symbols,
+            &mut market,
+            &exec_ctx,
+            live_adapter.as_deref(),
+        )
+        .await;
+        match result {
+            Ok(_) => {
+                if consecutive_live_failures > 0 {
+                    info!(
+                        "live cycle recovered trader={} failures_before_recover={}",
+                        cfg.trader_id, consecutive_live_failures
+                    );
+                }
+                consecutive_live_failures = 0;
+                let _ = engine.inner.state.set_runtime_engine_running(&cfg.trader_id, true, None);
+            }
+            Err(err) => {
+                // Budget circuit breaker — stop immediately regardless of mode
+                if matches!(err, AppError::BudgetExhausted(_)) {
+                    let breaker_msg = format!("budget circuit breaker: {}", err);
+                    let _ = engine.inner.state.set_runtime_engine_running(
+                        &cfg.trader_id,
+                        false,
+                        Some(breaker_msg.clone()),
+                    );
+                    warn!(
+                        "stopping loop by budget circuit breaker trader={} reason={}",
+                        cfg.trader_id, breaker_msg
+                    );
+                    break;
+                }
+
                 if exec_ctx.mode == RuntimeExecutionMode::LiveExchange {
-                    if let (Some(adapter), Some(session)) = (live_adapter.as_deref(), user_stream_session.as_ref()) {
-                        if let Err(err) = adapter.keepalive_user_stream_session(session).await {
-                            warn!(
-                                "exchange user stream keepalive failed trader={} err={}",
-                                cfg.trader_id, err
-                            );
+                    consecutive_live_failures = consecutive_live_failures.saturating_add(1);
+                    let failure_msg = format!(
+                        "live exchange failure {}/{}: {}",
+                        consecutive_live_failures, live_circuit_breaker_limit, err
+                    );
+                    let _ = engine.inner.state.set_runtime_engine_running(
+                        &cfg.trader_id,
+                        true,
+                        Some(failure_msg.clone()),
+                    );
+                    error!(
+                        "cycle failed trader={} live_failure_count={} err={}",
+                        cfg.trader_id, consecutive_live_failures, err
+                    );
 
-                            if let Some(old_session) = user_stream_session.take() {
-                                let _ = adapter.close_user_stream_session(&old_session).await;
-                            }
-
-                            time::sleep(user_stream_reconnect_backoff).await;
-                            match init_exchange_user_stream(adapter).await {
-                                Ok(session) => {
-                                    user_stream_rx = Some(spawn_exchange_user_stream_reader(session.clone(), stop_rx.clone()));
-                                    user_stream_session = Some(session);
-                                    info!("exchange user stream reconnected after keepalive failure trader={}", cfg.trader_id);
-                                }
-                                Err(reconnect_err) => {
-                                    warn!(
-                                        "exchange user stream reconnect failed after keepalive error trader={} err={}",
-                                        cfg.trader_id, reconnect_err
-                                    );
-                                    user_stream_rx = None;
-                                    user_stream_session = None;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            event = recv_user_stream_event(&mut user_stream_rx) => {
-                if let Some(event) = event {
-                    let should_reconnect = matches!(event, ExchangeUserStreamEvent::ListenKeyExpired { .. });
-
-                    let now = now_i64();
-                    if let Err(err) = handle_exchange_user_stream_event(&engine.inner.state, &cfg, event, now).await {
-                        warn!(
-                            "exchange user stream event handling failed trader={} err={}",
-                            cfg.trader_id, err
+                    if consecutive_live_failures >= live_circuit_breaker_limit {
+                        let breaker_msg = format!(
+                            "live circuit breaker opened after {} consecutive failures",
+                            consecutive_live_failures
                         );
-                    }
-
-                    if should_reconnect && exec_ctx.mode == RuntimeExecutionMode::LiveExchange {
-                        if let Some(adapter) = live_adapter.as_deref() {
-                            if let Some(old_session) = user_stream_session.take() {
-                                let _ = adapter.close_user_stream_session(&old_session).await;
-                            }
-
-                            time::sleep(user_stream_reconnect_backoff).await;
-                            match init_exchange_user_stream(adapter).await {
-                                Ok(session) => {
-                                    user_stream_rx = Some(spawn_exchange_user_stream_reader(session.clone(), stop_rx.clone()));
-                                    user_stream_session = Some(session);
-                                    info!("exchange user stream reconnected after listen key expiration trader={}", cfg.trader_id);
-                                }
-                                Err(reconnect_err) => {
-                                    warn!(
-                                        "exchange user stream reconnect failed after listen key expiration trader={} err={}",
-                                        cfg.trader_id, reconnect_err
-                                    );
-                                    user_stream_rx = None;
-                                    user_stream_session = None;
-                                }
-                            }
-                        }
-                    }
-                } else if exec_ctx.mode == RuntimeExecutionMode::LiveExchange {
-                    if let Some(adapter) = live_adapter.as_deref() {
-                        warn!(
-                            "exchange user stream disconnected trader={}, attempting reconnect",
-                            cfg.trader_id
+                        let _ = engine.inner.state.set_runtime_engine_running(
+                            &cfg.trader_id,
+                            false,
+                            Some(breaker_msg.clone()),
                         );
-
-                        if let Some(old_session) = user_stream_session.take() {
-                            let _ = adapter.close_user_stream_session(&old_session).await;
-                        }
-
-                        time::sleep(user_stream_reconnect_backoff).await;
-                        match init_exchange_user_stream(adapter).await {
-                            Ok(session) => {
-                                user_stream_rx = Some(spawn_exchange_user_stream_reader(session.clone(), stop_rx.clone()));
-                                user_stream_session = Some(session);
-                                info!("exchange user stream reconnected after disconnect trader={}", cfg.trader_id);
-                            }
-                            Err(reconnect_err) => {
-                                warn!(
-                                    "exchange user stream reconnect failed after disconnect trader={} err={}",
-                                    cfg.trader_id, reconnect_err
-                                );
-                                user_stream_rx = None;
-                                user_stream_session = None;
-                            }
-                        }
+                        warn!(
+                            "stopping live loop by circuit breaker trader={} reason={}",
+                            cfg.trader_id, breaker_msg
+                        );
+                        break;
                     }
-                }
-            }
-            changed = stop_rx.changed() => {
-                match changed {
-                    Ok(_) => {
-                        if *stop_rx.borrow() {
-                            break;
-                        }
-                    }
-                    Err(_) => break,
+                } else {
+                    let _ = engine.inner.state.set_runtime_engine_running(
+                        &cfg.trader_id,
+                        true,
+                        Some(err.to_string()),
+                    );
+                    error!("cycle failed trader={} err={}", cfg.trader_id, err);
                 }
             }
         }
@@ -311,6 +267,140 @@ async fn init_exchange_user_stream(
     adapter: &dyn LiveExchangeAdapter,
 ) -> Result<ExchangeUserStreamSession, AppError> {
     adapter.user_stream_session().await
+}
+
+/// Handle user stream keepalive tick — extracted from the old inline select! branch.
+async fn handle_user_stream_keepalive(
+    exec_ctx: &RuntimeExecutionContext,
+    live_adapter: Option<&dyn LiveExchangeAdapter>,
+    user_stream_session: &mut Option<ExchangeUserStreamSession>,
+    user_stream_rx: &mut Option<mpsc::Receiver<ExchangeUserStreamEvent>>,
+    cfg: &TraderRuntimeConfig,
+    stop_rx: &mut watch::Receiver<bool>,
+    backoff: Duration,
+) {
+    if exec_ctx.mode != RuntimeExecutionMode::LiveExchange {
+        return;
+    }
+    if let (Some(adapter), Some(session)) = (live_adapter, user_stream_session.as_ref()) {
+        if let Err(err) = adapter.keepalive_user_stream_session(session).await {
+            warn!(
+                "exchange user stream keepalive failed trader={} err={}",
+                cfg.trader_id, err
+            );
+
+            if let Some(old_session) = user_stream_session.take() {
+                let _ = adapter.close_user_stream_session(&old_session).await;
+            }
+
+            time::sleep(backoff).await;
+            match init_exchange_user_stream(adapter).await {
+                Ok(session) => {
+                    *user_stream_rx =
+                        Some(spawn_exchange_user_stream_reader(session.clone(), stop_rx.clone()));
+                    *user_stream_session = Some(session);
+                    info!(
+                        "exchange user stream reconnected after keepalive failure trader={}",
+                        cfg.trader_id
+                    );
+                }
+                Err(reconnect_err) => {
+                    warn!(
+                        "exchange user stream reconnect failed after keepalive error trader={} err={}",
+                        cfg.trader_id, reconnect_err
+                    );
+                    *user_stream_rx = None;
+                    *user_stream_session = None;
+                }
+            }
+        }
+    }
+}
+
+/// Handle user stream events (and reconnection logic) — extracted from the old inline select! branch.
+async fn handle_user_stream_event_safe(
+    state: &SharedState,
+    cfg: &TraderRuntimeConfig,
+    event: Option<ExchangeUserStreamEvent>,
+    exec_ctx: &RuntimeExecutionContext,
+    live_adapter: Option<&dyn LiveExchangeAdapter>,
+    user_stream_session: &mut Option<ExchangeUserStreamSession>,
+    user_stream_rx: &mut Option<mpsc::Receiver<ExchangeUserStreamEvent>>,
+    stop_rx: &mut watch::Receiver<bool>,
+    backoff: Duration,
+) {
+    if let Some(event) = event {
+        let should_reconnect = matches!(event, ExchangeUserStreamEvent::ListenKeyExpired { .. });
+
+        let now = now_i64();
+        if let Err(err) = handle_exchange_user_stream_event(state, cfg, event, now).await {
+            warn!(
+                "exchange user stream event handling failed trader={} err={}",
+                cfg.trader_id, err
+            );
+        }
+
+        if should_reconnect && exec_ctx.mode == RuntimeExecutionMode::LiveExchange {
+            if let Some(adapter) = live_adapter {
+                if let Some(old_session) = user_stream_session.take() {
+                    let _ = adapter.close_user_stream_session(&old_session).await;
+                }
+
+                time::sleep(backoff).await;
+                match init_exchange_user_stream(adapter).await {
+                    Ok(session) => {
+                        *user_stream_rx =
+                            Some(spawn_exchange_user_stream_reader(session.clone(), stop_rx.clone()));
+                        *user_stream_session = Some(session);
+                        info!(
+                            "exchange user stream reconnected after listen key expiration trader={}",
+                            cfg.trader_id
+                        );
+                    }
+                    Err(reconnect_err) => {
+                        warn!(
+                            "exchange user stream reconnect failed after listen key expiration trader={} err={}",
+                            cfg.trader_id, reconnect_err
+                        );
+                        *user_stream_rx = None;
+                        *user_stream_session = None;
+                    }
+                }
+            }
+        }
+    } else if exec_ctx.mode == RuntimeExecutionMode::LiveExchange {
+        if let Some(adapter) = live_adapter {
+            warn!(
+                "exchange user stream disconnected trader={}, attempting reconnect",
+                cfg.trader_id
+            );
+
+            if let Some(old_session) = user_stream_session.take() {
+                let _ = adapter.close_user_stream_session(&old_session).await;
+            }
+
+            time::sleep(backoff).await;
+            match init_exchange_user_stream(adapter).await {
+                Ok(session) => {
+                    *user_stream_rx =
+                        Some(spawn_exchange_user_stream_reader(session.clone(), stop_rx.clone()));
+                    *user_stream_session = Some(session);
+                    info!(
+                        "exchange user stream reconnected after disconnect trader={}",
+                        cfg.trader_id
+                    );
+                }
+                Err(reconnect_err) => {
+                    warn!(
+                        "exchange user stream reconnect failed after disconnect trader={} err={}",
+                        cfg.trader_id, reconnect_err
+                    );
+                    *user_stream_rx = None;
+                    *user_stream_session = None;
+                }
+            }
+        }
+    }
 }
 
 pub async fn process_cycle(

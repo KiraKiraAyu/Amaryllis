@@ -5,6 +5,7 @@ import {
   getPositionsApi,
   getRuntimeEventsApi,
   getTraderAccountApi,
+  getTraderStatusApi,
   startTraderApi,
   stopTraderApi,
 } from "@/api/trading"
@@ -48,6 +49,38 @@ export function useTraderDetail(traderId: Ref<string>) {
   const typing = ref(false)
   const showSystemOps = ref(false)
 
+  /** Unix timestamp (seconds) of the next scheduled scan, or null when
+   *  the trader is stopped or a scan is in progress. */
+  const nextScanAt = ref<number | null>(null)
+
+  // Status polling: fetch `next_scan_at` from the backend every 2 seconds
+  // while the trader is running. The countdown display itself updates every
+  // second client-side; this poll just keeps the target timestamp fresh.
+  let statusPollTimer: ReturnType<typeof setInterval> | null = null
+
+  async function pollStatus() {
+    if (!trader.value?.is_running) return
+    try {
+      const status = await getTraderStatusApi({ trader_id: traderId.value })
+      nextScanAt.value = status.runtime_engine?.next_scan_at ?? null
+    } catch {
+      /* silent — polling is best-effort */
+    }
+  }
+
+  function startStatusPolling() {
+    stopStatusPolling()
+    pollStatus() // immediate fetch
+    statusPollTimer = setInterval(pollStatus, 2000)
+  }
+
+  function stopStatusPolling() {
+    if (statusPollTimer) {
+      clearInterval(statusPollTimer)
+      statusPollTimer = null
+    }
+  }
+
   /** Feed filtered by the system-ops toggle. System Ops (action / system)
    *  messages are hidden by default; the user can toggle them on in the UI. */
   const filteredFeed = computed(() =>
@@ -78,6 +111,19 @@ export function useTraderDetail(traderId: Ref<string>) {
       trader.value = traderRes
       positions.value = positionsRes.items ?? []
       account.value = accountRes
+
+      // Fetch initial next_scan_at from runtime engine status
+      if (traderRes.is_running) {
+        try {
+          const status = await getTraderStatusApi({ trader_id: id })
+          nextScanAt.value = status.runtime_engine?.next_scan_at ?? null
+        } catch {
+          /* best-effort */
+        }
+        startStatusPolling()
+      } else {
+        nextScanAt.value = null
+      }
 
       // Build chronological feed from decisions + events
       const messages: FeedMessage[] = []
@@ -280,6 +326,18 @@ export function useTraderDetail(traderId: Ref<string>) {
             content: message || `Engine status: ${status}`,
             timestamp: Date.now(),
           })
+          // Start/stop polling based on engine status changes
+          if (status === "running") {
+            startStatusPolling()
+          } else if (status === "stopped" || status === "budget_exhausted") {
+            stopStatusPolling()
+            nextScanAt.value = null
+          }
+          break
+        }
+        case "scan_schedule": {
+          // Real-time update from backend: next_scan_at changed
+          nextScanAt.value = (ev.next_scan_at as number | null | undefined) ?? null
           break
         }
       }
@@ -300,6 +358,7 @@ export function useTraderDetail(traderId: Ref<string>) {
       await startTraderApi(traderId.value)
       toast.success("Trader started")
       if (trader.value) trader.value.is_running = true
+      startStatusPolling()
     } catch {
       /* handled by interceptor */
     }
@@ -310,6 +369,8 @@ export function useTraderDetail(traderId: Ref<string>) {
       await stopTraderApi(traderId.value)
       toast.success("Trader stopped")
       if (trader.value) trader.value.is_running = false
+      stopStatusPolling()
+      nextScanAt.value = null
     } catch {
       /* handled by interceptor */
     }
@@ -317,6 +378,7 @@ export function useTraderDetail(traderId: Ref<string>) {
 
   onUnmounted(() => {
     if (typewriterTimer) clearInterval(typewriterTimer)
+    stopStatusPolling()
     stopWatch()
   })
 
@@ -330,6 +392,7 @@ export function useTraderDetail(traderId: Ref<string>) {
     filteredFeed,
     typing,
     showSystemOps,
+    nextScanAt,
     loadAll,
     startTrader,
     stopTrader,
