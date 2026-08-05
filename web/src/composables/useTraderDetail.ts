@@ -261,24 +261,93 @@ export function useTraderDetail(traderId: Ref<string>) {
           })
           break
         }
+        case "ai_stream_chunk": {
+          const chunk = ev.chunk as string
+          const symbol = ev.symbol as string
+          const correlationId = ev.correlation_id as string
+
+          // Find an existing streaming trader message for this correlation_id
+          const existing = feed.value.find(
+            (m) =>
+              m.role === "trader" &&
+              m.streaming === true &&
+              m.data?.correlation_id === correlationId,
+          )
+
+          if (existing) {
+            // Append chunk to the existing streaming message
+            existing.content = existing.content + chunk
+          } else {
+            // Stop any running typewriter — the LLM stream replaces it
+            if (typewriterTimer) {
+              clearInterval(typewriterTimer)
+              typewriterTimer = null
+            }
+            // Create a new streaming trader message
+            feed.value.push({
+              id: `stream-${correlationId}`,
+              role: "trader",
+              title: `AI Thinking: ${symbol}…`,
+              content: chunk,
+              timestamp: Date.now(),
+              streaming: true,
+              data: {
+                symbol,
+                correlation_id: correlationId,
+              },
+            })
+            typing.value = true
+          }
+          break
+        }
         case "ai_decision": {
           const decision = ev.decision as Record<string, unknown> | undefined
-          addMessage({
-            id: `ai-${Date.now()}`,
-            role: "trader",
-            title: `AI Decision: ${decision?.symbol ?? "?"} → ${decision?.action ?? "?"}`,
-            content:
-              (decision?.reasoning as string) ||
-              (decision?.reason as string) ||
-              "",
-            timestamp: Date.now(),
-            data: {
+          const correlationId = decision?.correlation_id as string | undefined
+
+          // Try to find and finalize an existing streaming message
+          let streamingMsg: FeedMessage | undefined
+          if (correlationId) {
+            streamingMsg = feed.value.find(
+              (m) =>
+                m.role === "trader" &&
+                m.streaming === true &&
+                m.data?.correlation_id === correlationId,
+            )
+          }
+
+          if (streamingMsg) {
+            // Update the streaming message with final structured data
+            streamingMsg.title = `AI Decision: ${decision?.symbol ?? "?"} → ${decision?.action ?? "?"}`
+            streamingMsg.content =
+              (decision?.reason as string) || streamingMsg.content
+            streamingMsg.streaming = false
+            streamingMsg.data = {
               symbol: decision?.symbol,
               decision: decision?.action,
               confidence: decision?.confidence,
               timeframe: decision?.timeframe,
-            },
-          })
+              correlation_id: correlationId,
+            }
+            typing.value = false
+          } else {
+            // No streaming message found — create a new one (fallback)
+            addMessage({
+              id: `ai-${Date.now()}`,
+              role: "trader",
+              title: `AI Decision: ${decision?.symbol ?? "?"} → ${decision?.action ?? "?"}`,
+              content:
+                (decision?.reasoning as string) ||
+                (decision?.reason as string) ||
+                "",
+              timestamp: Date.now(),
+              data: {
+                symbol: decision?.symbol,
+                decision: decision?.action,
+                confidence: decision?.confidence,
+                timeframe: decision?.timeframe,
+              },
+            })
+          }
           break
         }
         case "trade_execution": {

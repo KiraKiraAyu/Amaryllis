@@ -704,6 +704,7 @@ pub async fn process_cycle(
                     "reason": signal.reason,
                     "timeframe": signal.timeframe,
                     "risk_level": signal.risk_level,
+                    "correlation_id": signal.correlation_id,
                 }),
             });
     }

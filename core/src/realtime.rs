@@ -32,6 +32,12 @@ pub enum RealtimeEvent {
         prompt: String,
         system_prompt: Option<String>,
     },
+    AiStreamChunk {
+        trader_id: String,
+        symbol: String,
+        chunk: String,
+        correlation_id: String,
+    },
     AiDecision {
         trader_id: String,
         decision: serde_json::Value,

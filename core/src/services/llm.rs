@@ -91,6 +91,28 @@ impl LlmService {
         client.chat(messages, system_prompt).await
     }
 
+    /// Stream chat completion chunks through `chunk_tx` and return the full
+    /// accumulated response when the stream completes.
+    pub async fn chat_stream_with_config(
+        &self,
+        provider: String,
+        api_key: String,
+        model: String,
+        base_url: String,
+        messages: Vec<LlmMessage>,
+        system_prompt: Option<&str>,
+        chunk_tx: tokio::sync::mpsc::UnboundedSender<String>,
+    ) -> Result<String> {
+        if api_key.trim().is_empty() {
+            return Err(AppError::BadRequest(
+                "Selected LLM provider has no API key configured".into(),
+            ));
+        }
+
+        let client = DefaultLlmClient::new(provider_config(provider, api_key, model, base_url))?;
+        client.chat_stream(messages, system_prompt, chunk_tx).await
+    }
+
     pub fn is_supported_provider(&self, provider_type: &str) -> bool {
         crate::clients::llm_chat::is_supported_provider(provider_type)
     }

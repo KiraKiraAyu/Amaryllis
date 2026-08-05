@@ -1,5 +1,7 @@
+use futures_util::StreamExt;
 use reqwest::{Client, Method};
 use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     clients::outbound_http::{OutboundRequestLog, send_text},
@@ -44,6 +46,12 @@ struct AnthropicRequestPayload {
     system: Option<String>,
     temperature: f32,
     max_tokens: u32,
+    #[serde(skip_serializing_if = "is_false")]
+    stream: bool,
+}
+
+fn is_false(v: &bool) -> bool {
+    !v
 }
 
 #[async_trait::async_trait]
@@ -104,6 +112,7 @@ impl LlmProviderClient for AnthropicClient {
             system,
             temperature: 0.7,
             max_tokens: 1024,
+            stream: false,
         };
         let body = serde_json::to_string(&payload)?;
         let url = anthropic_messages_url(&self.config.base_url);
@@ -144,6 +153,88 @@ impl LlmProviderClient for AnthropicClient {
             .ok_or_else(|| {
                 AppError::BadGateway(format!("No response from {}", self.config.provider))
             })
+    }
+
+    async fn chat_stream(
+        &self,
+        messages: Vec<LlmMessage>,
+        system_prompt: Option<&str>,
+        chunk_tx: UnboundedSender<String>,
+    ) -> Result<String> {
+        let (messages, system) = anthropic_messages(messages, system_prompt);
+        let payload = AnthropicRequestPayload {
+            model: self.config.model.clone(),
+            messages,
+            system,
+            temperature: 0.7,
+            max_tokens: 1024,
+            stream: true,
+        };
+        let url = anthropic_messages_url(&self.config.base_url);
+
+        let response = self
+            .http
+            .post(&url)
+            .header("x-api-key", &self.config.api_key)
+            .header("anthropic-version", "2023-06-01")
+            .json(&payload)
+            .send()
+            .await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            return Err(provider_api_error(
+                &self.config.provider,
+                status,
+                body,
+            ));
+        }
+
+        let mut full_response = String::new();
+        let mut stream = response.bytes_stream();
+        let mut line_buf = String::new();
+
+        while let Some(chunk_result) = stream.next().await {
+            let chunk = chunk_result?;
+            line_buf.push_str(&String::from_utf8_lossy(&chunk));
+
+            while let Some(newline_pos) = line_buf.find('\n') {
+                let line = line_buf[..newline_pos].trim().to_string();
+                line_buf = line_buf[newline_pos + 1..].to_string();
+
+                if line.is_empty() || line.starts_with(':') {
+                    continue;
+                }
+
+                // Anthropic SSE: "event: content_block_delta" then "data: {...}"
+                if let Some(data) = line.strip_prefix("data: ") {
+                    let data = data.trim();
+                    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(data) {
+                        // Check for content_block_delta with text_delta
+                        if let Some(text) = parsed
+                            .get("delta")
+                            .and_then(|d| d.get("text"))
+                            .and_then(|t| t.as_str())
+                        {
+                            if !text.is_empty() {
+                                full_response.push_str(text);
+                                let _ = chunk_tx.send(text.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if full_response.is_empty() {
+            return Err(AppError::BadGateway(format!(
+                "Empty stream response from {}",
+                self.config.provider
+            )));
+        }
+
+        Ok(full_response)
     }
 }
 

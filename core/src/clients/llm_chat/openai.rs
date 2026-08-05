@@ -1,5 +1,7 @@
+use futures_util::StreamExt;
 use reqwest::{Client, Method};
 use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     clients::outbound_http::{OutboundRequestLog, send_text},
@@ -125,6 +127,91 @@ impl LlmProviderClient for OpenAiCompatibleClient {
             .ok_or_else(|| {
                 AppError::BadGateway(format!("No response from {}", self.config.provider))
             })
+    }
+
+    async fn chat_stream(
+        &self,
+        messages: Vec<LlmMessage>,
+        system_prompt: Option<&str>,
+        chunk_tx: UnboundedSender<String>,
+    ) -> Result<String> {
+        let payload = ChatRequestPayload {
+            model: self.config.model.clone(),
+            messages: with_system_prompt(messages, system_prompt),
+            stream: true,
+            temperature: 0.7,
+            max_tokens: 1024,
+        };
+        let url = openai_chat_url(&self.config.base_url);
+
+        let response = self
+            .http
+            .post(&url)
+            .bearer_auth(&self.config.api_key)
+            .json(&payload)
+            .send()
+            .await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            return Err(provider_api_error(
+                &self.config.provider,
+                status,
+                body,
+            ));
+        }
+
+        let mut full_response = String::new();
+        let mut stream = response.bytes_stream();
+        let mut line_buf = String::new();
+
+        while let Some(chunk_result) = stream.next().await {
+            let chunk = chunk_result?;
+            line_buf.push_str(&String::from_utf8_lossy(&chunk));
+
+            // Process complete SSE lines
+            while let Some(newline_pos) = line_buf.find('\n') {
+                let line = line_buf[..newline_pos].trim().to_string();
+                line_buf = line_buf[newline_pos + 1..].to_string();
+
+                if line.is_empty() || line.starts_with(':') {
+                    continue;
+                }
+
+                if let Some(data) = line.strip_prefix("data: ") {
+                    let data = data.trim();
+                    if data == "[DONE]" {
+                        continue;
+                    }
+
+                    // Parse the SSE JSON chunk
+                    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(data) {
+                        if let Some(content) = parsed
+                            .get("choices")
+                            .and_then(|c| c.get(0))
+                            .and_then(|c| c.get("delta"))
+                            .and_then(|d| d.get("content"))
+                            .and_then(|c| c.as_str())
+                        {
+                            if !content.is_empty() {
+                                full_response.push_str(content);
+                                let _ = chunk_tx.send(content.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if full_response.is_empty() {
+            return Err(AppError::BadGateway(format!(
+                "Empty stream response from {}",
+                self.config.provider
+            )));
+        }
+
+        Ok(full_response)
     }
 }
 

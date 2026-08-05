@@ -120,15 +120,37 @@ pub async fn generate_ai_decision(
 
     let custom_system = system_prompt_owned.as_deref();
 
+    // Create an mpsc channel for streaming LLM response chunks.
+    // Each chunk is forwarded to realtime clients as an AiStreamChunk SSE event
+    // so the frontend can display the AI's response character-by-character.
+    let (chunk_tx, mut chunk_rx) =
+        tokio::sync::mpsc::unbounded_channel::<String>();
+
+    let realtime_hub = state.realtime_hub.clone();
+    let stream_trader_id = cfg.trader_id.clone();
+    let stream_symbol = symbol.to_string();
+    let stream_corr_id = correlation_id.to_string();
+    tokio::spawn(async move {
+        while let Some(chunk) = chunk_rx.recv().await {
+            realtime_hub.publish(crate::realtime::RealtimeEvent::AiStreamChunk {
+                trader_id: stream_trader_id.clone(),
+                symbol: stream_symbol.clone(),
+                chunk,
+                correlation_id: stream_corr_id.clone(),
+            });
+        }
+    });
+
     match state
         .llm_service
-        .chat_with_config(
+        .chat_stream_with_config(
             cfg.ai_provider_type.clone(),
             cfg.ai_api_key.clone(),
             cfg.ai_model_name.clone(),
             cfg.ai_base_url.clone(),
             vec![user_message],
             custom_system,
+            chunk_tx,
         )
         .await
     {

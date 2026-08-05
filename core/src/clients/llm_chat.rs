@@ -52,6 +52,15 @@ pub struct DefaultLlmClient {
 pub(super) trait LlmProviderClient: Send + Sync + std::fmt::Debug {
     async fn chat(&self, messages: Vec<LlmMessage>, system_prompt: Option<&str>) -> Result<String>;
 
+    /// Stream chat completion chunks through `chunk_tx` and return the full
+    /// accumulated response when the stream completes.
+    async fn chat_stream(
+        &self,
+        messages: Vec<LlmMessage>,
+        system_prompt: Option<&str>,
+        chunk_tx: tokio::sync::mpsc::UnboundedSender<String>,
+    ) -> Result<String>;
+
     async fn list_models(&self) -> Result<Vec<AvailableLlmModel>>;
 
     async fn check_model(&self) -> Result<()>;
@@ -85,6 +94,19 @@ impl DefaultLlmClient {
         system_prompt: Option<&str>,
     ) -> Result<String> {
         self.provider_client.chat(messages, system_prompt).await
+    }
+
+    /// Stream chat completion chunks through `chunk_tx` and return the full
+    /// accumulated response when the stream completes.
+    pub async fn chat_stream(
+        &self,
+        messages: Vec<LlmMessage>,
+        system_prompt: Option<&str>,
+        chunk_tx: tokio::sync::mpsc::UnboundedSender<String>,
+    ) -> Result<String> {
+        self.provider_client
+            .chat_stream(messages, system_prompt, chunk_tx)
+            .await
     }
 
     pub async fn list_models(&self) -> Result<Vec<AvailableLlmModel>> {

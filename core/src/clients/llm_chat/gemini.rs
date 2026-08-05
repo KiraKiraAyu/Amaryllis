@@ -1,5 +1,7 @@
+use futures_util::StreamExt;
 use reqwest::{Client, Method};
 use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     clients::outbound_http::{OutboundRequestLog, send_text},
@@ -8,7 +10,10 @@ use crate::{
 
 use super::{
     AvailableLlmModel, LlmClientConfig, LlmMessage, LlmProviderClient,
-    urls::{gemini_generate_content_url, gemini_model_url, gemini_models_url},
+    urls::{
+        gemini_generate_content_url, gemini_model_url, gemini_models_url,
+        gemini_stream_generate_content_url,
+    },
     util::{dedupe_models, non_empty_text, normalize_message_role, provider_api_error},
 };
 
@@ -200,6 +205,89 @@ impl LlmProviderClient for GeminiClient {
             .ok_or_else(|| {
                 AppError::BadGateway(format!("No response from {}", self.config.provider))
             })
+    }
+
+    async fn chat_stream(
+        &self,
+        messages: Vec<LlmMessage>,
+        system_prompt: Option<&str>,
+        chunk_tx: UnboundedSender<String>,
+    ) -> Result<String> {
+        let (contents, system_instruction) = gemini_contents(messages, system_prompt);
+        let payload = GeminiRequestPayload {
+            contents,
+            system_instruction,
+            generation_config: GeminiGenerationConfig {
+                temperature: 0.7,
+                max_output_tokens: 1024,
+            },
+        };
+        let url = gemini_stream_generate_content_url(&self.config.base_url, &self.config.model);
+
+        let response = self
+            .http
+            .post(&url)
+            .header("x-goog-api-key", &self.config.api_key)
+            .json(&payload)
+            .send()
+            .await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            return Err(provider_api_error(
+                &self.config.provider,
+                status,
+                body,
+            ));
+        }
+
+        let mut full_response = String::new();
+        let mut stream = response.bytes_stream();
+        let mut line_buf = String::new();
+
+        while let Some(chunk_result) = stream.next().await {
+            let chunk = chunk_result?;
+            line_buf.push_str(&String::from_utf8_lossy(&chunk));
+
+            while let Some(newline_pos) = line_buf.find('\n') {
+                let line = line_buf[..newline_pos].trim().to_string();
+                line_buf = line_buf[newline_pos + 1..].to_string();
+
+                if line.is_empty() || line.starts_with(':') {
+                    continue;
+                }
+
+                if let Some(data) = line.strip_prefix("data: ") {
+                    let data = data.trim();
+                    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(data) {
+                        if let Some(text) = parsed
+                            .get("candidates")
+                            .and_then(|c| c.get(0))
+                            .and_then(|c| c.get("content"))
+                            .and_then(|c| c.get("parts"))
+                            .and_then(|p| p.get(0))
+                            .and_then(|p| p.get("text"))
+                            .and_then(|t| t.as_str())
+                        {
+                            if !text.is_empty() {
+                                full_response.push_str(text);
+                                let _ = chunk_tx.send(text.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if full_response.is_empty() {
+            return Err(AppError::BadGateway(format!(
+                "Empty stream response from {}",
+                self.config.provider
+            )));
+        }
+
+        Ok(full_response)
     }
 }
 

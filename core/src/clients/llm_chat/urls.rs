@@ -86,6 +86,23 @@ pub(super) fn gemini_generate_content_url(base_url: &str, model: &str) -> String
     format!("{base}/models/{model}:generateContent")
 }
 
+/// Gemini streaming endpoint uses `:streamGenerateContent` with `alt=sse`.
+pub(super) fn gemini_stream_generate_content_url(base_url: &str, model: &str) -> String {
+    let base = base_url.trim_end_matches('/');
+    if base.ends_with(":streamGenerateContent") {
+        return format!("{base}?alt=sse");
+    }
+
+    let model = model.trim().trim_start_matches("models/");
+
+    if let Some(pos) = base.find("/models/") {
+        let api_base = &base[..pos];
+        return format!("{api_base}/models/{model}:streamGenerateContent?alt=sse");
+    }
+
+    format!("{base}/models/{model}:streamGenerateContent?alt=sse")
+}
+
 pub(super) fn gemini_models_url(base_url: &str) -> String {
     let base = gemini_api_base(base_url);
     if base.ends_with("/models") {
