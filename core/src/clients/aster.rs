@@ -458,42 +458,7 @@ impl LiveExchangeAdapter for AsterAdapter {
             )
             .await?;
 
-        let symbols = payload
-            .get("symbols")
-            .and_then(|v| v.as_array())
-            .ok_or_else(|| {
-                AppError::InvalidExchangeConfig("missing symbols in exchangeInfo".to_string())
-            })?;
-
-        let first = symbols.first().ok_or_else(|| {
-            AppError::InvalidExchangeConfig(format!(
-                "symbol not found in exchangeInfo: {symbol_upper}"
-            ))
-        })?;
-
-        Ok(ExchangeSymbolConstraints {
-            symbol: first
-                .get("symbol")
-                .and_then(|v| v.as_str())
-                .unwrap_or(&symbol_upper)
-                .to_string(),
-            base_asset: first
-                .get("baseAsset")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string(),
-            quote_asset: first
-                .get("quoteAsset")
-                .and_then(|v| v.as_str())
-                .unwrap_or("USDT")
-                .to_string(),
-            min_qty: filter_value(first, "LOT_SIZE", "minQty"),
-            max_qty: filter_value(first, "LOT_SIZE", "maxQty"),
-            step_size: filter_value(first, "LOT_SIZE", "stepSize"),
-            min_notional: filter_value(first, "MIN_NOTIONAL", "notional")
-                .max(filter_value(first, "MIN_NOTIONAL", "minNotional")),
-            tick_size: filter_value(first, "PRICE_FILTER", "tickSize"),
-        })
+        parse_symbol_constraints(&payload, &symbol_upper)
     }
 
     async fn ensure_symbol_settings(
@@ -721,8 +686,58 @@ fn parse_json_response<T: for<'de> Deserialize<'de>>(resp: OutboundResponse) -> 
     serde_json::from_str::<T>(&text).map_err(AppError::ExchangeJson)
 }
 
-fn filter_value(symbols: &serde_json::Value, filter_type: &str, field: &str) -> f64 {
-    symbols
+fn parse_symbol_constraints(
+    payload: &serde_json::Value,
+    requested_symbol: &str,
+) -> Result<ExchangeSymbolConstraints, AppError> {
+    let symbol_upper = requested_symbol.trim().to_uppercase();
+    let symbols = payload
+        .get("symbols")
+        .and_then(|value| value.as_array())
+        .ok_or_else(|| {
+            AppError::InvalidExchangeConfig("missing symbols in exchangeInfo".to_string())
+        })?;
+    let symbol = symbols
+        .iter()
+        .find(|candidate| {
+            candidate
+                .get("symbol")
+                .and_then(|value| value.as_str())
+                .is_some_and(|value| value.eq_ignore_ascii_case(&symbol_upper))
+        })
+        .ok_or_else(|| {
+            AppError::InvalidExchangeConfig(format!(
+                "symbol not found in exchangeInfo: {symbol_upper}"
+            ))
+        })?;
+
+    Ok(ExchangeSymbolConstraints {
+        symbol: symbol
+            .get("symbol")
+            .and_then(|value| value.as_str())
+            .unwrap_or(&symbol_upper)
+            .to_string(),
+        base_asset: symbol
+            .get("baseAsset")
+            .and_then(|value| value.as_str())
+            .unwrap_or("")
+            .to_string(),
+        quote_asset: symbol
+            .get("quoteAsset")
+            .and_then(|value| value.as_str())
+            .unwrap_or("USDT")
+            .to_string(),
+        min_qty: filter_value(symbol, "LOT_SIZE", "minQty"),
+        max_qty: filter_value(symbol, "LOT_SIZE", "maxQty"),
+        step_size: filter_value(symbol, "LOT_SIZE", "stepSize"),
+        min_notional: filter_value(symbol, "MIN_NOTIONAL", "notional")
+            .max(filter_value(symbol, "MIN_NOTIONAL", "minNotional")),
+        tick_size: filter_value(symbol, "PRICE_FILTER", "tickSize"),
+    })
+}
+
+fn filter_value(symbol: &serde_json::Value, filter_type: &str, field: &str) -> f64 {
+    symbol
         .get("filters")
         .and_then(|v| v.as_array())
         .and_then(|filters| {
@@ -952,5 +967,42 @@ mod tests {
         let a = next_nonce().parse::<u64>().unwrap();
         let b = next_nonce().parse::<u64>().unwrap();
         assert!(b > a);
+    }
+
+    #[test]
+    fn aster_constraints_select_the_requested_symbol_from_a_full_response() {
+        let payload = serde_json::json!({
+            "symbols": [
+                {
+                    "symbol": "ASTERUSDT",
+                    "baseAsset": "ASTER",
+                    "quoteAsset": "USDT",
+                    "filters": [{
+                        "filterType": "LOT_SIZE",
+                        "minQty": "0.01",
+                        "maxQty": "2000000",
+                        "stepSize": "0.01"
+                    }]
+                },
+                {
+                    "symbol": "BTCUSDT",
+                    "baseAsset": "BTC",
+                    "quoteAsset": "USDT",
+                    "filters": [{
+                        "filterType": "LOT_SIZE",
+                        "minQty": "0.001",
+                        "maxQty": "1000",
+                        "stepSize": "0.001"
+                    }]
+                }
+            ]
+        });
+
+        let constraints = parse_symbol_constraints(&payload, "BTCUSDT").expect("constraints");
+
+        assert_eq!(constraints.symbol, "BTCUSDT");
+        assert_eq!(constraints.base_asset, "BTC");
+        assert_eq!(constraints.min_qty, 0.001);
+        assert_eq!(constraints.step_size, 0.001);
     }
 }
