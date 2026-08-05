@@ -216,7 +216,6 @@ export function useStrategyPage() {
       previewPromptText.value = {
         system: data.system_prompt,
         variant: data.prompt_variant,
-        summary: JSON.stringify(data.config_summary, null, 2),
       }
     } finally {
       previewLoading.value = false

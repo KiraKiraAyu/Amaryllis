@@ -4,7 +4,8 @@ import Button from "primevue/button"
 import InputText from "primevue/inputtext"
 import InputNumber from "primevue/inputnumber"
 import Select from "primevue/select"
-import { ref, computed } from "vue"
+import Textarea from "primevue/textarea"
+import { ref, computed, watch } from "vue"
 import type { EditableStrategy } from "@/types/strategy-ui"
 
 const selected = defineModel<EditableStrategy>({ required: true })
@@ -96,6 +97,34 @@ function changeCostMode(index: number, mode: 'fixed' | 'dynamic') {
     item.max_cost = 1000.0
   }
 }
+
+const tpSlMode = ref<'fixed' | 'custom'>('fixed')
+// Both TP and SL are positive percentages in the UI (e.g. 100 = 100%)
+const fixedTpPnlRate = ref<number>(100.0)
+const fixedSlPnlRate = ref<number>(100.0)
+const customTpSlPrompt = ref<string>('')
+let tpSlInitialized = false
+
+// Initialize once from existing config (waits for async data if needed)
+watch(() => config.value.tp_sl, (tpSl) => {
+  if (tpSlInitialized || !tpSl || !tpSl.mode) return
+  if (tpSl.mode) tpSlMode.value = tpSl.mode
+  if (tpSl.fixed_tp_pnl_rate != null) fixedTpPnlRate.value = tpSl.fixed_tp_pnl_rate * 100
+  // SL stored as negative ratio in config, display as positive in UI
+  if (tpSl.fixed_sl_pnl_rate != null) fixedSlPnlRate.value = Math.abs(tpSl.fixed_sl_pnl_rate * 100)
+  if (tpSl.custom_prompt != null) customTpSlPrompt.value = tpSl.custom_prompt
+  tpSlInitialized = true
+}, { immediate: true })
+
+// Sync back to config (TP positive, SL negative) — only after initialization
+watch([tpSlMode, fixedTpPnlRate, fixedSlPnlRate, customTpSlPrompt], () => {
+  if (!tpSlInitialized) return
+  if (!config.value.tp_sl) config.value.tp_sl = {}
+  config.value.tp_sl.mode = tpSlMode.value
+  config.value.tp_sl.fixed_tp_pnl_rate = tpSlMode.value === 'fixed' ? fixedTpPnlRate.value / 100 : null
+  config.value.tp_sl.fixed_sl_pnl_rate = tpSlMode.value === 'fixed' ? -(fixedSlPnlRate.value / 100) : null
+  config.value.tp_sl.custom_prompt = tpSlMode.value === 'custom' ? customTpSlPrompt.value : null
+})
 </script>
 
 <template>
@@ -288,6 +317,79 @@ function changeCostMode(index: number, mode: 'fixed' | 'dynamic') {
               </tr>
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- Take-Profit / Stop-Loss Rules -->
+      <div class="flex flex-col gap-3 mb-6">
+        <label class="text-xs font-bold text-surface-500">Take-Profit / Stop-Loss Rules</label>
+
+        <div class="border border-surface-200 dark:border-surface-800 rounded-2xl p-4">
+          <div class="flex flex-col gap-4">
+            <!-- Mode selector -->
+            <div class="flex items-center gap-3">
+              <label class="text-xs text-surface-500 w-20 shrink-0">Mode</label>
+              <Select
+                v-model="tpSlMode"
+                :options="[
+                  { label: 'Fixed Unrealized PnL', value: 'fixed' },
+                  { label: 'Custom AI Prompt', value: 'custom' }
+                ]"
+                optionLabel="label"
+                optionValue="value"
+                class="h-10 rounded-xl flex-1"
+              />
+            </div>
+
+            <!-- Fixed mode: TP/SL PnL rate inputs -->
+            <div v-if="tpSlMode === 'fixed'" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs font-bold text-surface-500">Take-Profit (PnL Rate)</label>
+                <div class="flex items-center gap-1.5">
+                  <span class="text-sm text-emerald-500 font-bold">+</span>
+                  <InputNumber
+                    v-model="fixedTpPnlRate"
+                    :min="0"
+                    :minFractionDigits="0"
+                    :maxFractionDigits="2"
+                    suffix="%"
+                    class="h-10 rounded-xl flex-1"
+                    inputClass="font-mono"
+                  />
+                </div>
+                <span class="text-xs text-surface-400">Auto-close when unrealized PnL / margin reaches this rate</span>
+              </div>
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs font-bold text-surface-500">Stop-Loss (PnL Rate)</label>
+                <div class="flex items-center gap-1.5">
+                  <span class="text-sm text-rose-500 font-bold">-</span>
+                  <InputNumber
+                    v-model="fixedSlPnlRate"
+                    :min="0"
+                    :minFractionDigits="0"
+                    :maxFractionDigits="2"
+                    suffix="%"
+                    class="h-10 rounded-xl flex-1"
+                    inputClass="font-mono"
+                  />
+                </div>
+                <span class="text-xs text-surface-400">Auto-close when unrealized PnL / margin drops to this rate</span>
+              </div>
+            </div>
+
+            <!-- Custom mode: prompt textarea -->
+            <div v-if="tpSlMode === 'custom'" class="flex flex-col gap-1.5">
+              <label class="text-xs font-bold text-surface-500">Custom TP/SL Instructions</label>
+              <Textarea
+                v-model="customTpSlPrompt"
+                rows="4"
+                placeholder="Describe the conditions under which the AI should close positions. e.g. 'Close long positions when RSI exceeds 70 and price hits resistance level...'"
+                class="rounded-xl"
+                :autoResize="true"
+              />
+              <span class="text-xs text-surface-400">The AI will use these instructions to decide when to close positions</span>
+            </div>
+          </div>
         </div>
       </div>
 

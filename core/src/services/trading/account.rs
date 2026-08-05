@@ -320,6 +320,7 @@ fn manual_runtime_config(trader: &TraderRecord) -> TraderRuntimeConfig {
         override_base_prompt: trader.override_base_prompt != 0,
         system_prompt_template: trader.system_prompt_template.clone(),
         symbols_config: Vec::new(),
+        strategy_config: serde_json::json!({}),
     }
 }
 

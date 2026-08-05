@@ -23,11 +23,11 @@ pub async fn execute_decisions(
     let max_positions = 8_i64;
 
     for d in decisions {
-        if d.action == "HOLD" {
+        if d.action == "NO ACTION" {
             continue;
         }
 
-        let desired_side = if d.action == "BUY" { "LONG" } else { "SHORT" };
+        let desired_side = if d.action == "LONG" { "LONG" } else { "SHORT" };
         let opposite_side = if desired_side == "LONG" {
             "SHORT"
         } else {

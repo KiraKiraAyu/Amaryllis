@@ -67,6 +67,7 @@ async fn test_state_and_cfg() -> (TestRuntimeState, TraderRuntimeConfig) {
                 fixed_cost: None,
             },
         ],
+        strategy_config: serde_json::json!({}),
     };
 
     (state, cfg)

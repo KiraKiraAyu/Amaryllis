@@ -47,6 +47,15 @@ export interface StrategyRiskControlConfigPayload {
   min_confidence: number
 }
 
+export interface StrategyTpSlConfigPayload {
+  mode: 'fixed' | 'custom'
+  /** Take-profit as unrealized PnL ratio (e.g. 0.10 = +10%) */
+  fixed_tp_pnl_rate?: number | null
+  /** Stop-loss as unrealized PnL ratio (e.g. -0.05 = -5%) */
+  fixed_sl_pnl_rate?: number | null
+  custom_prompt?: string | null
+}
+
 export interface StrategyPromptSectionsConfigPayload {
   role_definition: string
   trading_frequency: string
@@ -88,6 +97,7 @@ export interface StrategyConfigPayload {
   indicators?: StrategyIndicatorsConfigPayload
   custom_prompt?: string
   risk_control?: StrategyRiskControlConfigPayload
+  tp_sl?: StrategyTpSlConfigPayload
   prompt_sections?: StrategyPromptSectionsConfigPayload
   grid_config?: StrategyGridConfigPayload
   trading_symbols?: string
@@ -165,17 +175,9 @@ export interface StrategyDefaultConfigPayload {
   config: StrategyConfigPayload
 }
 
-export interface StrategyConfigSummaryPayload {
-  coin_source: string
-  primary_tf: string
-  leverage: number
-  max_positions: number
-}
-
 export interface PreviewPromptPayload {
   system_prompt: string
   prompt_variant: string
-  config_summary: StrategyConfigSummaryPayload
 }
 
 export interface StrategyTestRunPayload {

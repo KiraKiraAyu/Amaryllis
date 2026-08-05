@@ -110,6 +110,7 @@ pub struct TraderRuntimeConfig {
     #[allow(dead_code)]
     pub system_prompt_template: String,
     pub symbols_config: Vec<SymbolConfig>,
+    pub strategy_config: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -146,7 +147,7 @@ pub struct MarketState {
 #[derive(Debug, Clone)]
 pub struct DecisionSignal {
     pub symbol: String,
-    pub action: &'static str, // BUY / SELL / HOLD
+    pub action: String, // LONG / SHORT / NO ACTION
     pub confidence: f64,
     pub reason: String,
     pub timeframe: &'static str,

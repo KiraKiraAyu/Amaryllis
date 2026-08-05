@@ -226,7 +226,12 @@ export function useTraderDetail(traderId: Ref<string>) {
               (decision?.reason as string) ||
               "",
             timestamp: Date.now(),
-            data: decision,
+            data: {
+              symbol: decision?.symbol,
+              decision: decision?.action,
+              confidence: decision?.confidence,
+              timeframe: decision?.timeframe,
+            },
           })
           break
         }

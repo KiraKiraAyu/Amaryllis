@@ -20,6 +20,7 @@ pub async fn load_trader_runtime_config(
 
     // Load strategy configuration to extract symbols and leverage settings
     let mut symbols_config = Vec::new();
+    let mut strategy_config: serde_json::Value = serde_json::json!({});
     if !row.strategy_id.trim().is_empty() {
         use crate::entity::strategies;
         use sea_orm::EntityTrait;
@@ -29,6 +30,7 @@ pub async fn load_trader_runtime_config(
             .await
         {
             if let Ok(cfg_val) = serde_json::from_str::<serde_json::Value>(&strategy.config) {
+                strategy_config = cfg_val.clone();
                 // Parse per-symbol configuration
                 if let Some(symbols_arr) = cfg_val.get("symbols").and_then(|v| v.as_array()) {
                     for item in symbols_arr {
@@ -75,6 +77,7 @@ pub async fn load_trader_runtime_config(
         override_base_prompt: row.override_base_prompt != 0,
         system_prompt_template: row.system_prompt_template,
         symbols_config,
+        strategy_config,
     }))
 }
 

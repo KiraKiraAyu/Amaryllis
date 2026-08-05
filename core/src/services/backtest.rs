@@ -28,6 +28,7 @@ use crate::{
         models::ResolvedModelRecord,
     },
     services::llm::{LlmMessage, LlmService},
+    services::trading_runtime::ai_decision::build_system_prompt_from_config,
 };
 use reqwest::Method;
 
@@ -618,95 +619,24 @@ impl BacktestRunner {
                     cycle,
                 );
 
-                match call_llm(&self.llm_service, &self.llm_model, &prompt).await {
+                // Build system prompt from strategy config (unified with live trading and preview)
+                let system_prompt = build_system_prompt_from_config(
+                    &self.cfg.strategy_config,
+                    true, // is_cross_margin: default for backtest
+                    "",   // no trader-specific custom prompt
+                    false,
+                );
+
+                match call_llm(&self.llm_service, &self.llm_model, &system_prompt, &prompt).await {
                     Ok(decisions) => {
                         for dec in decisions {
                             let sym = dec.symbol.clone();
                             let price = prices.get(&sym).copied().unwrap_or(bar.close);
 
                             match dec.action.as_str() {
-                                "open_long" => {
-                                    let size = dec.size_usd.unwrap_or(equity * 0.05);
+                                "LONG" => {
                                     let lev = resolve_leverage(&self.cfg, &sym);
-                                    if let Ok((fee, exec_price)) =
-                                        self.account.open(&sym, "long", size, lev, price)
-                                    {
-                                        let trade_id = Uuid::now_v7().to_string();
-                                        let _ = append_trade(
-                                            &backtest_repo,
-                                            &trade_id,
-                                            &run_id,
-                                            ts_sec,
-                                            &sym,
-                                            "open_long",
-                                            "long",
-                                            size / exec_price,
-                                            exec_price,
-                                            fee,
-                                            0.0,
-                                            lev,
-                                            cycle,
-                                            false,
-                                        )
-                                        .await;
-                                    }
-                                }
-                                "open_short" => {
-                                    let size = dec.size_usd.unwrap_or(equity * 0.05);
-                                    let lev = resolve_leverage(&self.cfg, &sym);
-                                    if let Ok((fee, exec_price)) =
-                                        self.account.open(&sym, "short", size, lev, price)
-                                    {
-                                        let trade_id = Uuid::now_v7().to_string();
-                                        let _ = append_trade(
-                                            &backtest_repo,
-                                            &trade_id,
-                                            &run_id,
-                                            ts_sec,
-                                            &sym,
-                                            "open_short",
-                                            "short",
-                                            size / exec_price,
-                                            exec_price,
-                                            fee,
-                                            0.0,
-                                            lev,
-                                            cycle,
-                                            false,
-                                        )
-                                        .await;
-                                    }
-                                }
-                                "close_long" => {
-                                    if let Ok((realized, fee, exec_price)) =
-                                        self.account.close(&sym, "long", price)
-                                    {
-                                        self.metrics_cache.total_trades += 1;
-                                        if realized > 0.0 {
-                                            self.metrics_cache.winning_trades += 1;
-                                        }
-                                        self.metrics_cache.total_realized_pnl += realized - fee;
-                                        let trade_id = Uuid::now_v7().to_string();
-                                        let _ = append_trade(
-                                            &backtest_repo,
-                                            &trade_id,
-                                            &run_id,
-                                            ts_sec,
-                                            &sym,
-                                            "close_long",
-                                            "long",
-                                            0.0,
-                                            exec_price,
-                                            fee,
-                                            realized - fee,
-                                            0,
-                                            cycle,
-                                            false,
-                                        )
-                                        .await;
-                                    }
-                                }
-                                "close_short" => {
+                                    // Close opposite (short) positions first
                                     if let Ok((realized, fee, exec_price)) =
                                         self.account.close(&sym, "short", price)
                                     {
@@ -717,25 +647,56 @@ impl BacktestRunner {
                                         self.metrics_cache.total_realized_pnl += realized - fee;
                                         let trade_id = Uuid::now_v7().to_string();
                                         let _ = append_trade(
-                                            &backtest_repo,
-                                            &trade_id,
-                                            &run_id,
-                                            ts_sec,
-                                            &sym,
-                                            "close_short",
-                                            "short",
-                                            0.0,
-                                            exec_price,
-                                            fee,
-                                            realized - fee,
-                                            0,
-                                            cycle,
-                                            false,
-                                        )
-                                        .await;
+                                            &backtest_repo, &trade_id, &run_id, ts_sec,
+                                            &sym, "close_short", "short", 0.0, exec_price, fee,
+                                            realized - fee, 0, cycle, false,
+                                        ).await;
+                                    }
+                                    // Open long
+                                    let size = dec.size_usd.unwrap_or(equity * 0.05);
+                                    if let Ok((fee, exec_price)) =
+                                        self.account.open(&sym, "long", size, lev, price)
+                                    {
+                                        let trade_id = Uuid::now_v7().to_string();
+                                        let _ = append_trade(
+                                            &backtest_repo, &trade_id, &run_id, ts_sec,
+                                            &sym, "open_long", "long", size / exec_price, exec_price,
+                                            fee, 0.0, lev, cycle, false,
+                                        ).await;
                                     }
                                 }
-                                _ => {} // hold / wait — do nothing
+                                "SHORT" => {
+                                    let lev = resolve_leverage(&self.cfg, &sym);
+                                    // Close opposite (long) positions first
+                                    if let Ok((realized, fee, exec_price)) =
+                                        self.account.close(&sym, "long", price)
+                                    {
+                                        self.metrics_cache.total_trades += 1;
+                                        if realized > 0.0 {
+                                            self.metrics_cache.winning_trades += 1;
+                                        }
+                                        self.metrics_cache.total_realized_pnl += realized - fee;
+                                        let trade_id = Uuid::now_v7().to_string();
+                                        let _ = append_trade(
+                                            &backtest_repo, &trade_id, &run_id, ts_sec,
+                                            &sym, "close_long", "long", 0.0, exec_price, fee,
+                                            realized - fee, 0, cycle, false,
+                                        ).await;
+                                    }
+                                    // Open short
+                                    let size = dec.size_usd.unwrap_or(equity * 0.05);
+                                    if let Ok((fee, exec_price)) =
+                                        self.account.open(&sym, "short", size, lev, price)
+                                    {
+                                        let trade_id = Uuid::now_v7().to_string();
+                                        let _ = append_trade(
+                                            &backtest_repo, &trade_id, &run_id, ts_sec,
+                                            &sym, "open_short", "short", size / exec_price, exec_price,
+                                            fee, 0.0, lev, cycle, false,
+                                        ).await;
+                                    }
+                                }
+                                _ => {} // NO ACTION — do nothing
                             }
 
                             // Persist AI decision record
@@ -843,10 +804,11 @@ struct LlmDecision {
 async fn call_llm(
     llm_service: &LlmService,
     model: &ResolvedModelRecord,
+    system_prompt: &str,
     prompt: &str,
 ) -> Result<Vec<LlmDecision>, String> {
     let messages = vec![
-        LlmMessage { role: "system".to_string(), content: "You are a professional crypto futures trading AI. Respond with a JSON array of trading decisions.".to_string() },
+        LlmMessage { role: "system".to_string(), content: system_prompt.to_string() },
         LlmMessage { role: "user".to_string(), content: prompt.to_string() },
     ];
     let raw = llm_service
@@ -876,8 +838,8 @@ fn parse_llm_decisions(raw: &str) -> Result<Vec<LlmDecision>, String> {
         let action = v
             .get("action")
             .and_then(Value::as_str)
-            .unwrap_or("hold")
-            .to_lowercase();
+            .unwrap_or("no action")
+            .to_uppercase();
         let confidence = v
             .get("confidence")
             .and_then(Value::as_f64)
@@ -908,7 +870,7 @@ fn parse_llm_decisions(raw: &str) -> Result<Vec<LlmDecision>, String> {
     if out.is_empty() {
         out.push(LlmDecision {
             symbol: "BTCUSDT".to_string(),
-            action: "hold".to_string(),
+            action: "NO ACTION".to_string(),
             confidence: 0.5,
             reason: "no parseable decisions".to_string(),
             size_usd: None,
@@ -954,10 +916,15 @@ fn build_trading_prompt(
 **Prompt style**: {variant}
 **Leverage**: {lev}x
 
-Analyze the market and respond with a JSON array of trading decisions. Each element:
-{{"symbol":"BTCUSDT","action":"open_long|open_short|close_long|close_short|hold","confidence":0.7,"reason":"...","size_usd":500}}
+All symbols are perpetual futures (USDT-margined).
+Choose one action per symbol: LONG, SHORT, or NO ACTION.
+- LONG: go long (close short first if currently short)
+- SHORT: go short (close long first if currently long)
+- NO ACTION: hold / observe
 
-Only include decisions you are confident about. Prefer HOLD when uncertain.
+Respond with a JSON array. Each element:
+{{"symbol":"BTCUSDT","action":"LONG|SHORT|NO ACTION","confidence":0.7,"reason":"...","size_usd":500}}
+
 Respond with ONLY the JSON array, no markdown."#,
         cycle = cycle,
         equity = equity,

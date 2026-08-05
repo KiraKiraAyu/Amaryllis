@@ -30,7 +30,7 @@ pub async fn generate_ai_decision(
         };
         return DecisionSignal {
             symbol: symbol.to_string(),
-            action: "HOLD",
+            action: "NO ACTION".to_string(),
             confidence: 0.95,
             reason: "risk control active: drawdown/margin threshold reached".to_string(),
             timeframe: "3m",
@@ -54,7 +54,7 @@ pub async fn generate_ai_decision(
             );
             return DecisionSignal {
                 symbol: symbol.to_string(),
-                action: "HOLD",
+                action: "NO ACTION".to_string(),
                 confidence: 0.5,
                 reason: "no market data".to_string(),
                 timeframe: "3m",
@@ -77,12 +77,12 @@ pub async fn generate_ai_decision(
     };
 
     let prompt = build_trading_prompt(symbol, &m, metrics, cfg);
-    let custom_prompt = if cfg.override_base_prompt {
-        Some(cfg.custom_prompt.as_str())
+    let system_prompt = build_system_prompt(cfg);
+    let system_prompt_owned = if cfg.override_base_prompt && !cfg.custom_prompt.trim().is_empty() {
+        Some(cfg.custom_prompt.clone())
     } else {
-        None
+        Some(system_prompt)
     };
-    let system_prompt_owned = custom_prompt.map(|s| s.to_string());
 
     // Always publish the prompt to realtime clients so users can see what's sent to the AI
     info!(
@@ -118,6 +118,8 @@ pub async fn generate_ai_decision(
         content: prompt.clone(),
     };
 
+    let custom_system = system_prompt_owned.as_deref();
+
     match state
         .llm_service
         .chat_with_config(
@@ -126,20 +128,15 @@ pub async fn generate_ai_decision(
             cfg.ai_model_name.clone(),
             cfg.ai_base_url.clone(),
             vec![user_message],
-            custom_prompt,
+            custom_system,
         )
         .await
     {
         Ok(response) => {
             let decision = parse_ai_response(&response);
-            let action_str = match decision.action.to_uppercase().as_str() {
-                "BUY" => "BUY",
-                "SELL" => "SELL",
-                _ => "HOLD",
-            };
             DecisionSignal {
                 symbol: symbol.to_string(),
-                action: action_str,
+                action: decision.action,
                 confidence: decision.confidence,
                 reason: decision.reason,
                 timeframe: "3m",
@@ -147,7 +144,7 @@ pub async fn generate_ai_decision(
                 momentum,
                 risk_level: risk_level.to_string(),
                 trigger_source: trigger_source.to_string(),
-                action_taken: format!("ai-{}-{}", cfg.ai_model_id, decision.action.to_lowercase()),
+                action_taken: format!("ai-{}-{}", cfg.ai_model_id, correlation_id),
                 correlation_id: correlation_id.to_string(),
                 prompt,
                 system_prompt: system_prompt_owned,
@@ -169,6 +166,296 @@ pub async fn generate_ai_decision(
     }
 }
 
+/// Build a comprehensive system prompt from the full strategy configuration.
+/// Includes strategy type, risk controls, TP/SL rules, prompt sections, symbols, and action definitions.
+///
+/// This is the single source of truth for system prompt construction, shared by:
+/// - Live trading (`generate_ai_decision`)
+/// - Strategy preview (`preview_prompt`)
+/// - Strategy test run (`test_run`)
+/// - Backtesting (`call_llm`)
+pub fn build_system_prompt(cfg: &TraderRuntimeConfig) -> String {
+    build_system_prompt_from_config(
+        &cfg.strategy_config,
+        cfg.is_cross_margin,
+        &cfg.custom_prompt,
+        cfg.override_base_prompt,
+    )
+}
+
+/// Core prompt builder that works purely from the strategy config JSON.
+/// All callers (live trading, preview, test run, backtest) use this function
+/// to ensure identical prompt construction logic.
+pub fn build_system_prompt_from_config(
+    config: &serde_json::Value,
+    is_cross_margin: bool,
+    custom_prompt: &str,
+    override_base_prompt: bool,
+) -> String {
+    let sc = config;
+    let is_zh = sc
+        .get("language")
+        .and_then(|v| v.as_str())
+        .map(|s| s.eq_ignore_ascii_case("zh"))
+        .unwrap_or(false);
+
+    let prompt_variant = sc
+        .get("prompt_variant")
+        .and_then(|v| v.as_str())
+        .unwrap_or("balanced");
+
+    // --- Symbols config (parsed from JSON `symbols` array) ---
+    let symbols_str = if let Some(symbols) = sc.get("symbols").and_then(|v| v.as_array()) {
+        if symbols.is_empty() {
+            "None configured".to_string()
+        } else {
+            symbols
+                .iter()
+                .filter_map(|s| {
+                    let sym = s.get("symbol").and_then(|v| v.as_str()).unwrap_or("");
+                    if sym.is_empty() {
+                        return None;
+                    }
+                    let lev = s.get("leverage").and_then(|v| v.as_i64()).unwrap_or(5);
+                    let fixed_cost = s.get("fixed_cost").and_then(|v| v.as_f64());
+                    let min_cost = s.get("min_cost").and_then(|v| v.as_f64());
+                    let max_cost = s.get("max_cost").and_then(|v| v.as_f64());
+                    let cost = if let Some(fixed) = fixed_cost {
+                        format!("fixed ${:.0}", fixed)
+                    } else {
+                        let min = min_cost.map(|v| format!("{:.0}", v)).unwrap_or("-".into());
+                        let max = max_cost.map(|v| format!("{:.0}", v)).unwrap_or("-".into());
+                        format!("${}-${}", min, max)
+                    };
+                    Some(format!("  - {} ({}x leverage, cost: {})", sym, lev, cost))
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        }
+    } else {
+        "None configured".to_string()
+    };
+
+    // --- Risk control ---
+    let rc = sc.get("risk_control");
+    let max_positions = rc
+        .and_then(|r| r.get("max_positions"))
+        .and_then(|v| v.as_i64())
+        .unwrap_or(3);
+    let max_margin_usage = rc
+        .and_then(|r| r.get("max_margin_usage"))
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.9);
+    let min_position_size = rc
+        .and_then(|r| r.get("min_position_size"))
+        .and_then(|v| v.as_f64())
+        .unwrap_or(20.0);
+    let min_risk_reward = rc
+        .and_then(|r| r.get("min_risk_reward_ratio"))
+        .and_then(|v| v.as_f64())
+        .unwrap_or(1.5);
+    let min_confidence = rc
+        .and_then(|r| r.get("min_confidence"))
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.6);
+
+    // --- Margin mode (prefer config value, fall back to is_cross_margin) ---
+    let margin_mode = rc
+        .and_then(|r| r.get("margin_mode"))
+        .and_then(|v| v.as_str())
+        .map(|m| if m.eq_ignore_ascii_case("cross") { "Cross" } else { "Isolated" })
+        .unwrap_or_else(|| if is_cross_margin { "Cross" } else { "Isolated" });
+
+    // --- TP/SL rules ---
+    let tp_sl = sc.get("tp_sl");
+    let tp_sl_mode = tp_sl
+        .and_then(|t| t.get("mode"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("fixed");
+    let (tp_sl_section, tp_sl_instruction) = if tp_sl_mode == "custom" {
+        let tp_sl_custom = tp_sl
+            .and_then(|t| t.get("custom_prompt"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let instruction = if tp_sl_custom.is_empty() {
+            "Close positions based on your own analysis of market conditions, momentum, and risk."
+        } else {
+            tp_sl_custom
+        };
+        (
+            format!("Mode: Custom AI-driven\nCustom Rule: {}", instruction),
+            instruction.to_string(),
+        )
+    } else {
+        let tp_rate = tp_sl
+            .and_then(|t| t.get("fixed_tp_pnl_rate"))
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1.0);
+        let sl_rate = tp_sl
+            .and_then(|t| t.get("fixed_sl_pnl_rate"))
+            .and_then(|v| v.as_f64())
+            .unwrap_or(-1.0);
+        (
+            format!(
+                "Mode: Fixed Unrealized PnL Rate\nTake-Profit: +{:.1}% (auto-close when PnL/margin >= this rate)\nStop-Loss: {:.1}% (auto-close when PnL/margin <= this rate)",
+                tp_rate * 100.0, sl_rate * 100.0
+            ),
+            String::new(),
+        )
+    };
+
+    // --- Prompt sections ---
+    let role_def = sc
+        .pointer("/prompt_sections/role_definition")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let trading_freq = sc
+        .pointer("/prompt_sections/trading_frequency")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let entry_standards = sc
+        .pointer("/prompt_sections/entry_standards")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let decision_process = sc
+        .pointer("/prompt_sections/decision_process")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+
+    // --- Indicators ---
+    let indicators = sc.get("indicators");
+    let primary_tf = indicators
+        .and_then(|i| i.pointer("/klines/primary_timeframe"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("3m");
+    let enable_ema = indicators
+        .and_then(|i| i.get("enable_ema"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+    let enable_macd = indicators
+        .and_then(|i| i.get("enable_macd"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+    let enable_rsi = indicators
+        .and_then(|i| i.get("enable_rsi"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+    let enable_atr = indicators
+        .and_then(|i| i.get("enable_atr"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+
+    let mut indicator_list = Vec::new();
+    if enable_ema { indicator_list.push("EMA"); }
+    if enable_macd { indicator_list.push("MACD"); }
+    if enable_rsi { indicator_list.push("RSI"); }
+    if enable_atr { indicator_list.push("ATR"); }
+    let indicators_str = if indicator_list.is_empty() {
+        "None".to_string()
+    } else {
+        indicator_list.join(", ")
+    };
+
+    let header = if is_zh {
+        "你是 QUANTAURA 交易AI，一个专业的加密货币永续合约交易系统。"
+    } else {
+        "You are QUANTAURA trading AI, a professional crypto perpetual futures trading system."
+    };
+
+    let action_desc = if is_zh {
+        r#"## 动作定义
+你必须从以下三个动作中选择一个：
+- **LONG**: 开多仓（如果当前持有空仓，先平空再开多；如果已有多仓，则保持）
+- **SHORT**: 开空仓（如果当前持有多仓，先平多再开空；如果已有空仓，则保持）
+- **NO ACTION**: 不执行任何操作（观望或保持现有仓位）
+
+所有交易标的均为永续合约（USDT本位），不支持现货和交割合约。"#
+    } else {
+        r#"## Action Definitions
+You must choose exactly one of three actions:
+- **LONG**: Open a long position (if currently short, close short first then open long; if already long, hold)
+- **SHORT**: Open a short position (if currently long, close long first then open short; if already short, hold)
+- **NO ACTION**: Do nothing (observe or maintain current positions)
+
+All trading symbols are perpetual futures contracts (USDT-margined). Spot and delivery contracts are not supported."#
+    };
+
+    let response_format = if is_zh {
+        r#"## 响应格式
+返回纯JSON对象，不要包含markdown：
+{"action": "LONG" | "SHORT" | "NO ACTION", "confidence": 0.0-1.0, "reason": "1-2句分析说明"}"#
+    } else {
+        r#"## Response Format
+Respond with a plain JSON object, no markdown:
+{"action": "LONG" | "SHORT" | "NO ACTION", "confidence": 0.0-1.0, "reason": "1-2 sentence analysis"}"#
+    };
+
+    let custom_prompt_section = if override_base_prompt && !custom_prompt.trim().is_empty() {
+        format!("\n## Additional Instructions\n{}", custom_prompt.trim())
+    } else {
+        String::new()
+    };
+
+    let tp_sl_instruction_section = if !tp_sl_instruction.is_empty() {
+        format!("\n## Take-Profit / Stop-Loss Guidance\n{}", tp_sl_instruction)
+    } else {
+        String::new()
+    };
+
+    // Build optional prompt sections (skip empty ones to avoid large gaps)
+    let role_def_section = if !role_def.is_empty() {
+        format!("\n{}\n", role_def)
+    } else {
+        String::new()
+    };
+    let trading_freq_section = if !trading_freq.is_empty() {
+        format!("\n{}\n", trading_freq)
+    } else {
+        String::new()
+    };
+    let entry_standards_section = if !entry_standards.is_empty() {
+        format!("\n{}\n", entry_standards)
+    } else {
+        String::new()
+    };
+    let decision_process_section = if !decision_process.is_empty() {
+        format!("\n{}\n", decision_process)
+    } else {
+        String::new()
+    };
+
+    format!(
+        r#"{header}
+
+## Strategy Configuration
+- Prompt Style: {prompt_variant}
+- Margin Mode: {margin_mode}
+- Primary Timeframe: {primary_tf}
+- Technical Indicators: {indicators_str}
+
+## Trading Symbols (Perpetual Futures)
+{symbols_str}
+
+## Risk Controls
+- Max Positions: {max_positions}
+- Max Margin Usage: {:.0}%
+- Min Position Size: ${:.0}
+- Min Risk/Reward Ratio: {:.1}
+- Min Confidence Threshold: {:.2}
+
+## Take-Profit / Stop-Loss Rules
+{tp_sl_section}
+{role_def_section}{trading_freq_section}{entry_standards_section}{decision_process_section}
+{action_desc}
+{tp_sl_instruction_section}
+{response_format}{custom_prompt_section}"#,
+        max_margin_usage * 100.0,
+        min_position_size,
+        min_risk_reward,
+        min_confidence,
+    )
+}
+
 pub fn build_trading_prompt(
     symbol: &str,
     m: &MarketState,
@@ -181,13 +468,16 @@ pub fn build_trading_prompt(
         0.0
     };
 
-    format!(
-        r#"Analyze the following trading opportunity for {}:
+    let leverage = leverage_for_symbol(cfg, symbol);
 
-Current Price: {:.2}
-Previous Price: {:.2}
-Price Change: {:.4}%
-Volatility: {:.4}%
+    format!(
+        r#"Analyze {} perpetual futures and decide: LONG, SHORT, or NO ACTION.
+
+Market Data:
+- Current Price: {:.2}
+- Previous Price: {:.2}
+- Price Change: {:.4}%
+- Volatility: {:.4}%
 
 Account Status:
 - Total Balance: ${:.2}
@@ -197,16 +487,11 @@ Account Status:
 - Realized PnL: ${:.2}
 - Margin Usage: {:.2}%
 
-Position Limits:
-- Max leverage: {}x
-- Risk per position: 6% of account
+Position Info:
+- Leverage: {}x
+- Margin Mode: {}
 
-Respond with a JSON object in this exact format:
-{{
-    "action": "BUY" or "SELL" or "HOLD",
-    "confidence": 0.0-1.0,
-    "reason": "Your analysis in 1-2 sentences"
-}}"#,
+Respond with JSON: {{"action":"LONG|SHORT|NO ACTION","confidence":0.0-1.0,"reason":"..."}}"#,
         symbol,
         m.price,
         m.prev_price,
@@ -218,7 +503,8 @@ Respond with a JSON object in this exact format:
         metrics.unrealized_pnl,
         metrics.realized_pnl,
         metrics.margin_used_ratio * 100.0,
-        leverage_for_symbol(cfg, symbol)
+        leverage,
+        if cfg.is_cross_margin { "Cross" } else { "Isolated" },
     )
 }
 
@@ -241,7 +527,7 @@ pub fn generate_fallback_decision(
     if hard_risk_trigger {
         return DecisionSignal {
             symbol: symbol.to_string(),
-            action: "HOLD",
+            action: "NO ACTION".to_string(),
             confidence: 0.95,
             reason: "risk control active: drawdown/margin threshold reached".to_string(),
             timeframe: "3m",
@@ -261,7 +547,7 @@ pub fn generate_fallback_decision(
     if momentum > threshold {
         DecisionSignal {
             symbol: symbol.to_string(),
-            action: "BUY",
+            action: "LONG".to_string(),
             confidence: (0.55 + (momentum / threshold).min(1.5) * 0.2).clamp(0.55, 0.9),
             reason: format!("uptrend momentum={:.4}", momentum),
             timeframe: "3m",
@@ -277,7 +563,7 @@ pub fn generate_fallback_decision(
     } else if momentum < -threshold {
         DecisionSignal {
             symbol: symbol.to_string(),
-            action: "SELL",
+            action: "SHORT".to_string(),
             confidence: (0.55 + ((-momentum) / threshold).min(1.5) * 0.2).clamp(0.55, 0.9),
             reason: format!("downtrend momentum={:.4}", momentum),
             timeframe: "3m",
@@ -293,7 +579,7 @@ pub fn generate_fallback_decision(
     } else {
         DecisionSignal {
             symbol: symbol.to_string(),
-            action: "HOLD",
+            action: "NO ACTION".to_string(),
             confidence: 0.5,
             reason: format!("range momentum={:.4}", momentum),
             timeframe: "3m",
@@ -339,7 +625,7 @@ pub async fn persist_decision(
             trader_id: cfg.trader_id.clone(),
             symbol: d.symbol.clone(),
             timeframe: d.timeframe.to_string(),
-            decision: d.action.to_string(),
+            decision: d.action.clone(),
             confidence: d.confidence,
             reason: d.reason.clone(),
             payload_json: payload,
@@ -359,26 +645,67 @@ pub struct TradingDecision {
 
 pub fn parse_ai_response(response: &str) -> TradingDecision {
     let lower = response.to_lowercase();
-    let action = if lower.contains("buy") || lower.contains("long") {
-        "BUY"
-    } else if lower.contains("sell") || lower.contains("short") {
-        "SELL"
+
+    // Try JSON parsing first
+    if let Some(action) = extract_json_action(response) {
+        let reason = extract_json_reason(response).unwrap_or_else(|| response.to_string());
+        let confidence = extract_confidence(&lower).unwrap_or(0.7);
+        return TradingDecision {
+            action,
+            confidence,
+            reason,
+        };
+    }
+
+    // Fallback: keyword matching
+    let action = if lower.contains("long") && !lower.contains("no action") {
+        "LONG".to_string()
+    } else if lower.contains("short") && !lower.contains("no action") {
+        "SHORT".to_string()
+    } else if lower.contains("no action") || lower.contains("hold") || lower.contains("nothing") {
+        "NO ACTION".to_string()
     } else {
-        "HOLD"
+        "NO ACTION".to_string()
     };
 
-    // Try to parse the response as JSON and extract the reason field.
-    // LLMs often wrap their output in a JSON object like:
-    //   {"action":"HOLD","confidence":0.5,"reason":"..."}
-    // If JSON parsing succeeds, use the extracted reason; otherwise fall back
-    // to the raw response text (without truncation).
     let reason = extract_json_reason(response).unwrap_or_else(|| response.to_string());
 
     TradingDecision {
-        action: action.to_string(),
+        action,
         confidence: extract_confidence(&lower).unwrap_or(0.7),
         reason,
     }
+}
+
+/// Attempt to extract the action from a JSON response.
+fn extract_json_action(response: &str) -> Option<String> {
+    let trimmed = response.trim();
+
+    // Strip markdown code fences if present
+    let json_str = if trimmed.starts_with("```") {
+        let inner = trimmed
+            .trim_start_matches("```json")
+            .trim_start_matches("```")
+            .trim_end_matches("```")
+            .trim();
+        inner
+    } else {
+        trimmed
+    };
+
+    let parsed: serde_json::Value = serde_json::from_str(json_str).ok()?;
+
+    if let Some(action) = parsed.get("action").and_then(|v| v.as_str()) {
+        let normalized = action.trim().to_uppercase();
+        return match normalized.as_str() {
+            "LONG" | "BUY" => Some("LONG".to_string()),
+            "SHORT" | "SELL" => Some("SHORT".to_string()),
+            "NO ACTION" | "NOACTION" | "HOLD" | "NONE" | "WAIT" => Some("NO ACTION".to_string()),
+            _ => Some("NO ACTION".to_string()),
+        };
+    }
+
+    None
 }
 
 /// Attempt to extract the "reason" field from a JSON response.

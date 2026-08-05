@@ -19,5 +19,4 @@ export interface StrategyConfigFormFields {
 export interface StrategyPromptPreviewModel {
   system: string
   variant: string
-  summary: string
 }

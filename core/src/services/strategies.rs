@@ -6,8 +6,8 @@ use crate::{
     clients::market_data::{now_ts, parse_json_value, ts_to_rfc3339},
     contracts::strategies::{
         CreateStrategyRequest, DefaultStrategyConfigQuery, DuplicateStrategyRequest,
-        PreviewPromptPayload, PreviewPromptRequest, StrategyConfigSummaryPayload,
-        StrategyCreatedPayload, StrategyDefaultConfigPayload, StrategyListPayload,
+        PreviewPromptPayload, PreviewPromptRequest, StrategyCreatedPayload,
+        StrategyDefaultConfigPayload, StrategyListPayload,
         StrategyMessagePayload, StrategyPayload, StrategyTestRunPayload, StrategyTestRunRequest,
         UpdateStrategyRequest,
     },
@@ -16,6 +16,7 @@ use crate::{
         CreateStrategyRecord, StrategyRecord, StrategyRepo, UpdateStrategyRecord,
     },
     services::llm::{LlmMessage, LlmService},
+    services::trading_runtime::ai_decision::build_system_prompt_from_config,
 };
 
 #[derive(Debug, Clone)]
@@ -137,10 +138,7 @@ impl StrategyService {
         })
     }
 
-    pub async fn delete_strategy(
-        &self,
-        id: String,
-    ) -> Result<StrategyMessagePayload> {
+    pub async fn delete_strategy(&self, id: String) -> Result<StrategyMessagePayload> {
         let affected = self
             .strategy_repo
             .delete_owned(&id)
@@ -156,15 +154,11 @@ impl StrategyService {
         })
     }
 
-    pub async fn activate_strategy(
-        &self,
-        id: String,
-    ) -> Result<StrategyMessagePayload> {
-        let exists = self
-            .strategy_repo
-            .get_owned(&id)
-            .await
-            .map_err(|_| strategy_error(AppErrorKind::Internal, "Failed to activate strategy"))?;
+    pub async fn activate_strategy(&self, id: String) -> Result<StrategyMessagePayload> {
+        let exists =
+            self.strategy_repo.get_owned(&id).await.map_err(|_| {
+                strategy_error(AppErrorKind::Internal, "Failed to activate strategy")
+            })?;
         if exists.is_none() {
             return Err(strategy_error(AppErrorKind::NotFound, "Strategy not found"));
         }
@@ -258,17 +252,18 @@ impl StrategyService {
             .unwrap_or_else(|| "balanced".to_string())
             .trim()
             .to_string();
-        let account_equity = request.account_equity.unwrap_or(1000.0).max(0.0);
-        let summary = build_config_summary(&request.config);
-        let system_prompt = format!(
-            "You are QUANTAURA trading AI. Style={}. Equity={:.2}. Follow risk controls strictly and output structured decisions.",
-            prompt_variant, account_equity
+
+        // Use the unified prompt builder shared with live trading, backtest, and test run
+        let system_prompt = build_system_prompt_from_config(
+            &request.config,
+            true, // is_cross_margin: default for preview (no trader context)
+            "",   // no trader-specific custom prompt
+            false,
         );
 
         let payload = PreviewPromptPayload {
             system_prompt,
             prompt_variant,
-            config_summary: summary,
         };
 
         Ok(payload)
@@ -297,19 +292,16 @@ impl StrategyService {
             .await?;
         let ai_model_id = resolved_model.id.clone();
         let run_real_ai = request.run_real_ai.unwrap_or(false);
-        let summary = build_config_summary(&request.config);
 
-        let system_prompt = "You are QUANTAURA, an expert AI trading system. \
-        Your task is to evaluate a trading strategy configuration and produce concrete \
-        trading decisions for the given symbols. \
-        Respond ONLY with a valid JSON array of decision objects with these fields: \
-        action (BUY/SELL/HOLD), symbol, confidence (0-100 integer), reasoning (string). \
-        No markdown, no explanation outside the JSON array."
-            .to_string();
+        let system_prompt = build_system_prompt_from_config(
+            &request.config,
+            true, // is_cross_margin: default for test run (no trader context)
+            "",   // no trader-specific custom prompt
+            false,
+        );
 
         let config_str =
             serde_json::to_string_pretty(&request.config).unwrap_or_else(|_| "{}".to_string());
-        let summary_str = serde_json::to_string(&summary).unwrap_or_else(|_| "{}".to_string());
 
         let mut symbols: Vec<String> = Vec::new();
         if let Some(symbols_arr) = request.config.get("symbols").and_then(|v| v.as_array()) {
@@ -323,8 +315,13 @@ impl StrategyService {
             }
         }
         if symbols.is_empty() {
-            if let Some(s) = request.config.get("trading_symbols").and_then(|v| v.as_str()) {
-                symbols = s.split(',')
+            if let Some(s) = request
+                .config
+                .get("trading_symbols")
+                .and_then(|v| v.as_str())
+            {
+                symbols = s
+                    .split(',')
                     .map(|sym| sym.trim().to_uppercase())
                     .filter(|s| !s.is_empty())
                     .collect();
@@ -344,7 +341,6 @@ impl StrategyService {
         Model: {ai_model_id}\n\
         Symbols to analyze: {symbols_str}\n\n\
         Strategy config:\n{config_str}\n\n\
-        Config summary:\n{summary_str}\n\n\
         Based on this strategy configuration and current market conditions, \
         provide trading decisions for each symbol: {symbols_str}.\n\
         Return a JSON array only.",
@@ -352,7 +348,6 @@ impl StrategyService {
             ai_model_id = ai_model_id,
             symbols_str = symbols_str,
             config_str = config_str,
-            summary_str = summary_str,
         );
 
         if run_real_ai {
@@ -405,7 +400,7 @@ impl StrategyService {
 
         let decisions = json!([
             {
-                "action": "HOLD",
+                "action": "NO ACTION",
                 "symbol": "BTCUSDT",
                 "confidence": 62,
                 "reasoning": "No clear multi-timeframe breakout and momentum is neutral."
@@ -459,7 +454,7 @@ fn parse_ai_decisions(raw: &str) -> Value {
     }
 
     json!([{
-        "action": "HOLD",
+        "action": "NO ACTION",
         "symbol": "UNKNOWN",
         "confidence": 50,
         "reasoning": raw.chars().take(500).collect::<String>()
@@ -544,6 +539,12 @@ fn default_strategy_config(lang: &str) -> Value {
             "min_risk_reward_ratio": 1.5,
             "min_confidence": 0.6
         },
+        "tp_sl": {
+            "mode": "fixed",
+            "fixed_tp_pnl_rate": 1.0,
+            "fixed_sl_pnl_rate": -1.0,
+            "custom_prompt": ""
+        },
         "prompt_sections": {
             "role_definition": if is_zh {
                 "# 你是专业的加密货币交易AI\n\n你专注于技术分析和风险管理。"
@@ -586,43 +587,3 @@ fn default_strategy_config(lang: &str) -> Value {
     })
 }
 
-fn build_config_summary(config: &Value) -> StrategyConfigSummaryPayload {
-    let mut leverage: i64 = 5;
-    if let Some(symbols) = config.get("symbols").and_then(|v| v.as_array()) {
-        for s in symbols {
-            if let Some(lev) = s.get("leverage").and_then(|v| v.as_i64()) {
-                if lev > leverage {
-                    leverage = lev;
-                }
-            }
-        }
-    }
-    if let Some(lev) = config.pointer("/risk_control/leverage").and_then(|v| v.as_i64()) {
-        leverage = leverage.max(lev);
-    }
-
-    let max_positions = config
-        .get("max_positions")
-        .and_then(|v| v.as_i64())
-        .unwrap_or_else(|| {
-            config
-                .pointer("/risk_control/max_positions")
-                .and_then(Value::as_i64)
-                .unwrap_or(3)
-        });
-
-    StrategyConfigSummaryPayload {
-        coin_source: config
-            .pointer("/coin_source/source_type")
-            .and_then(Value::as_str)
-            .unwrap_or("mixed")
-            .to_string(),
-        primary_tf: config
-            .pointer("/indicators/klines/primary_timeframe")
-            .and_then(Value::as_str)
-            .unwrap_or("3m")
-            .to_string(),
-        leverage,
-        max_positions,
-    }
-}

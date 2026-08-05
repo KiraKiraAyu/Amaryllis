@@ -80,18 +80,9 @@ pub struct StrategyDefaultConfigPayload {
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct StrategyConfigSummaryPayload {
-    pub coin_source: String,
-    pub primary_tf: String,
-    pub leverage: i64,
-    pub max_positions: i64,
-}
-
-#[derive(Debug, Clone, Serialize)]
 pub struct PreviewPromptPayload {
     pub system_prompt: String,
     pub prompt_variant: String,
-    pub config_summary: StrategyConfigSummaryPayload,
 }
 
 #[derive(Debug, Clone, Serialize)]
