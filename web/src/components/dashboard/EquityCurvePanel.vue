@@ -37,7 +37,7 @@ const emit = defineEmits<{
           />
         </div>
       </div>
-      <EquityChart :data="data" :height="220" color="oklch(0.66 0.058 301)" />
+      <EquityChart :data="data" :height="220" color="#9b6dae" />
     </template>
   </Card>
 </template>
