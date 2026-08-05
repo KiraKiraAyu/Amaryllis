@@ -103,8 +103,6 @@ pub struct TraderRuntimeConfig {
     pub exchange_id: String,
     pub scan_interval_minutes: i64,
     pub initial_balance: f64,
-    pub btc_eth_leverage: i64,
-    pub altcoin_leverage: i64,
     pub is_cross_margin: bool,
     pub trading_symbols: String,
     pub custom_prompt: String,

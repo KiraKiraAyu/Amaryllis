@@ -61,12 +61,6 @@ pub async fn create_trader(
             "name, ai_model_id, exchange_id are required",
         ));
     }
-    if !is_valid_leverage(req.btc_eth_leverage) || !is_valid_leverage(req.altcoin_leverage) {
-        return Err(app_error(
-            AppErrorKind::BadRequest,
-            "leverage must be between 1 and 50",
-        ));
-    }
     if let Err(err) = app
         .llm_service
         .resolve_for_user(Some(ai_model_id))
@@ -97,9 +91,6 @@ pub async fn create_trader(
             initial_balance: req.initial_balance.max(0.0),
             scan_interval_minutes: req.scan_interval_minutes.max(1),
             is_cross_margin: req.is_cross_margin.unwrap_or(true),
-            btc_eth_leverage: req.btc_eth_leverage,
-            altcoin_leverage: req.altcoin_leverage,
-            trading_symbols: req.trading_symbols.trim().to_string(),
             use_ai500: req.use_ai500,
             use_oi_top: req.use_oi_top,
             custom_prompt: req.custom_prompt.trim().to_string(),
@@ -138,14 +129,6 @@ pub async fn update_trader(
         }
     };
 
-    let btc_lev = req.btc_eth_leverage.unwrap_or(existing.btc_eth_leverage);
-    let alt_lev = req.altcoin_leverage.unwrap_or(existing.altcoin_leverage);
-    if !is_valid_leverage(btc_lev) || !is_valid_leverage(alt_lev) {
-        return Err(app_error(
-            AppErrorKind::BadRequest,
-            "leverage must be between 1 and 50",
-        ));
-    }
     if let Some(ai_model_id) = req.ai_model_id.as_deref().map(str::trim) {
         if ai_model_id.is_empty() {
             return Err(app_error(
@@ -200,13 +183,6 @@ pub async fn update_trader(
                     .unwrap_or(existing.scan_interval_minutes)
                     .max(1),
                 is_cross_margin: req.is_cross_margin.unwrap_or(existing.is_cross_margin != 0),
-                btc_eth_leverage: btc_lev,
-                altcoin_leverage: alt_lev,
-                trading_symbols: req
-                    .trading_symbols
-                    .unwrap_or(existing.trading_symbols)
-                    .trim()
-                    .to_string(),
                 use_ai500: req.use_ai500.unwrap_or(existing.use_ai500 != 0),
                 use_oi_top: req.use_oi_top.unwrap_or(existing.use_oi_top != 0),
                 custom_prompt: req

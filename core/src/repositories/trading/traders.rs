@@ -95,9 +95,6 @@ impl TradingRepo {
             scan_interval_minutes: Set(input.scan_interval_minutes.max(1) as i32),
             is_running: Set(0),
             is_cross_margin: Set(if input.is_cross_margin { 1 } else { 0 }),
-            btc_eth_leverage: Set(input.btc_eth_leverage as i32),
-            altcoin_leverage: Set(input.altcoin_leverage as i32),
-            trading_symbols: Set(input.trading_symbols),
             use_ai500: Set(if input.use_ai500 { 1 } else { 0 }),
             use_oi_top: Set(if input.use_oi_top { 1 } else { 0 }),
             custom_prompt: Set(input.custom_prompt),
@@ -159,18 +156,6 @@ impl TradingRepo {
             .col_expr(
                 entity::traders::Column::IsCrossMargin,
                 Expr::value(if patch.is_cross_margin { 1 } else { 0 }),
-            )
-            .col_expr(
-                entity::traders::Column::BtcEthLeverage,
-                Expr::value(patch.btc_eth_leverage as i32),
-            )
-            .col_expr(
-                entity::traders::Column::AltcoinLeverage,
-                Expr::value(patch.altcoin_leverage as i32),
-            )
-            .col_expr(
-                entity::traders::Column::TradingSymbols,
-                Expr::value(patch.trading_symbols),
             )
             .col_expr(
                 entity::traders::Column::UseAi500,

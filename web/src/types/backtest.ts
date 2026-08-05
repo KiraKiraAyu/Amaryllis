@@ -10,8 +10,7 @@ export interface BacktestStartRequest {
   slippage_bps?: number | null
   ai_model_id?: string | null
   prompt_variant?: string | null
-  btc_eth_leverage?: number | null
-  altcoin_leverage?: number | null
+  leverage?: number | null
   interval?: string | null
   decision_every?: number | null
 }
@@ -55,8 +54,7 @@ export interface BacktestRunConfigPayload {
   slippage_bps?: number
   ai_model_id?: string
   prompt_variant?: string
-  btc_eth_leverage?: number
-  altcoin_leverage?: number
+  leverage?: number
   interval?: string
   decision_every?: number
 }

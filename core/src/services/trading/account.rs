@@ -303,24 +303,6 @@ fn order_position_side(side: &str) -> AppResult<PositionSide> {
 }
 
 fn manual_runtime_config(trader: &TraderRecord) -> TraderRuntimeConfig {
-    let symbols = crate::services::trading_runtime::config_loaders::parse_symbols(&trader.trading_symbols);
-    let mut symbols_config = Vec::new();
-    for symbol in symbols {
-        let is_major = symbol.contains("BTC") || symbol.contains("ETH");
-        let leverage = if is_major {
-            trader.btc_eth_leverage
-        } else {
-            trader.altcoin_leverage
-        };
-        symbols_config.push(crate::services::trading_runtime::models::SymbolConfig {
-            symbol,
-            leverage,
-            min_cost: None,
-            max_cost: None,
-            fixed_cost: None,
-        });
-    }
-
     TraderRuntimeConfig {
         trader_id: trader.id.clone(),
         name: trader.name.clone(),
@@ -332,14 +314,12 @@ fn manual_runtime_config(trader: &TraderRecord) -> TraderRuntimeConfig {
         exchange_id: trader.exchange_id.clone(),
         scan_interval_minutes: trader.scan_interval_minutes,
         initial_balance: trader.initial_balance,
-        btc_eth_leverage: trader.btc_eth_leverage,
-        altcoin_leverage: trader.altcoin_leverage,
         is_cross_margin: trader.is_cross_margin != 0,
-        trading_symbols: trader.trading_symbols.clone(),
+        trading_symbols: String::new(),
         custom_prompt: trader.custom_prompt.clone(),
         override_base_prompt: trader.override_base_prompt != 0,
         system_prompt_template: trader.system_prompt_template.clone(),
-        symbols_config,
+        symbols_config: Vec::new(),
     }
 }
 

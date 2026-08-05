@@ -58,8 +58,7 @@ struct BacktestConfig {
     pub ai_model_id: String,
     #[serde(default = "default_prompt_variant")]
     pub prompt_variant: String,
-    pub btc_eth_leverage: i64,
-    pub altcoin_leverage: i64,
+    pub leverage: i64,
     /// Kline interval string (e.g. "5m", "15m")
     #[serde(default = "default_interval")]
     pub interval: String,
@@ -131,8 +130,7 @@ impl BacktestService {
             slippage_bps: req.slippage_bps.unwrap_or(2.0),
             ai_model_id: resolved_model.id.clone(),
             prompt_variant: req.prompt_variant.unwrap_or_else(|| "balanced".to_string()),
-            btc_eth_leverage: req.btc_eth_leverage.unwrap_or(5),
-            altcoin_leverage: req.altcoin_leverage.unwrap_or(5),
+            leverage: req.leverage.unwrap_or(5),
             interval: req.interval.unwrap_or_else(|| "5m".to_string()),
             decision_every: req.decision_every.unwrap_or(1),
             strategy_config: json!({}),
@@ -954,7 +952,7 @@ fn build_trading_prompt(
 **Open positions**: {pos_summary}
 **Latest bar** (symbol={symbols_str}): O={open} H={high} L={low} C={close} V={vol:.0}
 **Prompt style**: {variant}
-**Leverage**: BTC/ETH={btc_lev}x, Altcoins={alt_lev}x
+**Leverage**: {lev}x
 
 Analyze the market and respond with a JSON array of trading decisions. Each element:
 {{"symbol":"BTCUSDT","action":"open_long|open_short|close_long|close_short|hold","confidence":0.7,"reason":"...","size_usd":500}}
@@ -972,18 +970,12 @@ Respond with ONLY the JSON array, no markdown."#,
         close = bar.close,
         vol = bar.volume,
         variant = cfg.prompt_variant,
-        btc_lev = cfg.btc_eth_leverage,
-        alt_lev = cfg.altcoin_leverage,
+        lev = cfg.leverage,
     )
 }
 
-fn resolve_leverage(cfg: &BacktestConfig, symbol: &str) -> i64 {
-    let sym_upper = symbol.to_uppercase();
-    if sym_upper.starts_with("BTC") || sym_upper.starts_with("ETH") {
-        cfg.btc_eth_leverage.max(1)
-    } else {
-        cfg.altcoin_leverage.max(1)
-    }
+fn resolve_leverage(cfg: &BacktestConfig, _symbol: &str) -> i64 {
+    cfg.leverage.max(1)
 }
 
 // ===== Persistence helpers =====

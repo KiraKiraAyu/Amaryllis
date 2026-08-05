@@ -83,8 +83,7 @@ pub struct StrategyDefaultConfigPayload {
 pub struct StrategyConfigSummaryPayload {
     pub coin_source: String,
     pub primary_tf: String,
-    pub btc_eth_leverage: i64,
-    pub altcoin_leverage: i64,
+    pub leverage: i64,
     pub max_positions: i64,
 }
 

@@ -1,5 +1,4 @@
 use axum::{Json, extract::State};
-use std::env;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{
@@ -30,9 +29,6 @@ pub async fn config(
     let runtime_alerts = &shared_state.config.runtime_alerts;
 
     let payload = SystemConfigResponse {
-        btc_eth_leverage: env_u32("BTC_ETH_LEVERAGE", 10),
-        altcoin_leverage: env_u32("ALTCOIN_LEVERAGE", 5),
-
         runtime_alert_webhook_enabled: runtime_alerts.enabled(),
         runtime_alert_webhook_auth_header_set: runtime_alerts.auth_header_set(),
         runtime_alert_webhook_timeout_secs: runtime_alerts.timeout_secs,
@@ -46,13 +42,6 @@ pub async fn config(
     };
 
     Ok(Json(ApiResponse::success(Some(payload), None)))
-}
-
-fn env_u32(key: &str, default: u32) -> u32 {
-    env::var(key)
-        .ok()
-        .and_then(|v| v.trim().parse::<u32>().ok())
-        .unwrap_or(default)
 }
 
 const TIMEZONE_KEY: &str = "timezone";

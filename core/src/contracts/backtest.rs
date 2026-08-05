@@ -14,8 +14,7 @@ pub struct BacktestStartRequest {
     pub slippage_bps: Option<f64>,
     pub ai_model_id: Option<String>,
     pub prompt_variant: Option<String>,
-    pub btc_eth_leverage: Option<i64>,
-    pub altcoin_leverage: Option<i64>,
+    pub leverage: Option<i64>,
     pub interval: Option<String>,
     pub decision_every: Option<usize>,
 }

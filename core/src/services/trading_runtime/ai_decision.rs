@@ -218,7 +218,7 @@ Respond with a JSON object in this exact format:
         metrics.unrealized_pnl,
         metrics.realized_pnl,
         metrics.margin_used_ratio * 100.0,
-        cfg.btc_eth_leverage.max(cfg.altcoin_leverage)
+        leverage_for_symbol(cfg, symbol)
     )
 }
 

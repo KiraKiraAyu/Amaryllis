@@ -13,12 +13,6 @@ pub struct CreateTraderRequest {
     pub scan_interval_minutes: i64,
     #[serde(default)]
     pub is_cross_margin: Option<bool>,
-    #[serde(default = "default_leverage")]
-    pub btc_eth_leverage: i64,
-    #[serde(default = "default_leverage")]
-    pub altcoin_leverage: i64,
-    #[serde(default)]
-    pub trading_symbols: String,
     #[serde(default)]
     pub use_ai500: bool,
     #[serde(default)]
@@ -40,9 +34,6 @@ pub struct UpdateTraderRequest {
     pub initial_balance: Option<f64>,
     pub scan_interval_minutes: Option<i64>,
     pub is_cross_margin: Option<bool>,
-    pub btc_eth_leverage: Option<i64>,
-    pub altcoin_leverage: Option<i64>,
-    pub trading_symbols: Option<String>,
     pub use_ai500: Option<bool>,
     pub use_oi_top: Option<bool>,
     pub custom_prompt: Option<String>,
@@ -69,9 +60,6 @@ pub struct TraderPayload {
     pub scan_interval_minutes: i64,
     pub is_running: bool,
     pub is_cross_margin: bool,
-    pub btc_eth_leverage: i64,
-    pub altcoin_leverage: i64,
-    pub trading_symbols: String,
     pub use_ai500: bool,
     pub use_oi_top: bool,
     pub custom_prompt: String,
@@ -125,10 +113,6 @@ fn default_initial_balance() -> f64 {
 
 fn default_scan_interval() -> i64 {
     3
-}
-
-fn default_leverage() -> i64 {
-    5
 }
 
 fn default_prompt_template() -> String {

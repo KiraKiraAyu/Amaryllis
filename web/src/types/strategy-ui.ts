@@ -13,8 +13,6 @@ export type StrategyTestResult = StrategyTestRunPayload
 export interface StrategyConfigFormFields {
   trading_symbols?: string
   max_positions?: number
-  btc_eth_leverage?: number
-  altcoin_leverage?: number
   prompt_variant?: string
 }
 

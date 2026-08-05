@@ -18,8 +18,6 @@ pub struct UpdateSettingsRequest {
 
 #[derive(Debug, Serialize)]
 pub struct SystemConfigResponse {
-    pub btc_eth_leverage: u32,
-    pub altcoin_leverage: u32,
     pub runtime_alert_webhook_enabled: bool,
     pub runtime_alert_webhook_auth_header_set: bool,
     pub runtime_alert_webhook_timeout_secs: u64,

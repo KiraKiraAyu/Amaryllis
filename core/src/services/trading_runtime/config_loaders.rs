@@ -18,7 +18,7 @@ pub async fn load_trader_runtime_config(
         Err(err) => return Err(err),
     };
 
-    // Try to load strategy configuration to extract symbols settings
+    // Load strategy configuration to extract symbols and leverage settings
     let mut symbols_config = Vec::new();
     if !row.strategy_id.trim().is_empty() {
         use crate::entity::strategies;
@@ -29,6 +29,7 @@ pub async fn load_trader_runtime_config(
             .await
         {
             if let Ok(cfg_val) = serde_json::from_str::<serde_json::Value>(&strategy.config) {
+                // Parse per-symbol configuration
                 if let Some(symbols_arr) = cfg_val.get("symbols").and_then(|v| v.as_array()) {
                     for item in symbols_arr {
                         if let Some(symbol) = item.get("symbol").and_then(|v| v.as_str()) {
@@ -50,26 +51,6 @@ pub async fn load_trader_runtime_config(
         }
     }
 
-    if symbols_config.is_empty() {
-        // Fallback: Parse from trader's database columns
-        let symbols = parse_symbols(&row.trading_symbols);
-        for symbol in symbols {
-            let is_major = symbol.contains("BTC") || symbol.contains("ETH");
-            let leverage = if is_major {
-                row.btc_eth_leverage as i64
-            } else {
-                row.altcoin_leverage as i64
-            };
-            symbols_config.push(SymbolConfig {
-                symbol,
-                leverage,
-                min_cost: None,
-                max_cost: None,
-                fixed_cost: None,
-            });
-        }
-    }
-
     // Dynamic trading_symbols comma-separated string derived from symbols_config
     let trading_symbols = symbols_config
         .iter()
@@ -88,8 +69,6 @@ pub async fn load_trader_runtime_config(
         exchange_id: row.exchange_id,
         scan_interval_minutes: row.scan_interval_minutes,
         initial_balance: row.initial_balance,
-        btc_eth_leverage: row.btc_eth_leverage as i64,
-        altcoin_leverage: row.altcoin_leverage as i64,
         is_cross_margin: row.is_cross_margin != 0,
         trading_symbols,
         custom_prompt: row.custom_prompt,
@@ -232,16 +211,11 @@ pub fn parse_symbols(raw: &str) -> Vec<String> {
 }
 
 pub fn leverage_for_symbol(cfg: &TraderRuntimeConfig, symbol: &str) -> i64 {
-    if let Some(sym_cfg) = cfg.symbols_config.iter().find(|s| s.symbol.to_uppercase() == symbol.to_uppercase()) {
-        sym_cfg.leverage.clamp(1, 50)
-    } else {
-        let is_major = symbol.contains("BTC") || symbol.contains("ETH");
-        if is_major {
-            cfg.btc_eth_leverage.clamp(1, 50)
-        } else {
-            cfg.altcoin_leverage.clamp(1, 50)
-        }
-    }
+    cfg.symbols_config
+        .iter()
+        .find(|s| s.symbol.to_uppercase() == symbol.to_uppercase())
+        .map(|sc| sc.leverage.clamp(1, 200))
+        .unwrap_or(5)
 }
 
 pub async fn preflight_live_symbols(

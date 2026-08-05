@@ -538,10 +538,7 @@ fn default_strategy_config(lang: &str) -> Value {
         "custom_prompt": "",
         "risk_control": {
             "max_positions": 3,
-            "btc_eth_max_leverage": 5,
-            "altcoin_max_leverage": 5,
-            "btc_eth_max_position_value_ratio": 5,
-            "altcoin_max_position_value_ratio": 1,
+            "leverage": 5,
             "max_margin_usage": 0.9,
             "min_position_size": 20,
             "min_risk_reward_ratio": 1.5,
@@ -590,31 +587,18 @@ fn default_strategy_config(lang: &str) -> Value {
 }
 
 fn build_config_summary(config: &Value) -> StrategyConfigSummaryPayload {
-    let mut btc_eth_leverage = 5;
-    let mut altcoin_leverage = 5;
+    let mut leverage: i64 = 5;
     if let Some(symbols) = config.get("symbols").and_then(|v| v.as_array()) {
         for s in symbols {
-            if let Some(symbol) = s.get("symbol").and_then(|v| v.as_str()) {
-                let lev = s.get("leverage").and_then(|v| v.as_i64()).unwrap_or(5);
-                let sym_upper = symbol.to_uppercase();
-                if sym_upper.contains("BTC") || sym_upper.contains("ETH") {
-                    btc_eth_leverage = lev;
-                } else {
-                    altcoin_leverage = lev;
+            if let Some(lev) = s.get("leverage").and_then(|v| v.as_i64()) {
+                if lev > leverage {
+                    leverage = lev;
                 }
             }
         }
-    } else {
-        if let Some(lev) = config.get("btc_eth_leverage").and_then(|v| v.as_i64()) {
-            btc_eth_leverage = lev;
-        } else if let Some(lev) = config.pointer("/risk_control/btc_eth_max_leverage").and_then(|v| v.as_i64()) {
-            btc_eth_leverage = lev;
-        }
-        if let Some(lev) = config.get("altcoin_leverage").and_then(|v| v.as_i64()) {
-            altcoin_leverage = lev;
-        } else if let Some(lev) = config.pointer("/risk_control/altcoin_max_leverage").and_then(|v| v.as_i64()) {
-            altcoin_leverage = lev;
-        }
+    }
+    if let Some(lev) = config.pointer("/risk_control/leverage").and_then(|v| v.as_i64()) {
+        leverage = leverage.max(lev);
     }
 
     let max_positions = config
@@ -638,8 +622,7 @@ fn build_config_summary(config: &Value) -> StrategyConfigSummaryPayload {
             .and_then(Value::as_str)
             .unwrap_or("3m")
             .to_string(),
-        btc_eth_leverage,
-        altcoin_leverage,
+        leverage,
         max_positions,
     }
 }

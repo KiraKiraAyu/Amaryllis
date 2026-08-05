@@ -46,8 +46,6 @@ async fn test_state_and_cfg() -> (TestRuntimeState, TraderRuntimeConfig) {
         exchange_id: "exchange-test".to_string(),
         scan_interval_minutes: 1,
         initial_balance: 1000.0,
-        btc_eth_leverage: 5,
-        altcoin_leverage: 5,
         is_cross_margin: true,
         trading_symbols: "BTCUSDT,ETHUSDT".to_string(),
         custom_prompt: String::new(),
@@ -465,9 +463,6 @@ async fn insert_test_trader(state: &TestRuntimeState, cfg: &TraderRuntimeConfig,
         scan_interval_minutes: Set(cfg.scan_interval_minutes as i32),
         is_running: Set(int_flag(is_running)),
         is_cross_margin: Set(1),
-        btc_eth_leverage: Set(cfg.btc_eth_leverage as i32),
-        altcoin_leverage: Set(cfg.altcoin_leverage as i32),
-        trading_symbols: Set(cfg.trading_symbols.clone()),
         use_ai500: Set(0),
         use_oi_top: Set(0),
         custom_prompt: Set(cfg.custom_prompt.clone()),
@@ -1162,9 +1157,7 @@ async fn test_sync_open_orders_consistency_with_partial_and_metadata_updates() {
 async fn test_preflight_live_symbols_configures_margin_leverage_and_validates_constraints() {
     let (_, mut cfg) = test_state_and_cfg().await;
     cfg.is_cross_margin = false;
-    cfg.btc_eth_leverage = 7;
-    cfg.altcoin_leverage = 3;
-    cfg.symbols_config.clear(); // Clear so that it tests fallback leverage resolution
+    cfg.symbols_config.clear(); // Clear so that it tests default leverage resolution
 
     let adapter = FakeLiveExchangeAdapter::default();
 
@@ -1180,8 +1173,8 @@ async fn test_preflight_live_symbols_configures_margin_leverage_and_validates_co
     assert_eq!(
         calls,
         vec![
-            ("BTCUSDT".to_string(), 7, "isolated".to_string()),
-            ("SOLUSDT".to_string(), 3, "isolated".to_string()),
+            ("BTCUSDT".to_string(), 5, "isolated".to_string()),
+            ("SOLUSDT".to_string(), 5, "isolated".to_string()),
         ]
     );
 }

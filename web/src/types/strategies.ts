@@ -39,10 +39,8 @@ export interface StrategyIndicatorsConfigPayload {
 
 export interface StrategyRiskControlConfigPayload {
   max_positions: number
-  btc_eth_max_leverage: number
-  altcoin_max_leverage: number
-  btc_eth_max_position_value_ratio: number
-  altcoin_max_position_value_ratio: number
+  leverage: number
+  max_position_value_ratio: number
   max_margin_usage: number
   min_position_size: number
   min_risk_reward_ratio: number
@@ -94,8 +92,6 @@ export interface StrategyConfigPayload {
   grid_config?: StrategyGridConfigPayload
   trading_symbols?: string
   max_positions?: number
-  btc_eth_leverage?: number
-  altcoin_leverage?: number
   prompt_variant?: string
 }
 
@@ -172,8 +168,7 @@ export interface StrategyDefaultConfigPayload {
 export interface StrategyConfigSummaryPayload {
   coin_source: string
   primary_tf: string
-  btc_eth_leverage: number
-  altcoin_leverage: number
+  leverage: number
   max_positions: number
 }
 

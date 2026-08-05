@@ -6,9 +6,6 @@ export interface CreateTraderRequest {
   initial_balance?: number
   scan_interval_minutes?: number
   is_cross_margin?: boolean | null
-  btc_eth_leverage?: number
-  altcoin_leverage?: number
-  trading_symbols?: string
   use_ai500?: boolean
   use_oi_top?: boolean
   custom_prompt?: string
@@ -24,9 +21,6 @@ export interface UpdateTraderRequest {
   initial_balance?: number | null
   scan_interval_minutes?: number | null
   is_cross_margin?: boolean | null
-  btc_eth_leverage?: number | null
-  altcoin_leverage?: number | null
-  trading_symbols?: string | null
   use_ai500?: boolean | null
   use_oi_top?: boolean | null
   custom_prompt?: string | null
@@ -155,9 +149,6 @@ export interface TraderPayload {
   scan_interval_minutes: number
   is_running: boolean
   is_cross_margin: boolean
-  btc_eth_leverage: number
-  altcoin_leverage: number
-  trading_symbols: string
   use_ai500: boolean
   use_oi_top: boolean
   custom_prompt: string

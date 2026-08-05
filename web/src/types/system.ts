@@ -4,8 +4,6 @@ export interface HealthResponse {
 }
 
 export interface SystemConfigResponse {
-  btc_eth_leverage: number
-  altcoin_leverage: number
   runtime_alert_webhook_enabled: boolean
   runtime_alert_webhook_auth_header_set: boolean
   runtime_alert_webhook_timeout_secs: number

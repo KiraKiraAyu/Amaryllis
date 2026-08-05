@@ -58,9 +58,6 @@ export interface PublicTraderConfigPayload {
   scan_interval_minutes: number
   initial_balance: number
   is_running: boolean
-  btc_eth_leverage: number
-  altcoin_leverage: number
-  trading_symbols: string
   custom_prompt: string
   override_base_prompt: boolean
   system_prompt_template: string

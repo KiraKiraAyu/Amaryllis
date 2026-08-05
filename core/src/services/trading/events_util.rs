@@ -187,5 +187,5 @@ pub fn now_ts() -> i64 {
 }
 
 pub fn is_valid_leverage(v: i64) -> bool {
-    (1..=50).contains(&v)
+    (1..=200).contains(&v)
 }
