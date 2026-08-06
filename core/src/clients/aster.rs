@@ -5,7 +5,6 @@ use k256::ecdsa::SigningKey;
 use reqwest::{Client, Method};
 use serde::Deserialize;
 use sha3::{Digest, Keccak256};
-use uuid::Uuid;
 
 use crate::{
     clients::{
@@ -220,7 +219,7 @@ impl LiveExchangeAdapter for AsterAdapter {
             (
                 "newClientOrderId",
                 req.client_order_id
-                    .unwrap_or_else(|| format!("quantaura_{}", Uuid::now_v7().simple())),
+                    .unwrap_or_else(|| crate::clients::short_client_order_id("quantaura_")),
             ),
         ];
 

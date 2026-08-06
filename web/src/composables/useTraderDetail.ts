@@ -593,11 +593,16 @@ export function useTraderDetail(traderId: Ref<string>) {
           break
         }
         case "engine_status": {
-          const status = ev.status as string
-          const message = ev.message as string
+          const status = typeof ev.status === "string" ? ev.status : "unknown"
+          const message = typeof ev.message === "string" ? ev.message : ""
+          // Engine errors (cycle_error, budget_exhausted, etc.) should always be visible
+          const isEngineError =
+            status === "cycle_error" ||
+            status === "budget_exhausted" ||
+            status.startsWith("error")
           addMessage({
             id: `engine-${Date.now()}`,
-            role: "system",
+            role: isEngineError ? "warning" : "system",
             title: `Engine: ${status}`,
             content: message || `Engine status: ${status}`,
             timestamp: nowSeconds(),
@@ -608,6 +613,7 @@ export function useTraderDetail(traderId: Ref<string>) {
           } else if (status === "stopped" || status === "budget_exhausted") {
             stopStatusPolling()
             nextScanAt.value = null
+            if (trader.value) trader.value.is_running = false
           }
           break
         }

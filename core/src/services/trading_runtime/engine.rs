@@ -3,6 +3,36 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// Allowed scan intervals in minutes.
 pub const ALLOWED_SCAN_INTERVALS: [i64; 12] = [1, 5, 10, 15, 20, 30, 60, 120, 240, 480, 720, 1440];
+const LIVE_CIRCUIT_BREAKER_LIMIT: u32 = 5;
+
+fn live_circuit_breaker_message(consecutive_failures: u32) -> String {
+    format!(
+        "live circuit breaker opened after {} consecutive failures",
+        consecutive_failures
+    )
+}
+
+fn live_circuit_breaker_event(
+    trader_id: &str,
+    consecutive_failures: u32,
+) -> crate::realtime::RealtimeEvent {
+    crate::realtime::RealtimeEvent::EngineStatus {
+        trader_id: trader_id.to_string(),
+        status: "stopped".to_string(),
+        message: live_circuit_breaker_message(consecutive_failures),
+    }
+}
+
+fn publish_live_circuit_breaker_event(
+    realtime_hub: &crate::realtime::RealtimeHub,
+    trader_id: &str,
+    consecutive_failures: u32,
+) {
+    realtime_hub.publish(live_circuit_breaker_event(
+        trader_id,
+        consecutive_failures,
+    ));
+}
 
 /// Calculate the next aligned scan timestamp (Unix seconds).
 /// Scans are aligned to epoch boundaries divisible by `interval_secs`.
@@ -31,6 +61,30 @@ fn next_aligned_scan_delay(now: Duration, interval_secs: u64) -> Duration {
 mod tests {
     use super::*;
     use std::time::Duration;
+
+    #[test]
+    fn live_circuit_breaker_event_is_terminal_and_explains_shutdown() {
+        let realtime_hub = crate::realtime::RealtimeHub::new();
+        let mut receiver = realtime_hub.subscribe();
+        publish_live_circuit_breaker_event(&realtime_hub, "trader-1", 5);
+        let event = receiver.try_recv().expect("expected shutdown event");
+
+        let crate::realtime::RealtimeEvent::EngineStatus {
+            trader_id,
+            status,
+            message,
+        } = event.as_ref()
+        else {
+            panic!("expected an engine status event");
+        };
+
+        assert_eq!(trader_id, "trader-1");
+        assert_eq!(status, "stopped");
+        assert_eq!(
+            message,
+            "live circuit breaker opened after 5 consecutive failures"
+        );
+    }
 
     #[test]
     fn aligned_scan_delay_preserves_subsecond_precision() {
@@ -96,7 +150,7 @@ pub async fn run_trader_loop(
     );
 
     let mut consecutive_live_failures: u32 = 0;
-    let live_circuit_breaker_limit: u32 = 5;
+    let live_circuit_breaker_limit = LIVE_CIRCUIT_BREAKER_LIMIT;
 
     let mut user_stream_rx: Option<mpsc::Receiver<ExchangeUserStreamEvent>> = None;
     let mut user_stream_session: Option<ExchangeUserStreamSession> = None;
@@ -256,15 +310,27 @@ pub async fn run_trader_loop(
                         cfg.trader_id, consecutive_live_failures, err
                     );
 
+                    // Broadcast cycle error via SSE so frontend can display a warning
+                    engine.inner.state.realtime_hub.publish(
+                        crate::realtime::RealtimeEvent::EngineStatus {
+                            trader_id: cfg.trader_id.clone(),
+                            status: "cycle_error".to_string(),
+                            message: failure_msg.clone(),
+                        },
+                    );
+
                     if consecutive_live_failures >= live_circuit_breaker_limit {
-                        let breaker_msg = format!(
-                            "live circuit breaker opened after {} consecutive failures",
-                            consecutive_live_failures
-                        );
+                        let breaker_msg =
+                            live_circuit_breaker_message(consecutive_live_failures);
                         let _ = engine.inner.state.set_runtime_engine_running(
                             &cfg.trader_id,
                             false,
                             Some(breaker_msg.clone()),
+                        );
+                        publish_live_circuit_breaker_event(
+                            &engine.inner.state.realtime_hub,
+                            &cfg.trader_id,
+                            consecutive_live_failures,
                         );
                         warn!(
                             "stopping live loop by circuit breaker trader={} reason={}",
@@ -615,7 +681,7 @@ pub async fn process_cycle(
                                             crate::clients::exchanges::PositionSide::Short
                                         }),
                                         time_in_force: None,
-                                        client_order_id: Some(format!("tpsl_{}", Uuid::now_v7().simple())),
+                                        client_order_id: Some(crate::clients::short_client_order_id("tpsl_")),
                                     })
                                     .await;
                             }

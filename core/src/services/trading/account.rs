@@ -272,7 +272,7 @@ async fn submit_live_close_order(
             ),
             position_side: Some(position_side),
             time_in_force: None,
-            client_order_id: Some(format!("manual_{}", Uuid::now_v7().simple())),
+            client_order_id: Some(crate::clients::short_client_order_id("manual_")),
         })
         .await?;
 
