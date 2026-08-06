@@ -1,3 +1,4 @@
+use super::fixed_tpsl::ensure_fixed_tp_sl_orders;
 use super::service::*;
 use crate::repositories::trading::records::{
     accounts::TraderAccountRecord,
@@ -689,6 +690,7 @@ pub async fn execute_decisions_live(
         open_count += 1;
     }
 
+    ensure_fixed_tp_sl_orders(adapter, cfg).await?;
     sync_open_orders_from_exchange(state, cfg, adapter, ts).await?;
     sync_terminal_orders_from_exchange(state, cfg, adapter, ts).await?;
     reconcile_stale_submitted_execution_intents(

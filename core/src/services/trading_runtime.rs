@@ -14,6 +14,7 @@ pub mod events;
 pub mod execution_live;
 pub mod execution_live_limit;
 pub mod execution_sim;
+pub mod fixed_tpsl;
 pub mod market;
 pub mod market_seed;
 pub mod models;

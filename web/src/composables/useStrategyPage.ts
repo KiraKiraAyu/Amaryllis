@@ -62,6 +62,12 @@ export function useStrategyPage() {
         symbols: [],
         max_positions: 5,
         prompt_variant: "balanced",
+        tp_sl: {
+          mode: "fixed",
+          fixed_tp_pnl_rate: null,
+          fixed_sl_pnl_rate: null,
+          custom_prompt: null,
+        },
       },
     }
     

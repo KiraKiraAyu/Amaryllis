@@ -1384,7 +1384,7 @@ async fn test_preflight_live_symbols_configures_margin_leverage_from_symbols_con
     cfg.symbols_config = vec![
         SymbolConfig {
             symbol: "BTCUSDT".to_string(),
-            leverage: 12,
+            leverage: 200,
             min_cost: None,
             max_cost: None,
             fixed_cost: None,
@@ -1412,7 +1412,7 @@ async fn test_preflight_live_symbols_configures_margin_leverage_from_symbols_con
     assert_eq!(
         calls,
         vec![
-            ("BTCUSDT".to_string(), 12, "isolated".to_string()),
+            ("BTCUSDT".to_string(), 200, "isolated".to_string()),
             ("SOLUSDT".to_string(), 8, "isolated".to_string()),
         ]
     );

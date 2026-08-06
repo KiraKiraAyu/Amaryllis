@@ -159,13 +159,19 @@ const tpSlLabel = computed(() => tpSlMode.value === 'custom' ? 'Custom AI Prompt
             <div class="flex flex-col gap-1 p-3 rounded-xl bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/20">
               <span class="text-xs font-bold text-surface-400 uppercase tracking-wider">Take-Profit</span>
               <span class="text-lg font-bold text-emerald-500 font-mono">
-                +{{ ((tpSl?.fixed_tp_pnl_rate ?? 1.0) * 100).toFixed(1) }}%
+                <template v-if="tpSl?.fixed_tp_pnl_rate != null">
+                  +{{ (tpSl.fixed_tp_pnl_rate * 100).toFixed(1) }}%
+                </template>
+                <template v-else>Not configured</template>
               </span>
             </div>
             <div class="flex flex-col gap-1 p-3 rounded-xl bg-rose-500/5 dark:bg-rose-500/10 border border-rose-500/20">
               <span class="text-xs font-bold text-surface-400 uppercase tracking-wider">Stop-Loss</span>
               <span class="text-lg font-bold text-rose-500 font-mono">
-                {{ ((tpSl?.fixed_sl_pnl_rate ?? -1.0) * 100).toFixed(1) }}%
+                <template v-if="tpSl?.fixed_sl_pnl_rate != null">
+                  {{ (tpSl.fixed_sl_pnl_rate * 100).toFixed(1) }}%
+                </template>
+                <template v-else>Not configured</template>
               </span>
             </div>
           </div>

@@ -24,6 +24,13 @@ pub enum ExchangeOrderType {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ExchangeConditionalOrderType {
+    TakeProfitMarket,
+    StopMarket,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum PositionSide {
     Both,
@@ -57,6 +64,19 @@ pub struct PlaceOrderRequest {
     pub margin_mode: Option<ExchangeMarginMode>,
     pub position_side: Option<PositionSide>,
     pub time_in_force: Option<TimeInForce>,
+    pub client_order_id: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PlaceConditionalOrderRequest {
+    pub symbol: String,
+    pub side: ExchangeSide,
+    pub conditional_type: ExchangeConditionalOrderType,
+    pub quantity: f64,
+    pub trigger_price: f64,
+    pub reduce_only: bool,
+    pub margin_mode: Option<ExchangeMarginMode>,
+    pub position_side: Option<PositionSide>,
     pub client_order_id: Option<String>,
 }
 

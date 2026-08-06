@@ -100,18 +100,48 @@ function changeCostMode(index: number, mode: 'fixed' | 'dynamic') {
 
 const tpSlMode = ref<'fixed' | 'custom'>('fixed')
 // Both TP and SL are positive percentages in the UI (e.g. 100 = 100%)
-const fixedTpPnlRate = ref<number>(100.0)
-const fixedSlPnlRate = ref<number>(100.0)
+const fixedTpPnlRate = ref<number | null>(null)
+const fixedSlPnlRate = ref<number | null>(null)
 const customTpSlPrompt = ref<string>('')
 let tpSlInitialized = false
 
 // Initialize once from existing config (waits for async data if needed)
 watch(() => config.value.tp_sl, (tpSl) => {
-  if (tpSlInitialized || !tpSl || !tpSl.mode) return
+  if (tpSlInitialized) return
+  if (!tpSl) {
+    config.value.tp_sl = {
+      mode: 'fixed',
+      fixed_tp_pnl_rate: null,
+      fixed_sl_pnl_rate: null,
+      custom_prompt: null
+    }
+    tpSlMode.value = 'fixed'
+    fixedTpPnlRate.value = null
+    fixedSlPnlRate.value = null
+    customTpSlPrompt.value = ''
+    tpSlInitialized = true
+    return
+  }
+  if (!tpSl.mode) {
+    tpSl.mode = 'fixed'
+    tpSl.fixed_tp_pnl_rate = null
+    tpSl.fixed_sl_pnl_rate = null
+    tpSl.custom_prompt = null
+    tpSlMode.value = 'fixed'
+    fixedTpPnlRate.value = null
+    fixedSlPnlRate.value = null
+    customTpSlPrompt.value = ''
+    tpSlInitialized = true
+    return
+  }
   if (tpSl.mode) tpSlMode.value = tpSl.mode
-  if (tpSl.fixed_tp_pnl_rate != null) fixedTpPnlRate.value = tpSl.fixed_tp_pnl_rate * 100
+  fixedTpPnlRate.value = tpSl.fixed_tp_pnl_rate != null
+    ? tpSl.fixed_tp_pnl_rate * 100
+    : null
   // SL stored as negative ratio in config, display as positive in UI
-  if (tpSl.fixed_sl_pnl_rate != null) fixedSlPnlRate.value = Math.abs(tpSl.fixed_sl_pnl_rate * 100)
+  fixedSlPnlRate.value = tpSl.fixed_sl_pnl_rate != null
+    ? Math.abs(tpSl.fixed_sl_pnl_rate * 100)
+    : null
   if (tpSl.custom_prompt != null) customTpSlPrompt.value = tpSl.custom_prompt
   tpSlInitialized = true
 }, { immediate: true })
@@ -119,11 +149,24 @@ watch(() => config.value.tp_sl, (tpSl) => {
 // Sync back to config (TP positive, SL negative) — only after initialization
 watch([tpSlMode, fixedTpPnlRate, fixedSlPnlRate, customTpSlPrompt], () => {
   if (!tpSlInitialized) return
-  if (!config.value.tp_sl) config.value.tp_sl = {}
-  config.value.tp_sl.mode = tpSlMode.value
-  config.value.tp_sl.fixed_tp_pnl_rate = tpSlMode.value === 'fixed' ? fixedTpPnlRate.value / 100 : null
-  config.value.tp_sl.fixed_sl_pnl_rate = tpSlMode.value === 'fixed' ? -(fixedSlPnlRate.value / 100) : null
-  config.value.tp_sl.custom_prompt = tpSlMode.value === 'custom' ? customTpSlPrompt.value : null
+  let tpSlConfig = config.value.tp_sl
+  if (!tpSlConfig) {
+    tpSlConfig = {
+      mode: tpSlMode.value,
+      fixed_tp_pnl_rate: null,
+      fixed_sl_pnl_rate: null,
+      custom_prompt: null
+    }
+    config.value.tp_sl = tpSlConfig
+  }
+  tpSlConfig.mode = tpSlMode.value
+  tpSlConfig.fixed_tp_pnl_rate = tpSlMode.value === 'fixed' && fixedTpPnlRate.value != null
+    ? fixedTpPnlRate.value / 100
+    : null
+  tpSlConfig.fixed_sl_pnl_rate = tpSlMode.value === 'fixed' && fixedSlPnlRate.value != null
+    ? -(fixedSlPnlRate.value / 100)
+    : null
+  tpSlConfig.custom_prompt = tpSlMode.value === 'custom' ? customTpSlPrompt.value : null
 })
 </script>
 
@@ -353,6 +396,7 @@ watch([tpSlMode, fixedTpPnlRate, fixedSlPnlRate, customTpSlPrompt], () => {
                     :minFractionDigits="0"
                     :maxFractionDigits="2"
                     suffix="%"
+                    placeholder=""
                     class="h-10 rounded-xl flex-1"
                     inputClass="font-mono"
                   />
@@ -369,6 +413,7 @@ watch([tpSlMode, fixedTpPnlRate, fixedSlPnlRate, customTpSlPrompt], () => {
                     :minFractionDigits="0"
                     :maxFractionDigits="2"
                     suffix="%"
+                    placeholder=""
                     class="h-10 rounded-xl flex-1"
                     inputClass="font-mono"
                   />

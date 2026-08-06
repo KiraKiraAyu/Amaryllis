@@ -293,7 +293,7 @@ pub fn build_system_prompt_from_config(
     let tp_sl_mode = tp_sl
         .and_then(|t| t.get("mode"))
         .and_then(|v| v.as_str())
-        .unwrap_or("fixed");
+        .unwrap_or("unconfigured");
     let (tp_sl_section, tp_sl_instruction) = if tp_sl_mode == "custom" {
         let tp_sl_custom = tp_sl
             .and_then(|t| t.get("custom_prompt"))
@@ -308,20 +308,28 @@ pub fn build_system_prompt_from_config(
             format!("Mode: Custom AI-driven\nCustom Rule: {}", instruction),
             instruction.to_string(),
         )
-    } else {
+    } else if tp_sl_mode == "fixed" {
         let tp_rate = tp_sl
             .and_then(|t| t.get("fixed_tp_pnl_rate"))
-            .and_then(|v| v.as_f64())
-            .unwrap_or(1.0);
+            .and_then(|v| v.as_f64());
         let sl_rate = tp_sl
             .and_then(|t| t.get("fixed_sl_pnl_rate"))
-            .and_then(|v| v.as_f64())
-            .unwrap_or(-1.0);
-        (
-            format!(
+            .and_then(|v| v.as_f64());
+        let fixed_rule = match (tp_rate, sl_rate) {
+            (Some(tp_rate), Some(sl_rate)) => format!(
                 "Mode: Fixed Unrealized PnL Rate\nTake-Profit: +{:.1}% (auto-close when PnL/margin >= this rate)\nStop-Loss: {:.1}% (auto-close when PnL/margin <= this rate)",
-                tp_rate * 100.0, sl_rate * 100.0
+                tp_rate * 100.0,
+                sl_rate * 100.0
             ),
+            _ => "Mode: Fixed Unrealized PnL Rate\nTake-Profit and Stop-Loss values are not configured in the form.".to_string(),
+        };
+        (
+            fixed_rule,
+            String::new(),
+        )
+    } else {
+        (
+            "Mode: Take-Profit / Stop-Loss is not configured in the form.".to_string(),
             String::new(),
         )
     };

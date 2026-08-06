@@ -1,3 +1,4 @@
+use super::fixed_tpsl::{configured_fixed_tp_sl_rates, ensure_fixed_tp_sl_orders};
 use super::service::*;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -527,6 +528,7 @@ pub async fn process_cycle(
     if exec_ctx.mode == RuntimeExecutionMode::LiveExchange {
         if let Some(adapter) = live_adapter {
             sync_live_positions_and_balances(state, cfg, adapter, cycle_started_at).await?;
+            ensure_fixed_tp_sl_orders(adapter, cfg).await?;
             refresh_market_from_exchange(symbols, market, adapter).await;
         } else {
             warn!(
@@ -624,81 +626,43 @@ pub async fn process_cycle(
         )));
     }
 
-    // 4.6) fixed TP/SL check — auto-close positions when unrealized PnL rate hits thresholds
-    if !open_positions.is_empty() {
-        let tp_sl = cfg.strategy_config.get("tp_sl");
-        let tp_sl_mode = tp_sl
-            .and_then(|t| t.get("mode"))
-            .and_then(|v| v.as_str())
-            .unwrap_or("fixed");
-        if tp_sl_mode == "fixed" {
-            let tp_rate = tp_sl
-                .and_then(|t| t.get("fixed_tp_pnl_rate"))
-                .and_then(|v| v.as_f64())
-                .unwrap_or(f64::MAX);
-            let sl_rate = tp_sl
-                .and_then(|t| t.get("fixed_sl_pnl_rate"))
-                .and_then(|v| v.as_f64())
-                .unwrap_or(f64::MIN);
-
+    // 4.6) Keep the polling fallback only for simulation and adapters without
+    // exchange-hosted conditional orders. Aster installs fixed protection orders
+    // during the live sync above and must not replace them with a delayed market close.
+    let exchange_managed_fixed_tp_sl = exec_ctx.mode == RuntimeExecutionMode::LiveExchange
+        && live_adapter
+            .map(|adapter| adapter.exchange_type() == "aster")
+            .unwrap_or(false);
+    if !exchange_managed_fixed_tp_sl && !open_positions.is_empty() {
+        if let Some(rates) = configured_fixed_tp_sl_rates(&cfg.strategy_config)? {
             for p in &open_positions {
-                let pnl = (p.mark_price - p.entry_price) * p.quantity * if p.side == "LONG" { 1.0 } else { -1.0 };
-                // PnL rate = unrealized PnL / position margin
-                // position margin = (entry_price * quantity) / leverage
+                let pnl = (p.mark_price - p.entry_price)
+                    * p.quantity
+                    * if p.side == "LONG" { 1.0 } else { -1.0 };
                 let margin = (p.entry_price * p.quantity.abs()) / (p.leverage as f64).max(1.0);
                 let pnl_rate = if margin > 0.0 { pnl / margin } else { 0.0 };
-                let hit_tp = pnl_rate >= tp_rate;
-                let hit_sl = pnl_rate <= sl_rate;
+                let hit_tp = pnl_rate >= rates.take_profit_rate;
+                let hit_sl = pnl_rate <= rates.stop_loss_rate;
                 if hit_tp || hit_sl {
-                    let reason = if hit_tp { "fixed take-profit" } else { "fixed stop-loss" };
+                    let reason = if hit_tp {
+                        "fixed take-profit"
+                    } else {
+                        "fixed stop-loss"
+                    };
                     info!(
                         "[TP_SL] auto-close trader={} symbol={} side={} pnl={:.2} pnl_rate={:.4} margin={:.2} reason={}",
                         cfg.trader_id, p.symbol, p.side, pnl, pnl_rate, margin, reason
                     );
-                    match (exec_ctx.mode, live_adapter) {
-                        (RuntimeExecutionMode::LiveExchange, Some(adapter)) => {
-                            // For live mode, submit a reduce-only market order
-                            let close_side = if p.side == "LONG" { "SELL" } else { "BUY" };
-                            let constraints = adapter.get_symbol_constraints(&p.symbol).await?;
-                            let quantity = normalize_order_quantity_by_constraints(p.quantity.abs(), &constraints);
-                            if quantity > f64::EPSILON {
-                                let _ = adapter
-                                    .place_order(crate::clients::exchanges::PlaceOrderRequest {
-                                        symbol: p.symbol.clone(),
-                                        side: if close_side == "SELL" {
-                                            crate::clients::exchanges::ExchangeSide::Sell
-                                        } else {
-                                            crate::clients::exchanges::ExchangeSide::Buy
-                                        },
-                                        order_type: crate::clients::exchanges::ExchangeOrderType::Market,
-                                        quantity,
-                                        price: None,
-                                        reduce_only: true,
-                                        margin_mode: Some(margin_mode_for_config(cfg)),
-                                        position_side: Some(if p.side == "LONG" {
-                                            crate::clients::exchanges::PositionSide::Long
-                                        } else {
-                                            crate::clients::exchanges::PositionSide::Short
-                                        }),
-                                        time_in_force: None,
-                                        client_order_id: Some(crate::clients::short_client_order_id("tpsl_")),
-                                    })
-                                    .await;
-                            }
-                        }
-                        _ => {
-                            let px = market
-                                .get(&p.symbol)
-                                .map(|m| m.price)
-                                .unwrap_or(p.mark_price.max(1e-9));
-                            close_position(state, cfg, p, px, cycle_started_at, reason).await?;
-                        }
-                    }
+                    let px = market
+                        .get(&p.symbol)
+                        .map(|m| m.price)
+                        .unwrap_or(p.mark_price.max(1e-9));
+                    close_position(state, cfg, p, px, cycle_started_at, reason).await?;
                 }
             }
-            // Reload positions after TP/SL closures
             open_positions = load_open_positions(state, &cfg.trader_id).await?;
-            mark_to_market_positions(state, cfg, &mut open_positions, market, cycle_started_at).await?;
+            mark_to_market_positions(state, cfg, &mut open_positions, market, cycle_started_at)
+                .await?;
         }
     }
 

@@ -11,7 +11,7 @@ use crate::{
 use super::types::{
     CancelOrderResponse, ExchangeBalance, ExchangeCredentials, ExchangeMarginMode,
     ExchangeOpenOrder, ExchangeOrderDetail, ExchangePosition, ExchangeSymbolConstraints,
-    ExchangeTradeFill, PlaceOrderRequest, PlaceOrderResponse,
+    ExchangeTradeFill, PlaceConditionalOrderRequest, PlaceOrderRequest, PlaceOrderResponse,
 };
 use super::user_stream::ExchangeUserStreamSession;
 
@@ -22,6 +22,15 @@ pub trait LiveExchangeAdapter: Send + Sync {
     async fn ping(&self) -> Result<(), AppError>;
     async fn get_price(&self, symbol: &str) -> Result<f64, AppError>;
     async fn place_order(&self, req: PlaceOrderRequest) -> Result<PlaceOrderResponse, AppError>;
+    async fn place_conditional_order(
+        &self,
+        _req: PlaceConditionalOrderRequest,
+    ) -> Result<PlaceOrderResponse, AppError> {
+        Err(AppError::UnsupportedExchange(format!(
+            "{} does not support exchange-hosted conditional orders",
+            self.exchange_type()
+        )))
+    }
     async fn cancel_order(
         &self,
         symbol: &str,

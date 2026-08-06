@@ -9,9 +9,10 @@ use sha3::{Digest, Keccak256};
 use crate::{
     clients::{
         exchanges::{
-            CancelOrderResponse, ExchangeBalance, ExchangeCredentials, ExchangeMarginMode,
-            ExchangeOpenOrder, ExchangeOrderDetail, ExchangeOrderType, ExchangePosition,
-            ExchangeSide, ExchangeSymbolConstraints, ExchangeTradeFill, LiveExchangeAdapter,
+            CancelOrderResponse, ExchangeBalance, ExchangeConditionalOrderType,
+            ExchangeCredentials, ExchangeMarginMode, ExchangeOpenOrder, ExchangeOrderDetail,
+            ExchangeOrderType, ExchangePosition, ExchangeSide, ExchangeSymbolConstraints,
+            ExchangeTradeFill, LiveExchangeAdapter, PlaceConditionalOrderRequest,
             PlaceOrderRequest, PlaceOrderResponse, PositionSide, TimeInForce,
         },
         outbound_http::{OutboundRequestLog, OutboundResponse, send_text},
@@ -281,6 +282,93 @@ impl LiveExchangeAdapter for AsterAdapter {
         })
     }
 
+    async fn place_conditional_order(
+        &self,
+        req: PlaceConditionalOrderRequest,
+    ) -> Result<PlaceOrderResponse, AppError> {
+        if req.quantity <= 0.0 || !req.quantity.is_finite() {
+            return Err(AppError::InvalidExchangeConfig(
+                "conditional order quantity must be > 0".to_string(),
+            ));
+        }
+        if req.trigger_price <= 0.0 || !req.trigger_price.is_finite() {
+            return Err(AppError::InvalidExchangeConfig(
+                "conditional order trigger price must be > 0".to_string(),
+            ));
+        }
+
+        let symbol = req.symbol.trim().to_uppercase();
+        if symbol.is_empty() {
+            return Err(AppError::InvalidExchangeConfig(
+                "symbol is required".to_string(),
+            ));
+        }
+
+        let hedge_mode = self.dual_side_position().await;
+        let mut params = vec![
+            ("symbol", symbol),
+            (
+                "side",
+                match req.side {
+                    ExchangeSide::Buy => "BUY".to_string(),
+                    ExchangeSide::Sell => "SELL".to_string(),
+                },
+            ),
+            (
+                "type",
+                match req.conditional_type {
+                    ExchangeConditionalOrderType::TakeProfitMarket => {
+                        "TAKE_PROFIT_MARKET".to_string()
+                    }
+                    ExchangeConditionalOrderType::StopMarket => "STOP_MARKET".to_string(),
+                },
+            ),
+            ("quantity", format_decimal(req.quantity)),
+            ("stopPrice", format_decimal(req.trigger_price)),
+            ("workingType", "MARK_PRICE".to_string()),
+            (
+                "newClientOrderId",
+                req.client_order_id
+                    .unwrap_or_else(|| crate::clients::short_client_order_id("tpsl_")),
+            ),
+        ];
+
+        if hedge_mode {
+            let position_side = req
+                .position_side
+                .unwrap_or_else(|| inferred_position_side_for_order(req.side, true));
+            params.push((
+                "positionSide",
+                match position_side {
+                    PositionSide::Both => "BOTH",
+                    PositionSide::Long => "LONG",
+                    PositionSide::Short => "SHORT",
+                }
+                .to_string(),
+            ));
+        } else if req.reduce_only {
+            params.push(("reduceOnly", "true".to_string()));
+        }
+
+        let payload: AsterOrderResponse = self
+            .signed_post(&format!("{ASTER_API_VERSION}/order"), params)
+            .await?;
+        Ok(PlaceOrderResponse {
+            order_id: payload.order_id.to_string(),
+            client_order_id: payload.client_order_id,
+            symbol: payload.symbol,
+            side: payload.side,
+            position_side: payload.position_side,
+            reduce_only: payload.reduce_only,
+            status: payload.status,
+            order_type: payload.order_type,
+            price: parse_f64(&payload.price),
+            orig_qty: parse_f64(&payload.orig_qty),
+            executed_qty: parse_f64(&payload.executed_qty),
+            update_time: payload.update_time,
+        })
+    }
+
     async fn cancel_order(
         &self,
         symbol: &str,
@@ -472,7 +560,6 @@ impl LiveExchangeAdapter for AsterAdapter {
                 "symbol is required".to_string(),
             ));
         }
-        let leverage = leverage.clamp(1, 125);
         let margin_type = match margin_mode {
             ExchangeMarginMode::Cross => "CROSSED",
             ExchangeMarginMode::Isolated => "ISOLATED",
@@ -937,7 +1024,150 @@ fn keccak256(input: &[u8]) -> [u8; 32] {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::{Arc, Mutex};
+
+    use axum::{
+        Router,
+        extract::State,
+        http::{Method, Uri},
+        routing::{get, post},
+    };
+
     use super::*;
+
+    async fn capture_settings_request(
+        State(requests): State<Arc<Mutex<Vec<String>>>>,
+        uri: Uri,
+    ) -> &'static str {
+        requests
+            .lock()
+            .expect("request lock poisoned")
+            .push(uri.to_string());
+        "{}"
+    }
+
+    async fn capture_conditional_request(
+        State(requests): State<Arc<Mutex<Vec<String>>>>,
+        method: Method,
+        uri: Uri,
+    ) -> axum::Json<serde_json::Value> {
+        requests
+            .lock()
+            .expect("request lock poisoned")
+            .push(format!("{} {}", method, uri));
+        if uri.path().ends_with("/positionSide/dual") {
+            axum::Json(serde_json::json!({ "dualSidePosition": false }))
+        } else {
+            axum::Json(serde_json::json!({
+                "orderId": 1,
+                "clientOrderId": "tpsl_test",
+                "symbol": "BTCUSDT",
+                "side": "SELL",
+                "positionSide": "LONG",
+                "reduceOnly": true,
+                "status": "NEW",
+                "type": "TAKE_PROFIT_MARKET",
+                "price": "0",
+                "origQty": "0.01",
+                "executedQty": "0",
+                "updateTime": 1
+            }))
+        }
+    }
+
+    #[tokio::test]
+    async fn aster_conditional_order_maps_trigger_and_reduce_only_fields() {
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let app = Router::new()
+            .route(
+                "/fapi/v3/positionSide/dual",
+                get(capture_conditional_request),
+            )
+            .route("/fapi/v3/order", post(capture_conditional_request))
+            .with_state(requests.clone());
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind test server");
+        let address = listener.local_addr().expect("test server address");
+        let server = tokio::spawn(async move {
+            axum::serve(listener, app).await.expect("serve test server");
+        });
+
+        let mut adapter = AsterAdapter::new(ExchangeCredentials {
+            api_key: String::new(),
+            secret_key: format!("{:064x}", 1),
+            passphrase: None,
+            wallet_addr: Some("0x0000000000000000000000000000000000000001".to_string()),
+            testnet: true,
+        })
+        .expect("adapter");
+        adapter.base_url = format!("http://{address}");
+
+        adapter
+            .place_conditional_order(PlaceConditionalOrderRequest {
+                symbol: "BTCUSDT".to_string(),
+                side: ExchangeSide::Sell,
+                conditional_type: ExchangeConditionalOrderType::TakeProfitMarket,
+                quantity: 0.01,
+                trigger_price: 102.0,
+                reduce_only: true,
+                margin_mode: Some(ExchangeMarginMode::Isolated),
+                position_side: Some(PositionSide::Long),
+                client_order_id: Some("tpsl_tp_test".to_string()),
+            })
+            .await
+            .expect("conditional order");
+
+        server.abort();
+        let requests = requests.lock().expect("request lock poisoned").clone();
+        let order_request = requests
+            .iter()
+            .find(|request| request.starts_with("POST /fapi/v3/order?"))
+            .expect("order request");
+        assert!(order_request.contains("type=TAKE_PROFIT_MARKET"));
+        assert!(order_request.contains("stopPrice=102"));
+        assert!(order_request.contains("workingType=MARK_PRICE"));
+        assert!(order_request.contains("reduceOnly=true"));
+        assert!(!order_request.contains("positionSide=LONG"));
+    }
+
+    #[tokio::test]
+    async fn aster_forwards_configured_leverage_without_adapter_cap() {
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let app = Router::new()
+            .route("/fapi/v3/marginType", post(capture_settings_request))
+            .route("/fapi/v3/leverage", post(capture_settings_request))
+            .with_state(requests.clone());
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind test server");
+        let address = listener.local_addr().expect("test server address");
+        let server = tokio::spawn(async move {
+            axum::serve(listener, app).await.expect("serve test server");
+        });
+
+        let mut adapter = AsterAdapter::new(ExchangeCredentials {
+            api_key: String::new(),
+            secret_key: format!("{:064x}", 1),
+            passphrase: None,
+            wallet_addr: Some("0x0000000000000000000000000000000000000001".to_string()),
+            testnet: true,
+        })
+        .expect("adapter");
+        adapter.base_url = format!("http://{address}");
+
+        adapter
+            .ensure_symbol_settings("BTCUSDT", 200, ExchangeMarginMode::Isolated)
+            .await
+            .expect("symbol settings");
+
+        server.abort();
+        let requests = requests.lock().expect("request lock poisoned").clone();
+        assert_eq!(requests.len(), 2);
+        assert!(requests[0].starts_with("/fapi/v3/marginType?"));
+        assert!(requests[1].starts_with("/fapi/v3/leverage?"));
+        assert!(requests[1].contains("leverage=200"));
+    }
 
     #[test]
     fn aster_signs_known_eip712_message() {

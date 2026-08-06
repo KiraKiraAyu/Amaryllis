@@ -522,8 +522,8 @@ fn default_strategy_config(lang: &str) -> Value {
         },
         "tp_sl": {
             "mode": "fixed",
-            "fixed_tp_pnl_rate": 1.0,
-            "fixed_sl_pnl_rate": -1.0,
+            "fixed_tp_pnl_rate": null,
+            "fixed_sl_pnl_rate": null,
             "custom_prompt": ""
         },
         "prompt_sections": {
@@ -568,3 +568,17 @@ fn default_strategy_config(lang: &str) -> Value {
     })
 }
 
+#[cfg(test)]
+mod tests {
+    use super::default_strategy_config;
+
+    #[test]
+    fn default_fixed_tp_sl_values_are_empty() {
+        let config = default_strategy_config("en");
+        let tp_sl = config
+            .get("tp_sl")
+            .expect("default TP/SL config");
+        assert!(tp_sl.get("fixed_tp_pnl_rate").is_some_and(|value| value.is_null()));
+        assert!(tp_sl.get("fixed_sl_pnl_rate").is_some_and(|value| value.is_null()));
+    }
+}
