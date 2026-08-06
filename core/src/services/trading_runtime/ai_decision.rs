@@ -205,6 +205,85 @@ pub fn build_system_prompt(cfg: &TraderRuntimeConfig) -> String {
     )
 }
 
+#[derive(Clone, Copy)]
+enum ExitRulePromptKind {
+    TakeProfit,
+    StopLoss,
+}
+
+impl ExitRulePromptKind {
+    fn config_key(self) -> &'static str {
+        match self {
+            Self::TakeProfit => "take_profit",
+            Self::StopLoss => "stop_loss",
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::TakeProfit => "Take-Profit",
+            Self::StopLoss => "Stop-Loss",
+        }
+    }
+
+    fn fixed_rate_prefix(self) -> &'static str {
+        match self {
+            Self::TakeProfit => "+",
+            Self::StopLoss => "",
+        }
+    }
+}
+
+fn render_exit_rule(
+    rule: Option<&serde_json::Value>,
+    rule_kind: ExitRulePromptKind,
+) -> (String, Option<String>) {
+    let label = rule_kind.label();
+    let Some(rule) = rule else {
+        return (format!("{label}: Not configured in the form"), None);
+    };
+    let mode = rule
+        .get("mode")
+        .and_then(|value| value.as_str())
+        .unwrap_or("unconfigured");
+    if mode.eq_ignore_ascii_case("fixed") {
+        let Some(rate) = rule.get("pnl_rate").and_then(|value| value.as_f64()) else {
+            return (
+                format!("{label}: Fixed value is not configured in the form"),
+                None,
+            );
+        };
+        return (
+            format!(
+                "{label}: Fixed {}{:.1}% Unrealized PnL Rate (exchange-hosted protection)",
+                rule_kind.fixed_rate_prefix(),
+                rate * 100.0
+            ),
+            None,
+        );
+    }
+    if mode.eq_ignore_ascii_case("custom") {
+        let prompt = rule
+            .get("custom_prompt")
+            .and_then(|value| value.as_str())
+            .unwrap_or("")
+            .trim();
+        let instruction = if prompt.is_empty() {
+            format!("{label}: decide exit conditions from market analysis and risk")
+        } else {
+            prompt.to_string()
+        };
+        return (
+            format!("{label}: Custom AI-driven"),
+            Some(format!("{label}: {instruction}")),
+        );
+    }
+    (
+        format!("{label}: Mode is not configured in the form"),
+        None,
+    )
+}
+
 /// Core prompt builder that works purely from the strategy config JSON.
 /// All callers (live trading, preview, test run, backtest) use this function
 /// to ensure identical prompt construction logic.
@@ -290,49 +369,20 @@ pub fn build_system_prompt_from_config(
 
     // --- TP/SL rules ---
     let tp_sl = sc.get("tp_sl");
-    let tp_sl_mode = tp_sl
-        .and_then(|t| t.get("mode"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("unconfigured");
-    let (tp_sl_section, tp_sl_instruction) = if tp_sl_mode == "custom" {
-        let tp_sl_custom = tp_sl
-            .and_then(|t| t.get("custom_prompt"))
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        let instruction = if tp_sl_custom.is_empty() {
-            "Close positions based on your own analysis of market conditions, momentum, and risk."
-        } else {
-            tp_sl_custom
-        };
-        (
-            format!("Mode: Custom AI-driven\nCustom Rule: {}", instruction),
-            instruction.to_string(),
-        )
-    } else if tp_sl_mode == "fixed" {
-        let tp_rate = tp_sl
-            .and_then(|t| t.get("fixed_tp_pnl_rate"))
-            .and_then(|v| v.as_f64());
-        let sl_rate = tp_sl
-            .and_then(|t| t.get("fixed_sl_pnl_rate"))
-            .and_then(|v| v.as_f64());
-        let fixed_rule = match (tp_rate, sl_rate) {
-            (Some(tp_rate), Some(sl_rate)) => format!(
-                "Mode: Fixed Unrealized PnL Rate\nTake-Profit: +{:.1}% (auto-close when PnL/margin >= this rate)\nStop-Loss: {:.1}% (auto-close when PnL/margin <= this rate)",
-                tp_rate * 100.0,
-                sl_rate * 100.0
-            ),
-            _ => "Mode: Fixed Unrealized PnL Rate\nTake-Profit and Stop-Loss values are not configured in the form.".to_string(),
-        };
-        (
-            fixed_rule,
-            String::new(),
-        )
-    } else {
-        (
-            "Mode: Take-Profit / Stop-Loss is not configured in the form.".to_string(),
-            String::new(),
-        )
-    };
+    let (take_profit_rule, take_profit_instruction) = render_exit_rule(
+        tp_sl.and_then(|value| value.get(ExitRulePromptKind::TakeProfit.config_key())),
+        ExitRulePromptKind::TakeProfit,
+    );
+    let (stop_loss_rule, stop_loss_instruction) = render_exit_rule(
+        tp_sl.and_then(|value| value.get(ExitRulePromptKind::StopLoss.config_key())),
+        ExitRulePromptKind::StopLoss,
+    );
+    let tp_sl_section = format!("{}\n{}", take_profit_rule, stop_loss_rule);
+    let tp_sl_instruction = [take_profit_instruction, stop_loss_instruction]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join("\n");
 
     // --- Prompt sections ---
     let role_def = sc
@@ -785,4 +835,37 @@ fn extract_confidence(text: &str) -> Option<f64> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_system_prompt_from_config;
+
+    #[test]
+    fn system_prompt_renders_take_profit_and_stop_loss_modes_independently() {
+        let prompt = build_system_prompt_from_config(
+            &serde_json::json!({
+                "tp_sl": {
+                    "take_profit": {
+                        "mode": "fixed",
+                        "pnl_rate": 0.2,
+                        "custom_prompt": null
+                    },
+                    "stop_loss": {
+                        "mode": "custom",
+                        "pnl_rate": null,
+                        "custom_prompt": "Close when the market structure breaks."
+                    }
+                }
+            }),
+            false,
+            "",
+            false,
+        );
+
+        assert!(prompt.contains("Take-Profit: Fixed +20.0%"));
+        assert!(prompt.contains("Stop-Loss: Custom AI-driven"));
+        assert!(prompt.contains("Stop-Loss: Close when the market structure breaks."));
+        assert!(!prompt.contains("Stop-Loss: Fixed"));
+    }
 }

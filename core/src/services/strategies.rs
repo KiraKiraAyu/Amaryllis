@@ -521,10 +521,16 @@ fn default_strategy_config(lang: &str) -> Value {
             "min_confidence": 0.6
         },
         "tp_sl": {
-            "mode": "fixed",
-            "fixed_tp_pnl_rate": null,
-            "fixed_sl_pnl_rate": null,
-            "custom_prompt": ""
+            "take_profit": {
+                "mode": "fixed",
+                "pnl_rate": null,
+                "custom_prompt": null
+            },
+            "stop_loss": {
+                "mode": "fixed",
+                "pnl_rate": null,
+                "custom_prompt": null
+            }
         },
         "prompt_sections": {
             "role_definition": if is_zh {
@@ -578,7 +584,11 @@ mod tests {
         let tp_sl = config
             .get("tp_sl")
             .expect("default TP/SL config");
-        assert!(tp_sl.get("fixed_tp_pnl_rate").is_some_and(|value| value.is_null()));
-        assert!(tp_sl.get("fixed_sl_pnl_rate").is_some_and(|value| value.is_null()));
+        assert!(tp_sl
+            .pointer("/take_profit/pnl_rate")
+            .is_some_and(|value| value.is_null()));
+        assert!(tp_sl
+            .pointer("/stop_loss/pnl_rate")
+            .is_some_and(|value| value.is_null()));
     }
 }

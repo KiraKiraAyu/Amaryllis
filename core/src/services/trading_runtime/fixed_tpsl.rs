@@ -9,64 +9,110 @@ use crate::services::trading_runtime::{
 use tracing::warn;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct FixedTpSlRates {
-    pub take_profit_rate: f64,
-    pub stop_loss_rate: f64,
+pub struct FixedTakeProfit {
+    pub pnl_rate: f64,
 }
 
-pub fn configured_fixed_tp_sl_rates(
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FixedStopLoss {
+    pub pnl_rate: f64,
+}
+
+#[derive(Clone, Copy)]
+enum FixedRuleKind {
+    TakeProfit,
+    StopLoss,
+}
+
+impl FixedRuleKind {
+    fn config_key(self) -> &'static str {
+        match self {
+            Self::TakeProfit => "take_profit",
+            Self::StopLoss => "stop_loss",
+        }
+    }
+
+    fn accepts_rate(self, rate: f64) -> bool {
+        match self {
+            Self::TakeProfit => rate > 0.0,
+            Self::StopLoss => rate < 0.0,
+        }
+    }
+
+    fn expected_rate_description(self) -> &'static str {
+        match self {
+            Self::TakeProfit => "positive",
+            Self::StopLoss => "negative",
+        }
+    }
+}
+
+pub fn configured_fixed_take_profit(
     strategy_config: &serde_json::Value,
-) -> Result<Option<FixedTpSlRates>, AppError> {
+) -> Result<Option<FixedTakeProfit>, AppError> {
     let Some(tp_sl) = strategy_config.get("tp_sl") else {
         return Ok(None);
     };
-    let Some(mode) = tp_sl.get("mode").and_then(|value| value.as_str()) else {
-        return Err(AppError::InvalidExchangeConfig(
-            "tp_sl.mode is required".to_string(),
-        ));
+    configured_rule_rate(tp_sl, FixedRuleKind::TakeProfit)
+        .map(|rate| rate.map(|pnl_rate| FixedTakeProfit { pnl_rate }))
+}
+
+pub fn configured_fixed_stop_loss(
+    strategy_config: &serde_json::Value,
+) -> Result<Option<FixedStopLoss>, AppError> {
+    let Some(tp_sl) = strategy_config.get("tp_sl") else {
+        return Ok(None);
     };
-    if !mode.eq_ignore_ascii_case("fixed") {
+    configured_rule_rate(tp_sl, FixedRuleKind::StopLoss)
+        .map(|rate| rate.map(|pnl_rate| FixedStopLoss { pnl_rate }))
+}
+
+fn configured_rule_rate(
+    tp_sl: &serde_json::Value,
+    rule_kind: FixedRuleKind,
+) -> Result<Option<f64>, AppError> {
+    let rule_name = rule_kind.config_key();
+    let rule = tp_sl.get(rule_name).ok_or_else(|| {
+        AppError::InvalidExchangeConfig(format!(
+            "tp_sl.{rule_name} configuration must be provided by the form"
+        ))
+    })?;
+    let mode = rule
+        .get("mode")
+        .and_then(|value| value.as_str())
+        .ok_or_else(|| {
+            AppError::InvalidExchangeConfig(format!("tp_sl.{rule_name}.mode is required"))
+        })?;
+
+    if mode.eq_ignore_ascii_case("custom") {
         return Ok(None);
     }
-
-    let Some(take_profit_rate) = tp_sl
-        .get("fixed_tp_pnl_rate")
-        .and_then(|value| value.as_f64())
-    else {
-        return Err(AppError::InvalidExchangeConfig(
-            "fixed_tp_pnl_rate must be provided by the form".to_string(),
-        ));
-    };
-    let Some(stop_loss_rate) = tp_sl
-        .get("fixed_sl_pnl_rate")
-        .and_then(|value| value.as_f64())
-    else {
-        return Err(AppError::InvalidExchangeConfig(
-            "fixed_sl_pnl_rate must be provided by the form".to_string(),
-        ));
-    };
-    let rates = FixedTpSlRates {
-        take_profit_rate,
-        stop_loss_rate,
-    };
-    if !rates.take_profit_rate.is_finite()
-        || !rates.stop_loss_rate.is_finite()
-        || rates.take_profit_rate <= 0.0
-        || rates.stop_loss_rate >= 0.0
-    {
-        return Err(AppError::InvalidExchangeConfig(
-            "fixed TP/SL requires a positive take-profit rate and negative stop-loss rate"
-                .to_string(),
-        ));
+    if !mode.eq_ignore_ascii_case("fixed") {
+        return Err(AppError::InvalidExchangeConfig(format!(
+            "tp_sl.{rule_name}.mode must be fixed or custom"
+        )));
     }
-    Ok(Some(rates))
+
+    let rate = rule.get("pnl_rate").and_then(|value| value.as_f64()).ok_or_else(|| {
+        AppError::InvalidExchangeConfig(format!(
+            "tp_sl.{rule_name}.pnl_rate must be provided by the form"
+        ))
+    })?;
+    if !rate.is_finite() || !rule_kind.accepts_rate(rate) {
+        return Err(AppError::InvalidExchangeConfig(format!(
+            "tp_sl.{rule_name}.pnl_rate must be {} for fixed mode",
+            rule_kind.expected_rate_description()
+        )));
+    }
+    Ok(Some(rate))
 }
 
 pub fn build_fixed_tp_sl_orders(
     position: &ExchangePosition,
     constraints: &ExchangeSymbolConstraints,
-    rates: FixedTpSlRates,
-) -> Result<[PlaceConditionalOrderRequest; 2], AppError> {
+    take_profit: Option<FixedTakeProfit>,
+    stop_loss: Option<FixedStopLoss>,
+) -> Result<Vec<PlaceConditionalOrderRequest>, AppError> {
     if position.entry_price <= 0.0 || !position.entry_price.is_finite() {
         return Err(AppError::InvalidExchangeConfig(
             "fixed TP/SL requires a positive entry price".to_string(),
@@ -77,14 +123,9 @@ pub fn build_fixed_tp_sl_orders(
             "fixed TP/SL requires leverage >= 1".to_string(),
         ));
     }
-    if !rates.take_profit_rate.is_finite()
-        || !rates.stop_loss_rate.is_finite()
-        || rates.take_profit_rate <= 0.0
-        || rates.stop_loss_rate >= 0.0
-    {
+    if take_profit.is_none() && stop_loss.is_none() {
         return Err(AppError::InvalidExchangeConfig(
-            "fixed TP/SL requires a positive take-profit rate and negative stop-loss rate"
-                .to_string(),
+            "fixed TP/SL requires at least one fixed rule".to_string(),
         ));
     }
 
@@ -96,35 +137,29 @@ pub fn build_fixed_tp_sl_orders(
     }
 
     let leverage = position.leverage as f64;
-    let (side, position_side, take_profit_raw, stop_loss_raw) = match position_side(position) {
-        PositionSide::Long => (
-            ExchangeSide::Sell,
-            PositionSide::Long,
-            position.entry_price * (1.0 + rates.take_profit_rate / leverage),
-            position.entry_price * (1.0 + rates.stop_loss_rate / leverage),
-        ),
-        PositionSide::Short => (
-            ExchangeSide::Buy,
-            PositionSide::Short,
-            position.entry_price * (1.0 - rates.take_profit_rate / leverage),
-            position.entry_price * (1.0 - rates.stop_loss_rate / leverage),
-        ),
+    let (side, position_side) = match position_side(position) {
+        PositionSide::Long => (ExchangeSide::Sell, PositionSide::Long),
+        PositionSide::Short => (ExchangeSide::Buy, PositionSide::Short),
         PositionSide::Both => {
             return Err(AppError::InvalidExchangeConfig(
                 "fixed TP/SL requires a long or short position side".to_string(),
             ));
         }
     };
-    let take_profit_trigger = normalize_trigger_price(take_profit_raw, constraints.tick_size);
-    let stop_loss_trigger = normalize_trigger_price(stop_loss_raw, constraints.tick_size);
-    if take_profit_trigger <= 0.0 || stop_loss_trigger <= 0.0 {
-        return Err(AppError::InvalidExchangeConfig(
-            "fixed TP/SL trigger price is invalid for exchange tick size".to_string(),
-        ));
-    }
-
-    Ok([
-        PlaceConditionalOrderRequest {
+    let mut orders = Vec::with_capacity(2);
+    if let Some(take_profit_rate) = take_profit.map(|rule| rule.pnl_rate) {
+        let take_profit_raw = match position_side {
+            PositionSide::Long => position.entry_price * (1.0 + take_profit_rate / leverage),
+            PositionSide::Short => position.entry_price * (1.0 - take_profit_rate / leverage),
+            PositionSide::Both => unreachable!("position side validated above"),
+        };
+        let take_profit_trigger = normalize_trigger_price(take_profit_raw, constraints.tick_size);
+        if take_profit_trigger <= 0.0 {
+            return Err(AppError::InvalidExchangeConfig(
+                "fixed TP/SL take-profit trigger price is invalid".to_string(),
+            ));
+        }
+        orders.push(PlaceConditionalOrderRequest {
             symbol: position.symbol.trim().to_uppercase(),
             side,
             conditional_type: ExchangeConditionalOrderType::TakeProfitMarket,
@@ -134,8 +169,21 @@ pub fn build_fixed_tp_sl_orders(
             margin_mode: None,
             position_side: Some(position_side),
             client_order_id: Some(crate::clients::short_client_order_id("tpsl_tp_")),
-        },
-        PlaceConditionalOrderRequest {
+        });
+    }
+    if let Some(stop_loss_rate) = stop_loss.map(|rule| rule.pnl_rate) {
+        let stop_loss_raw = match position_side {
+            PositionSide::Long => position.entry_price * (1.0 + stop_loss_rate / leverage),
+            PositionSide::Short => position.entry_price * (1.0 - stop_loss_rate / leverage),
+            PositionSide::Both => unreachable!("position side validated above"),
+        };
+        let stop_loss_trigger = normalize_trigger_price(stop_loss_raw, constraints.tick_size);
+        if stop_loss_trigger <= 0.0 {
+            return Err(AppError::InvalidExchangeConfig(
+                "fixed TP/SL stop-loss trigger price is invalid".to_string(),
+            ));
+        }
+        orders.push(PlaceConditionalOrderRequest {
             symbol: position.symbol.trim().to_uppercase(),
             side,
             conditional_type: ExchangeConditionalOrderType::StopMarket,
@@ -145,8 +193,22 @@ pub fn build_fixed_tp_sl_orders(
             margin_mode: None,
             position_side: Some(position_side),
             client_order_id: Some(crate::clients::short_client_order_id("tpsl_sl_")),
-        },
-    ])
+        });
+    }
+
+    Ok(orders)
+}
+
+fn position_order_is_configured(
+    order: &ExchangeOpenOrder,
+    take_profit: Option<FixedTakeProfit>,
+    stop_loss: Option<FixedStopLoss>,
+) -> bool {
+    match order.order_type.trim().to_ascii_uppercase().as_str() {
+        "TAKE_PROFIT_MARKET" => take_profit.is_some(),
+        "STOP_MARKET" => stop_loss.is_some(),
+        _ => true,
+    }
 }
 
 fn position_side(position: &ExchangePosition) -> PositionSide {
@@ -187,9 +249,8 @@ pub async fn ensure_fixed_tp_sl_orders(
     adapter: &dyn LiveExchangeAdapter,
     cfg: &TraderRuntimeConfig,
 ) -> Result<(), AppError> {
-    let Some(rates) = configured_fixed_tp_sl_rates(&cfg.strategy_config)? else {
-        return Ok(());
-    };
+    let take_profit = configured_fixed_take_profit(&cfg.strategy_config)?;
+    let stop_loss = configured_fixed_stop_loss(&cfg.strategy_config)?;
     if adapter.exchange_type() != "aster" {
         return Ok(());
     }
@@ -197,23 +258,30 @@ pub async fn ensure_fixed_tp_sl_orders(
     let positions = adapter.get_positions().await?;
     let open_orders = adapter.get_open_orders(None).await?;
 
-    // Remove protections left behind after a position was closed. This also clears
-    // the sibling order after either the take-profit or stop-loss has fired.
+    // Remove protections left behind after a position was closed or after the
+    // corresponding rule was switched to custom mode.
     for order in open_orders
         .iter()
         .filter(|order| is_managed_protection(order))
     {
-        if !positions
+        let matching_position = positions
             .iter()
-            .any(|position| order_matches_position(order, position))
+            .find(|position| order_matches_position(order, position));
+        if matching_position.is_none()
+            || !position_order_is_configured(order, take_profit, stop_loss)
         {
             adapter.cancel_order(&order.symbol, &order.order_id).await?;
         }
     }
 
+    if take_profit.is_none() && stop_loss.is_none() {
+        return Ok(());
+    }
+
     for position in &positions {
         let constraints = adapter.get_symbol_constraints(&position.symbol).await?;
-        let mut requests = build_fixed_tp_sl_orders(position, &constraints, rates)?;
+        let mut requests =
+            build_fixed_tp_sl_orders(position, &constraints, take_profit, stop_loss)?;
         for request in &mut requests {
             request.margin_mode = Some(margin_mode_for_config(cfg));
         }
@@ -316,12 +384,29 @@ mod tests {
     #[test]
     fn missing_tp_sl_config_does_not_create_fixed_protection() {
         assert_eq!(
-            configured_fixed_tp_sl_rates(&serde_json::json!({})).expect("rates"),
+            configured_fixed_take_profit(&serde_json::json!({})).expect("take-profit"),
+            None
+        );
+        assert_eq!(
+            configured_fixed_stop_loss(&serde_json::json!({})).expect("stop-loss"),
             None
         );
         assert!(
-            configured_fixed_tp_sl_rates(&serde_json::json!({
-                "tp_sl": { "mode": "fixed" }
+            configured_fixed_take_profit(&serde_json::json!({
+                "tp_sl": {
+                    "take_profit": { "mode": "fixed" },
+                    "stop_loss": { "mode": "custom", "custom_prompt": "use structure" }
+                }
+            }))
+            .is_err()
+        );
+        assert!(
+            configured_fixed_take_profit(&serde_json::json!({
+                "tp_sl": {
+                    "mode": "fixed",
+                    "fixed_tp_pnl_rate": 0.2,
+                    "fixed_sl_pnl_rate": -0.1
+                }
             }))
             .is_err()
         );
@@ -332,22 +417,51 @@ mod tests {
         for value in [serde_json::Value::Null, serde_json::json!("")] {
             let config = serde_json::json!({
                 "tp_sl": {
-                    "mode": "fixed",
-                    "fixed_tp_pnl_rate": value,
-                    "fixed_sl_pnl_rate": -0.1
+                    "take_profit": { "mode": "fixed", "pnl_rate": value },
+                    "stop_loss": { "mode": "fixed", "pnl_rate": -0.1 }
                 }
             });
-            assert!(configured_fixed_tp_sl_rates(&config).is_err());
+            assert!(configured_fixed_take_profit(&config).is_err());
         }
 
         let config = serde_json::json!({
             "tp_sl": {
-                "mode": "fixed",
-                "fixed_tp_pnl_rate": 0.2,
-                "fixed_sl_pnl_rate": null
+                "take_profit": { "mode": "fixed", "pnl_rate": 0.2 },
+                "stop_loss": { "mode": "fixed", "pnl_rate": null }
             }
         });
-        assert!(configured_fixed_tp_sl_rates(&config).is_err());
+        assert!(configured_fixed_stop_loss(&config).is_err());
+    }
+
+    #[test]
+    fn fixed_and_custom_rules_are_configured_independently() {
+        let config = serde_json::json!({
+            "tp_sl": {
+                "take_profit": { "mode": "fixed", "pnl_rate": 0.2 },
+                "stop_loss": { "mode": "custom", "custom_prompt": "close on structure break" }
+            }
+        });
+        assert_eq!(
+            configured_fixed_take_profit(&config).expect("take-profit"),
+            Some(FixedTakeProfit { pnl_rate: 0.2 })
+        );
+        assert_eq!(
+            configured_fixed_stop_loss(&config).expect("stop-loss"),
+            None
+        );
+
+        let orders = build_fixed_tp_sl_orders(
+            &position("LONG"),
+            &constraints(),
+            Some(FixedTakeProfit { pnl_rate: 0.2 }),
+            None,
+        )
+        .expect("orders");
+        assert_eq!(orders.len(), 1);
+        assert_eq!(
+            orders[0].conditional_type,
+            ExchangeConditionalOrderType::TakeProfitMarket
+        );
     }
 
     #[test]
@@ -355,10 +469,8 @@ mod tests {
         let orders = build_fixed_tp_sl_orders(
             &position("LONG"),
             &constraints(),
-            FixedTpSlRates {
-                take_profit_rate: 0.2,
-                stop_loss_rate: -0.1,
-            },
+            Some(FixedTakeProfit { pnl_rate: 0.2 }),
+            Some(FixedStopLoss { pnl_rate: -0.1 }),
         )
         .expect("orders");
 
@@ -386,10 +498,8 @@ mod tests {
         let orders = build_fixed_tp_sl_orders(
             &position("SHORT"),
             &constraints(),
-            FixedTpSlRates {
-                take_profit_rate: 0.2,
-                stop_loss_rate: -0.1,
-            },
+            Some(FixedTakeProfit { pnl_rate: 0.2 }),
+            Some(FixedStopLoss { pnl_rate: -0.1 }),
         )
         .expect("orders");
 

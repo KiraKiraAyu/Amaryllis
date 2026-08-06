@@ -47,13 +47,25 @@ export interface StrategyRiskControlConfigPayload {
   min_confidence: number
 }
 
-export interface StrategyTpSlConfigPayload {
-  mode: 'fixed' | 'custom'
-  /** Take-profit as unrealized PnL ratio (e.g. 0.10 = +10%) */
-  fixed_tp_pnl_rate?: number | null
-  /** Stop-loss as unrealized PnL ratio (e.g. -0.05 = -5%) */
-  fixed_sl_pnl_rate?: number | null
+export type StrategyTpSlMode = 'fixed' | 'custom'
+
+export interface StrategyTakeProfitConfigPayload {
+  mode: StrategyTpSlMode
+  /** Positive unrealized PnL ratio (e.g. 0.10 = +10%). */
+  pnl_rate?: number | null
   custom_prompt?: string | null
+}
+
+export interface StrategyStopLossConfigPayload {
+  mode: StrategyTpSlMode
+  /** Negative unrealized PnL ratio (e.g. -0.05 = -5%). */
+  pnl_rate?: number | null
+  custom_prompt?: string | null
+}
+
+export interface StrategyTpSlConfigPayload {
+  take_profit: StrategyTakeProfitConfigPayload
+  stop_loss: StrategyStopLossConfigPayload
 }
 
 export interface StrategyPromptSectionsConfigPayload {

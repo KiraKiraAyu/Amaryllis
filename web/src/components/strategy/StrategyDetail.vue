@@ -26,8 +26,8 @@ const promptVariant = computed(() => config.value.prompt_variant ?? "balanced")
 
 // TP/SL display
 const tpSl = computed(() => config.value.tp_sl)
-const tpSlMode = computed(() => tpSl.value?.mode ?? 'fixed')
-const tpSlLabel = computed(() => tpSlMode.value === 'custom' ? 'Custom AI Prompt' : 'Fixed Unrealized PnL')
+const takeProfit = computed(() => tpSl.value?.take_profit)
+const stopLoss = computed(() => tpSl.value?.stop_loss)
 </script>
 
 <template>
@@ -146,42 +146,53 @@ const tpSlLabel = computed(() => tpSlMode.value === 'custom' ? 'Custom AI Prompt
       <div class="mb-6">
         <h3 class="font-bold text-sm text-surface-900 dark:text-white mb-3">Take-Profit / Stop-Loss Rules</h3>
         <div class="border border-surface-200 dark:border-surface-800 rounded-2xl p-4">
-          <div class="flex items-center gap-3 mb-3">
-            <div class="h-8 w-8 rounded-lg flex items-center justify-center shrink-0"
-              :class="tpSlMode === 'custom' ? 'bg-purple-500/10 dark:bg-purple-500/20 text-purple-500' : 'bg-amber-500/10 dark:bg-amber-500/20 text-amber-500'">
-              <span class="pi text-sm" :class="tpSlMode === 'custom' ? 'pi-brain' : 'pi-shield'"></span>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="flex flex-col gap-2 p-3 rounded-xl bg-surface-50 dark:bg-surface-950 border border-surface-200 dark:border-surface-800">
+              <div class="flex items-center gap-2">
+                <span class="pi pi-arrow-up-right text-emerald-500"></span>
+                <span class="text-xs font-bold text-surface-400 uppercase tracking-wider">Take-Profit</span>
+                <span class="ml-auto text-xs font-semibold text-surface-500">
+                  {{ takeProfit?.mode === 'custom' ? 'Custom AI' : takeProfit?.mode === 'fixed' ? 'Fixed' : 'Not configured' }}
+                </span>
+              </div>
+              <template v-if="takeProfit?.mode === 'custom'">
+                <p class="text-sm text-surface-700 dark:text-surface-300 whitespace-pre-wrap">
+                  {{ takeProfit.custom_prompt || 'No custom instructions provided.' }}
+                </p>
+              </template>
+              <template v-else-if="takeProfit?.mode === 'fixed'">
+                <span class="text-lg font-bold text-emerald-500 font-mono">
+                  <template v-if="takeProfit?.pnl_rate != null">
+                    +{{ (takeProfit.pnl_rate * 100).toFixed(1) }}%
+                  </template>
+                  <template v-else>Not configured</template>
+                </span>
+              </template>
+              <span v-else class="text-sm text-surface-400">Not configured</span>
             </div>
-            <span class="text-sm font-bold text-surface-900 dark:text-white">{{ tpSlLabel }}</span>
-          </div>
-
-          <!-- Fixed mode display -->
-          <div v-if="tpSlMode === 'fixed'" class="grid grid-cols-2 gap-4">
-            <div class="flex flex-col gap-1 p-3 rounded-xl bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/20">
-              <span class="text-xs font-bold text-surface-400 uppercase tracking-wider">Take-Profit</span>
-              <span class="text-lg font-bold text-emerald-500 font-mono">
-                <template v-if="tpSl?.fixed_tp_pnl_rate != null">
-                  +{{ (tpSl.fixed_tp_pnl_rate * 100).toFixed(1) }}%
-                </template>
-                <template v-else>Not configured</template>
-              </span>
+            <div class="flex flex-col gap-2 p-3 rounded-xl bg-surface-50 dark:bg-surface-950 border border-surface-200 dark:border-surface-800">
+              <div class="flex items-center gap-2">
+                <span class="pi pi-arrow-down-right text-rose-500"></span>
+                <span class="text-xs font-bold text-surface-400 uppercase tracking-wider">Stop-Loss</span>
+                <span class="ml-auto text-xs font-semibold text-surface-500">
+                  {{ stopLoss?.mode === 'custom' ? 'Custom AI' : stopLoss?.mode === 'fixed' ? 'Fixed' : 'Not configured' }}
+                </span>
+              </div>
+              <template v-if="stopLoss?.mode === 'custom'">
+                <p class="text-sm text-surface-700 dark:text-surface-300 whitespace-pre-wrap">
+                  {{ stopLoss.custom_prompt || 'No custom instructions provided.' }}
+                </p>
+              </template>
+              <template v-else-if="stopLoss?.mode === 'fixed'">
+                <span class="text-lg font-bold text-rose-500 font-mono">
+                  <template v-if="stopLoss?.pnl_rate != null">
+                    {{ (stopLoss.pnl_rate * 100).toFixed(1) }}%
+                  </template>
+                  <template v-else>Not configured</template>
+                </span>
+              </template>
+              <span v-else class="text-sm text-surface-400">Not configured</span>
             </div>
-            <div class="flex flex-col gap-1 p-3 rounded-xl bg-rose-500/5 dark:bg-rose-500/10 border border-rose-500/20">
-              <span class="text-xs font-bold text-surface-400 uppercase tracking-wider">Stop-Loss</span>
-              <span class="text-lg font-bold text-rose-500 font-mono">
-                <template v-if="tpSl?.fixed_sl_pnl_rate != null">
-                  {{ (tpSl.fixed_sl_pnl_rate * 100).toFixed(1) }}%
-                </template>
-                <template v-else>Not configured</template>
-              </span>
-            </div>
-          </div>
-
-          <!-- Custom mode display -->
-          <div v-else class="p-3 rounded-xl bg-surface-50 dark:bg-surface-950 border border-surface-200 dark:border-surface-800">
-            <span class="text-xs font-bold text-surface-400 uppercase tracking-wider mb-1 block">Custom Instructions</span>
-            <p class="text-sm text-surface-700 dark:text-surface-300 whitespace-pre-wrap">
-              {{ tpSl?.custom_prompt || 'No custom instructions provided. AI will decide based on analysis.' }}
-            </p>
           </div>
         </div>
       </div>

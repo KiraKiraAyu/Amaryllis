@@ -63,10 +63,16 @@ export function useStrategyPage() {
         max_positions: 5,
         prompt_variant: "balanced",
         tp_sl: {
-          mode: "fixed",
-          fixed_tp_pnl_rate: null,
-          fixed_sl_pnl_rate: null,
-          custom_prompt: null,
+          take_profit: {
+            mode: "fixed",
+            pnl_rate: null,
+            custom_prompt: null,
+          },
+          stop_loss: {
+            mode: "fixed",
+            pnl_rate: null,
+            custom_prompt: null,
+          },
         },
       },
     }

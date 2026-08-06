@@ -1,4 +1,6 @@
-use super::fixed_tpsl::{configured_fixed_tp_sl_rates, ensure_fixed_tp_sl_orders};
+use super::fixed_tpsl::{
+    configured_fixed_stop_loss, configured_fixed_take_profit, ensure_fixed_tp_sl_orders,
+};
 use super::service::*;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -634,15 +636,19 @@ pub async fn process_cycle(
             .map(|adapter| adapter.exchange_type() == "aster")
             .unwrap_or(false);
     if !exchange_managed_fixed_tp_sl && !open_positions.is_empty() {
-        if let Some(rates) = configured_fixed_tp_sl_rates(&cfg.strategy_config)? {
+        let take_profit = configured_fixed_take_profit(&cfg.strategy_config)?;
+        let stop_loss = configured_fixed_stop_loss(&cfg.strategy_config)?;
+        if take_profit.is_some() || stop_loss.is_some() {
             for p in &open_positions {
                 let pnl = (p.mark_price - p.entry_price)
                     * p.quantity
                     * if p.side == "LONG" { 1.0 } else { -1.0 };
                 let margin = (p.entry_price * p.quantity.abs()) / (p.leverage as f64).max(1.0);
                 let pnl_rate = if margin > 0.0 { pnl / margin } else { 0.0 };
-                let hit_tp = pnl_rate >= rates.take_profit_rate;
-                let hit_sl = pnl_rate <= rates.stop_loss_rate;
+                let hit_tp = take_profit
+                    .is_some_and(|rule| pnl_rate >= rule.pnl_rate);
+                let hit_sl = stop_loss
+                    .is_some_and(|rule| pnl_rate <= rule.pnl_rate);
                 if hit_tp || hit_sl {
                     let reason = if hit_tp {
                         "fixed take-profit"
