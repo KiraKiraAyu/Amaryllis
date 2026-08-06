@@ -13,10 +13,9 @@ use crate::{
     },
     contracts::backtest::{
         BacktestDecisionsPayload, BacktestEquityPayload, BacktestExportPayload,
-        BacktestLabelRequest, BacktestMessagePayload, BacktestMetricsPayload, BacktestQueryParams,
-        BacktestRunActionPayload, BacktestRunIdRequest, BacktestRunsPayload, BacktestStartRequest,
+        BacktestMessagePayload, BacktestMetricsPayload,
+        BacktestRunActionPayload, BacktestRunsPayload,
         BacktestStatusPayload, BacktestTracePayload, BacktestTradesPayload, KlinePayload,
-        KlinesQuery,
     },
     error::{AppError, Result as AppResult},
     realtime::RealtimeHub,
@@ -107,33 +106,44 @@ impl BacktestService {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn start(
         &self,
-        req: BacktestStartRequest,
+        run_id: Option<String>,
+        symbols: Option<Vec<String>>,
+        start_ts: Option<i64>,
+        end_ts: Option<i64>,
+        initial_balance: Option<f64>,
+        fee_bps: Option<f64>,
+        slippage_bps: Option<f64>,
+        ai_model_id: Option<String>,
+        prompt_variant: Option<String>,
+        leverage: Option<i64>,
+        interval: Option<String>,
+        decision_every: Option<usize>,
     ) -> AppResult<BacktestRunActionPayload> {
         let resolved_model = self
             .llm_service
-            .resolve_for_user(req.ai_model_id.as_deref())
+            .resolve_for_user(ai_model_id.as_deref())
             .await?;
 
-        let run_id = req
-            .run_id
+        let run_id = run_id
             .filter(|id| !id.trim().is_empty())
             .unwrap_or_else(|| Uuid::now_v7().to_string());
         let now_sec = now_ts();
         let cfg = BacktestConfig {
             run_id: run_id.clone(),
-            symbols: req.symbols.unwrap_or_else(|| vec!["BTCUSDT".to_string()]),
-            start_ts: req.start_ts.unwrap_or(now_sec - 7 * 24 * 3600),
-            end_ts: req.end_ts.unwrap_or(now_sec),
-            initial_balance: req.initial_balance.unwrap_or(1000.0),
-            fee_bps: req.fee_bps.unwrap_or(4.0),
-            slippage_bps: req.slippage_bps.unwrap_or(2.0),
+            symbols: symbols.unwrap_or_else(|| vec!["BTCUSDT".to_string()]),
+            start_ts: start_ts.unwrap_or(now_sec - 7 * 24 * 3600),
+            end_ts: end_ts.unwrap_or(now_sec),
+            initial_balance: initial_balance.unwrap_or(1000.0),
+            fee_bps: fee_bps.unwrap_or(4.0),
+            slippage_bps: slippage_bps.unwrap_or(2.0),
             ai_model_id: resolved_model.id.clone(),
-            prompt_variant: req.prompt_variant.unwrap_or_else(|| "balanced".to_string()),
-            leverage: req.leverage.unwrap_or(5),
-            interval: req.interval.unwrap_or_else(|| "5m".to_string()),
-            decision_every: req.decision_every.unwrap_or(1),
+            prompt_variant: prompt_variant.unwrap_or_else(|| "balanced".to_string()),
+            leverage: leverage.unwrap_or(5),
+            interval: interval.unwrap_or_else(|| "5m".to_string()),
+            decision_every: decision_every.unwrap_or(1),
             strategy_config: json!({}),
         };
 
@@ -153,39 +163,37 @@ impl BacktestService {
         })
     }
 
-    pub fn pause(&self, req: BacktestRunIdRequest) -> BacktestRunActionPayload {
+    pub fn pause(&self, run_id: String) -> BacktestRunActionPayload {
         BacktestRunActionPayload {
-            run_id: req.run_id,
+            run_id,
             message: "Pause requested",
         }
     }
 
-    pub fn resume(&self, req: BacktestRunIdRequest) -> BacktestRunActionPayload {
+    pub fn resume(&self, run_id: String) -> BacktestRunActionPayload {
         BacktestRunActionPayload {
-            run_id: req.run_id,
+            run_id,
             message: "Resume requested",
         }
     }
 
-    pub fn stop(
-        &self,
-        req: BacktestRunIdRequest,
-    ) -> AppResult<BacktestRunActionPayload> {
-        stop_backtest(&req.run_id).map_err(|err| AppError::BadRequest(err.into()))?;
+    pub fn stop(&self, run_id: String) -> AppResult<BacktestRunActionPayload> {
+        stop_backtest(&run_id).map_err(|err| AppError::BadRequest(err.into()))?;
 
         Ok(BacktestRunActionPayload {
-            run_id: req.run_id,
+            run_id,
             message: "Stop sent",
         })
     }
 
     pub async fn label(
         &self,
-        req: BacktestLabelRequest,
+        run_id: String,
+        label: String,
     ) -> AppResult<BacktestMessagePayload> {
         let rows_affected = self
             .backtest_repo
-            .update_label(&req.run_id, req.label, now_ts())
+            .update_label(&run_id, label, now_ts())
             .await
             .map_err(|err| AppError::Internal(format!("Failed to update run label: {err}")))?;
 
@@ -200,13 +208,13 @@ impl BacktestService {
 
     pub async fn delete(
         &self,
-        req: BacktestRunIdRequest,
+        run_id: String,
     ) -> AppResult<BacktestMessagePayload> {
-        let _ = stop_backtest(&req.run_id);
+        let _ = stop_backtest(&run_id);
 
         let rows_affected = self
             .backtest_repo
-            .delete_run(&req.run_id)
+            .delete_run(&run_id)
             .await
             .map_err(|err| AppError::Internal(format!("Failed to delete run: {err}")))?;
 
@@ -221,9 +229,10 @@ impl BacktestService {
 
     pub async fn status(
         &self,
-        q: BacktestQueryParams,
+        run_id: Option<String>,
+        _limit: Option<i64>,
     ) -> AppResult<BacktestStatusPayload> {
-        let run_id = required_run_id(q.run_id)?;
+        let run_id = required_run_id(run_id)?;
         let status = query_run_status(&self.backtest_repo, &run_id)
             .await
             .ok_or_else(|| AppError::NotFound("Run not found".into()))?;
@@ -231,8 +240,8 @@ impl BacktestService {
         Ok(BacktestStatusPayload { status })
     }
 
-    pub async fn runs(&self, q: BacktestQueryParams) -> BacktestRunsPayload {
-        let limit = q.limit.unwrap_or(50).clamp(1, 200);
+    pub async fn runs(&self, _run_id: Option<String>, limit: Option<i64>) -> BacktestRunsPayload {
+        let limit = limit.unwrap_or(50).clamp(1, 200);
         let runs = list_runs(&self.backtest_repo, limit).await;
         let count = runs.len();
         BacktestRunsPayload { runs, count }
@@ -240,10 +249,11 @@ impl BacktestService {
 
     pub async fn equity(
         &self,
-        q: BacktestQueryParams,
+        run_id: Option<String>,
+        limit: Option<i64>,
     ) -> AppResult<BacktestEquityPayload> {
-        let run_id = required_run_id(q.run_id)?;
-        let limit = q.limit.unwrap_or(5000).clamp(1, 10_000);
+        let run_id = required_run_id(run_id)?;
+        let limit = limit.unwrap_or(5000).clamp(1, 10_000);
         let points = query_equity_points(&self.backtest_repo, &run_id, limit).await;
 
         Ok(BacktestEquityPayload {
@@ -254,10 +264,11 @@ impl BacktestService {
 
     pub async fn trades(
         &self,
-        q: BacktestQueryParams,
+        run_id: Option<String>,
+        limit: Option<i64>,
     ) -> AppResult<BacktestTradesPayload> {
-        let run_id = required_run_id(q.run_id)?;
-        let limit = q.limit.unwrap_or(1000).clamp(1, 5000);
+        let run_id = required_run_id(run_id)?;
+        let limit = limit.unwrap_or(1000).clamp(1, 5000);
         let trades = query_trades(&self.backtest_repo, &run_id, limit).await;
 
         Ok(BacktestTradesPayload {
@@ -268,29 +279,32 @@ impl BacktestService {
 
     pub async fn metrics(
         &self,
-        q: BacktestQueryParams,
+        run_id: Option<String>,
+        _limit: Option<i64>,
     ) -> AppResult<BacktestMetricsPayload> {
-        let run_id = required_run_id(q.run_id)?;
+        let run_id = required_run_id(run_id)?;
         let metrics = compute_metrics(&self.backtest_repo, &run_id).await;
         Ok(BacktestMetricsPayload { metrics })
     }
 
     pub async fn trace(
         &self,
-        q: BacktestQueryParams,
+        run_id: Option<String>,
+        limit: Option<i64>,
     ) -> AppResult<BacktestTracePayload> {
-        let run_id = required_run_id(q.run_id)?;
-        let limit = q.limit.unwrap_or(50).clamp(1, 200);
+        let run_id = required_run_id(run_id)?;
+        let limit = limit.unwrap_or(50).clamp(1, 200);
         let trace = query_decisions(&self.backtest_repo, &run_id, limit).await;
         Ok(BacktestTracePayload { trace })
     }
 
     pub async fn decisions(
         &self,
-        q: BacktestQueryParams,
+        run_id: Option<String>,
+        limit: Option<i64>,
     ) -> AppResult<BacktestDecisionsPayload> {
-        let run_id = required_run_id(q.run_id)?;
-        let limit = q.limit.unwrap_or(1000).clamp(1, 5000);
+        let run_id = required_run_id(run_id)?;
+        let limit = limit.unwrap_or(1000).clamp(1, 5000);
         let decisions = query_decisions(&self.backtest_repo, &run_id, limit).await;
         let count = decisions.len();
         Ok(BacktestDecisionsPayload { decisions, count })
@@ -298,9 +312,10 @@ impl BacktestService {
 
     pub async fn export(
         &self,
-        q: BacktestQueryParams,
+        run_id: Option<String>,
+        _limit: Option<i64>,
     ) -> AppResult<BacktestExportPayload> {
-        let run_id = required_run_id(q.run_id)?;
+        let run_id = required_run_id(run_id)?;
         let trades = query_trades(&self.backtest_repo, &run_id, 10_000).await;
         let equity = query_equity_points(&self.backtest_repo, &run_id, 10_000).await;
         Ok(BacktestExportPayload {
@@ -311,14 +326,19 @@ impl BacktestService {
         })
     }
 
-    pub async fn klines(&self, q: KlinesQuery) -> AppResult<Vec<KlinePayload>> {
-        let symbol = q.symbol.trim().to_uppercase();
+    pub async fn klines(
+        &self,
+        symbol: String,
+        interval: Option<String>,
+        limit: Option<i64>,
+    ) -> AppResult<Vec<KlinePayload>> {
+        let symbol = symbol.trim().to_uppercase();
         if symbol.is_empty() {
             return Err(AppError::BadRequest("symbol is required".into()));
         }
 
-        let interval = q.interval.unwrap_or_else(|| "5m".to_string());
-        let limit = q.limit.unwrap_or(1000).clamp(1, 1500) as usize;
+        let interval = interval.unwrap_or_else(|| "5m".to_string());
+        let limit = limit.unwrap_or(1000).clamp(1, 1500) as usize;
         let symbol = normalize_crypto_symbol(&symbol);
 
         let klines = fetch_binance_klines(&symbol, &interval, limit)

@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::{
     contracts::debates::{
-        CreateDebateRequest, DebateActionPayload, DebateDetailPayload, DebateExecutionPayload,
+        DebateActionPayload, DebateDetailPayload, DebateExecutionPayload,
         DebateListPayload, DebateMessagePayload, DebateMessagesPayload, DebatePersonalitiesPayload,
         DebatePersonalityPayload, DebateVotesPayload,
     },
@@ -110,14 +110,18 @@ impl DebateService {
 
     pub async fn create(
         &self,
-        req: CreateDebateRequest,
+        name: Option<String>,
+        symbol: Option<String>,
+        max_rounds: Option<i64>,
+        prompt_variant: Option<String>,
+        participants: Option<Vec<String>>,
     ) -> AppResult<DebateActionPayload> {
         let create_request = DebateCreateRequest {
-            name: req.name.unwrap_or_else(|| "Debate".to_string()),
-            symbol: req.symbol.unwrap_or_else(|| "BTCUSDT".to_string()),
-            max_rounds: req.max_rounds,
-            prompt_variant: req.prompt_variant,
-            participants: req.participants,
+            name: name.unwrap_or_else(|| "Debate".to_string()),
+            symbol: symbol.unwrap_or_else(|| "BTCUSDT".to_string()),
+            max_rounds,
+            prompt_variant,
+            participants,
         };
 
         let id = create_debate(&self.debate_repo, &create_request)

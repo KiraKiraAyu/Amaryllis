@@ -10,7 +10,7 @@ use crate::{
         StrategyDefaultConfigPayload, StrategyListPayload, StrategyMessagePayload, StrategyPayload,
         StrategyTestRunPayload, StrategyTestRunRequest, UpdateStrategyRequest,
     },
-    error::Result,
+    error::{AppError, Result},
     http::response::ApiResponse,
     state::AppState,
 };
@@ -40,12 +40,20 @@ pub async fn handle_get_strategy(
 
 pub async fn handle_create_strategy(
     State(app): State<AppState>,
-    Json(request): Json<CreateStrategyRequest>,
+    Json(req): Json<CreateStrategyRequest>,
 ) -> Result<Json<ApiResponse<StrategyCreatedPayload>>> {
+    let name = req.name.trim().to_string();
+    if name.is_empty() {
+        return Err(AppError::BadRequest("Strategy name is required".into()));
+    }
+    if !req.config.is_object() {
+        return Err(AppError::BadRequest("Invalid strategy config".into()));
+    }
+    let description = req.description.trim().to_string();
     let payload = app
         .services
         .strategy_service
-        .create_strategy(request)
+        .create_strategy(name, description, req.config)
         .await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
@@ -53,12 +61,14 @@ pub async fn handle_create_strategy(
 pub async fn handle_update_strategy(
     State(app): State<AppState>,
     Path(id): Path<String>,
-    Json(request): Json<UpdateStrategyRequest>,
+    Json(req): Json<UpdateStrategyRequest>,
 ) -> Result<Json<ApiResponse<StrategyMessagePayload>>> {
+    let name = req.name.trim().to_string();
+    let description = req.description.trim().to_string();
     let payload = app
         .services
         .strategy_service
-        .update_strategy(id, request)
+        .update_strategy(id, name, description, req.config)
         .await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
@@ -90,12 +100,13 @@ pub async fn handle_activate_strategy(
 pub async fn handle_duplicate_strategy(
     State(app): State<AppState>,
     Path(id): Path<String>,
-    Json(request): Json<DuplicateStrategyRequest>,
+    Json(req): Json<DuplicateStrategyRequest>,
 ) -> Result<Json<ApiResponse<StrategyCreatedPayload>>> {
+    let name = req.name.trim().to_string();
     let payload = app
         .services
         .strategy_service
-        .duplicate_strategy(id, request)
+        .duplicate_strategy(id, name)
         .await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
@@ -118,26 +129,40 @@ pub async fn handle_get_default_strategy_config(
     let payload = app
         .services
         .strategy_service
-        .default_strategy_config(query)?;
+        .default_strategy_config(query.lang)?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 
 pub async fn handle_preview_prompt(
     State(app): State<AppState>,
-    Json(request): Json<PreviewPromptRequest>,
+    Json(req): Json<PreviewPromptRequest>,
 ) -> Result<Json<ApiResponse<PreviewPromptPayload>>> {
-    let payload = app.services.strategy_service.preview_prompt(request)?;
+    if !req.config.is_object() {
+        return Err(AppError::BadRequest("Invalid strategy config".into()));
+    }
+    let payload = app
+        .services
+        .strategy_service
+        .preview_prompt(req.config, req.account_equity, req.prompt_variant)?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 
 pub async fn handle_strategy_test_run(
     State(app): State<AppState>,
-    Json(request): Json<StrategyTestRunRequest>,
+    Json(req): Json<StrategyTestRunRequest>,
 ) -> Result<Json<ApiResponse<StrategyTestRunPayload>>> {
+    if !req.config.is_object() {
+        return Err(AppError::BadRequest("Invalid strategy config".into()));
+    }
     let payload = app
         .services
         .strategy_service
-        .test_run(request)
+        .test_run(
+            req.config,
+            req.prompt_variant,
+            req.ai_model_id,
+            req.run_real_ai,
+        )
         .await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }

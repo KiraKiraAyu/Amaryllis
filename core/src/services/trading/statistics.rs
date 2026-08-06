@@ -2,14 +2,15 @@ use super::service::*;
 
 pub async fn statistics(
     app: &SharedState,
-    q: StatisticsQuery,
+    trader_id: Option<String>,
+    days: Option<i64>,
 ) -> AppResult<TraderStatisticsPayload> {
-    let trader_id = match resolve_trader_id(app, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
 
-    let days = q.days.unwrap_or(30).clamp(1, 3650);
+    let days = days.unwrap_or(30).clamp(1, 3650);
     let from_ts = now_ts() - days * 86_400;
 
     let stats = app

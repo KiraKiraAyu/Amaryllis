@@ -49,11 +49,22 @@ pub async fn get_trader_config(
 
 pub async fn create_trader(
     app: &SharedState,
-    req: CreateTraderRequest,
+    name: &str,
+    ai_model_id: &str,
+    exchange_id: &str,
+    strategy_id: &str,
+    initial_balance: f64,
+    scan_interval_minutes: i64,
+    is_cross_margin: Option<bool>,
+    use_ai500: bool,
+    use_oi_top: bool,
+    custom_prompt: &str,
+    override_base_prompt: bool,
+    system_prompt_template: &str,
 ) -> AppResult<TraderCreatedPayload> {
-    let name = req.name.trim();
-    let ai_model_id = req.ai_model_id.trim();
-    let exchange_id = req.exchange_id.trim();
+    let name = name.trim();
+    let ai_model_id = ai_model_id.trim();
+    let exchange_id = exchange_id.trim();
 
     if name.is_empty() || ai_model_id.is_empty() || exchange_id.is_empty() {
         return Err(app_error(
@@ -87,15 +98,15 @@ pub async fn create_trader(
             name: name.to_string(),
             ai_model_id: ai_model_id.to_string(),
             exchange_id: exchange_id.to_string(),
-            strategy_id: req.strategy_id.trim().to_string(),
-            initial_balance: req.initial_balance.max(0.0),
-            scan_interval_minutes: req.scan_interval_minutes.max(1),
-            is_cross_margin: req.is_cross_margin.unwrap_or(true),
-            use_ai500: req.use_ai500,
-            use_oi_top: req.use_oi_top,
-            custom_prompt: req.custom_prompt.trim().to_string(),
-            override_base_prompt: req.override_base_prompt,
-            system_prompt_template: req.system_prompt_template.trim().to_string(),
+            strategy_id: strategy_id.trim().to_string(),
+            initial_balance: initial_balance.max(0.0),
+            scan_interval_minutes: scan_interval_minutes.max(1),
+            is_cross_margin: is_cross_margin.unwrap_or(true),
+            use_ai500,
+            use_oi_top,
+            custom_prompt: custom_prompt.trim().to_string(),
+            override_base_prompt,
+            system_prompt_template: system_prompt_template.trim().to_string(),
             created_at: now,
             updated_at: now,
         })
@@ -114,7 +125,18 @@ pub async fn create_trader(
 pub async fn update_trader(
     app: &SharedState,
     id: &str,
-    req: UpdateTraderRequest,
+    name: Option<String>,
+    ai_model_id: Option<String>,
+    exchange_id: Option<String>,
+    strategy_id: Option<String>,
+    initial_balance: Option<f64>,
+    scan_interval_minutes: Option<i64>,
+    is_cross_margin: Option<bool>,
+    use_ai500: Option<bool>,
+    use_oi_top: Option<bool>,
+    custom_prompt: Option<String>,
+    override_base_prompt: Option<bool>,
+    system_prompt_template: Option<String>,
 ) -> AppResult<TraderMessagePayload> {
     let existing = match get_trader_by_owner(app, id).await {
         Ok(Some(v)) => v,
@@ -129,7 +151,7 @@ pub async fn update_trader(
         }
     };
 
-    if let Some(ai_model_id) = req.ai_model_id.as_deref().map(str::trim) {
+    if let Some(ai_model_id) = ai_model_id.as_deref().map(str::trim) {
         if ai_model_id.is_empty() {
             return Err(app_error(
                 AppErrorKind::BadRequest,
@@ -158,43 +180,35 @@ pub async fn update_trader(
         .update_trader(
             id,
             UpdateTraderRecord {
-                name: req.name.unwrap_or(existing.name).trim().to_string(),
-                ai_model_id: req
-                    .ai_model_id
+                name: name.unwrap_or(existing.name).trim().to_string(),
+                ai_model_id: ai_model_id
                     .unwrap_or(existing.ai_model_id)
                     .trim()
                     .to_string(),
-                exchange_id: req
-                    .exchange_id
+                exchange_id: exchange_id
                     .unwrap_or(existing.exchange_id)
                     .trim()
                     .to_string(),
-                strategy_id: req
-                    .strategy_id
+                strategy_id: strategy_id
                     .unwrap_or(existing.strategy_id)
                     .trim()
                     .to_string(),
-                initial_balance: req
-                    .initial_balance
+                initial_balance: initial_balance
                     .unwrap_or(existing.initial_balance)
                     .max(0.0),
-                scan_interval_minutes: req
-                    .scan_interval_minutes
+                scan_interval_minutes: scan_interval_minutes
                     .unwrap_or(existing.scan_interval_minutes)
                     .max(1),
-                is_cross_margin: req.is_cross_margin.unwrap_or(existing.is_cross_margin != 0),
-                use_ai500: req.use_ai500.unwrap_or(existing.use_ai500 != 0),
-                use_oi_top: req.use_oi_top.unwrap_or(existing.use_oi_top != 0),
-                custom_prompt: req
-                    .custom_prompt
+                is_cross_margin: is_cross_margin.unwrap_or(existing.is_cross_margin != 0),
+                use_ai500: use_ai500.unwrap_or(existing.use_ai500 != 0),
+                use_oi_top: use_oi_top.unwrap_or(existing.use_oi_top != 0),
+                custom_prompt: custom_prompt
                     .unwrap_or(existing.custom_prompt)
                     .trim()
                     .to_string(),
-                override_base_prompt: req
-                    .override_base_prompt
+                override_base_prompt: override_base_prompt
                     .unwrap_or(existing.override_base_prompt != 0),
-                system_prompt_template: req
-                    .system_prompt_template
+                system_prompt_template: system_prompt_template
                     .unwrap_or(existing.system_prompt_template)
                     .trim()
                     .to_string(),
@@ -299,14 +313,15 @@ pub async fn stop_trader(
 pub async fn update_trader_prompt(
     app: &SharedState,
     id: &str,
-    req: UpdatePromptRequest,
+    custom_prompt: &str,
+    override_base_prompt: bool,
 ) -> AppResult<TraderMessagePayload> {
     let result = app
         .trading_repo
         .update_prompt(
             id,
-            req.custom_prompt.trim().to_string(),
-            req.override_base_prompt,
+            custom_prompt.trim().to_string(),
+            override_base_prompt,
             now_ts(),
         )
         .await;

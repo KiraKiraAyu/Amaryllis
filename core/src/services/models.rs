@@ -4,8 +4,7 @@ use crate::{
     clients::llm_chat::provider_config,
     contracts::models::{
         AvailableModelListPayload, AvailableModelPayload, MessagePayload, ModelConfigPayload,
-        ModelProviderProbeRequest, ProviderAvailabilityPayload, ProviderAvailabilityRequest,
-        SafeModelConfig, SafeProviderConfig, UpdateModelConfigRequest,
+        ProviderAvailabilityPayload, ProviderConfigInput, SafeModelConfig, SafeProviderConfig,
     },
     error::{AppError, Result},
     repositories::{
@@ -58,11 +57,11 @@ impl ModelService {
 
     pub async fn update_configs(
         &self,
-        request: UpdateModelConfigRequest,
+        providers: Vec<ProviderConfigInput>,
     ) -> Result<MessagePayload> {
-        let mut providers = Vec::new();
+        let mut upsert_providers = Vec::new();
 
-        for provider in request.providers {
+        for provider in providers {
             let provider_type = provider.provider_type.trim().to_ascii_lowercase();
             if provider.name.trim().is_empty() {
                 return Err(AppError::BadRequest("Provider name is required".into()));
@@ -85,7 +84,7 @@ impl ModelService {
                 });
             }
 
-            providers.push(UpsertProviderConfig {
+            upsert_providers.push(UpsertProviderConfig {
                 id: provider.id,
                 name: provider.name.trim().to_string(),
                 provider_type,
@@ -97,7 +96,7 @@ impl ModelService {
         }
 
         self.repo
-            .replace_for_user(providers)
+            .replace_for_user(upsert_providers)
             .await
             .map_err(|err| {
                 AppError::Internal(format!("Failed to update LLM configurations: {err}"))
@@ -110,14 +109,11 @@ impl ModelService {
 
     pub async fn list_available_models(
         &self,
-        request: ModelProviderProbeRequest,
+        provider_type: String,
+        api_key: String,
+        base_url: String,
     ) -> Result<AvailableModelListPayload> {
-        let config = self.probe_config(
-            request.provider_type,
-            request.api_key,
-            String::new(),
-            request.base_url,
-        )?;
+        let config = self.probe_config(provider_type, api_key, String::new(), base_url)?;
         let client = crate::clients::llm_chat::DefaultLlmClient::new(config)?;
         let models = client.list_models().await?;
 
@@ -134,14 +130,12 @@ impl ModelService {
 
     pub async fn check_provider_availability(
         &self,
-        request: ProviderAvailabilityRequest,
+        provider_type: String,
+        api_key: String,
+        base_url: String,
+        model_id: String,
     ) -> Result<ProviderAvailabilityPayload> {
-        let config = self.probe_config(
-            request.provider_type,
-            request.api_key,
-            request.model_id,
-            request.base_url,
-        )?;
+        let config = self.probe_config(provider_type, api_key, model_id, base_url)?;
         let client = crate::clients::llm_chat::DefaultLlmClient::new(config)?;
         client.check_provider().await?;
 

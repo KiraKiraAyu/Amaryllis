@@ -2,17 +2,19 @@ use super::service::*;
 
 pub async fn decisions(
     app: &SharedState,
-    q: DecisionQuery,
+    trader_id: Option<String>,
+    limit: Option<i64>,
+    offset: Option<i64>,
+    symbol: Option<String>,
 ) -> AppResult<DecisionListPayload> {
-    let trader_id = match resolve_trader_id(app, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
 
-    let limit = q.limit.unwrap_or(100).clamp(1, 500);
-    let offset = q.offset.unwrap_or(0).max(0);
-    let symbol_filter = q
-        .symbol
+    let limit = limit.unwrap_or(100).clamp(1, 500);
+    let offset = offset.unwrap_or(0).max(0);
+    let symbol_filter = symbol
         .clone()
         .map(|v| v.trim().to_uppercase())
         .filter(|v| !v.is_empty());
@@ -42,9 +44,9 @@ pub async fn decisions(
 
 pub async fn latest_decisions(
     app: &SharedState,
-    q: TraderQuery,
+    trader_id: Option<String>,
 ) -> AppResult<LatestDecisionsPayload> {
-    let trader_id = match resolve_trader_id(app, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
@@ -71,14 +73,16 @@ pub async fn latest_decisions(
 
 pub async fn trades(
     app: &SharedState,
-    q: PaginationQuery,
+    trader_id: Option<String>,
+    limit: Option<i64>,
+    offset: Option<i64>,
 ) -> AppResult<TradeListPayload> {
-    let trader_id = match resolve_trader_id(app, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
-    let limit = q.limit.unwrap_or(100).clamp(1, 500);
-    let offset = q.offset.unwrap_or(0).max(0);
+    let limit = limit.unwrap_or(100).clamp(1, 500);
+    let offset = offset.unwrap_or(0).max(0);
 
     match app
         .trading_repo
@@ -101,17 +105,19 @@ pub async fn trades(
 
 pub async fn orders(
     app: &SharedState,
-    q: PaginationQuery,
+    trader_id: Option<String>,
+    limit: Option<i64>,
+    offset: Option<i64>,
 ) -> AppResult<OrderListPayload> {
-    order_list(app, q, false, true, true, "Failed to load orders").await
+    order_list(app, trader_id, limit, offset, false, true, true, "Failed to load orders").await
 }
 
 pub async fn order_fills(
     app: &SharedState,
     order_id: &str,
-    q: TraderQuery,
+    trader_id: Option<String>,
 ) -> AppResult<FillListPayload> {
-    let trader_id = match resolve_trader_id(app, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
@@ -139,11 +145,15 @@ pub async fn order_fills(
 
 pub async fn open_orders(
     app: &SharedState,
-    q: PaginationQuery,
+    trader_id: Option<String>,
+    limit: Option<i64>,
+    offset: Option<i64>,
 ) -> AppResult<OrderListPayload> {
     order_list(
         app,
-        q,
+        trader_id,
+        limit,
+        offset,
         true,
         false,
         false,
@@ -154,18 +164,20 @@ pub async fn open_orders(
 
 async fn order_list(
     app: &SharedState,
-    q: PaginationQuery,
+    trader_id: Option<String>,
+    limit: Option<i64>,
+    offset: Option<i64>,
     open_only: bool,
     include_avg_fill: bool,
     include_closed_at: bool,
     error_message: &str,
 ) -> AppResult<OrderListPayload> {
-    let trader_id = match resolve_trader_id(app, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
-    let limit = q.limit.unwrap_or(100).clamp(1, 500);
-    let offset = q.offset.unwrap_or(0).max(0);
+    let limit = limit.unwrap_or(100).clamp(1, 500);
+    let offset = offset.unwrap_or(0).max(0);
 
     match app
         .trading_repo

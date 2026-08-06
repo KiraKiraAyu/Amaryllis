@@ -2,21 +2,33 @@ use axum::{Json, extract::Query};
 
 use crate::{
     contracts::public::{ExchangeSymbolsPayload, KlinePayload, KlinesQuery, SymbolsQuery},
-    error::Result,
+    error::{AppError, Result},
     http::response::ApiResponse,
     services::market,
 };
 
 pub async fn handle_symbols(
-    Query(q): Query<SymbolsQuery>,
+    Query(SymbolsQuery { exchange }): Query<SymbolsQuery>,
 ) -> Result<Json<ApiResponse<ExchangeSymbolsPayload>>> {
-    let payload = market::symbols(q).await?;
+    let payload = market::symbols(exchange).await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 
 pub async fn handle_klines(
-    Query(q): Query<KlinesQuery>,
+    Query(KlinesQuery {
+        symbol,
+        interval,
+        limit,
+        exchange,
+    }): Query<KlinesQuery>,
 ) -> Result<Json<ApiResponse<Vec<KlinePayload>>>> {
-    let payload = market::klines(q).await?;
+    if let Some(l) = limit {
+        if l <= 0 {
+            return Err(AppError::BadRequest(
+                "limit must be a positive number".into(),
+            ));
+        }
+    }
+    let payload = market::klines(symbol, interval, limit, exchange).await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }

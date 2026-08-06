@@ -2,8 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     contracts::exchanges::{
-        CreateExchangePayload, CreateExchangeRequest, MessagePayload, SafeExchangeConfig,
-        UpdateExchangeConfigRequest,
+        CreateExchangePayload, ExchangeConfigPatch, MessagePayload, SafeExchangeConfig,
     },
     error::{AppError, Result},
     repositories::{
@@ -46,21 +45,28 @@ impl ExchangeConfigService {
 
     pub async fn create_exchange(
         &self,
-        request: CreateExchangeRequest,
+        exchange_type: String,
+        account_name: String,
+        enabled: bool,
+        api_key: String,
+        secret_key: String,
+        passphrase: String,
+        testnet: bool,
+        hyperliquid_wallet_addr: String,
     ) -> Result<CreateExchangePayload> {
-        let exchange_type = request.exchange_type.trim().to_ascii_lowercase();
+        let exchange_type = exchange_type.trim().to_ascii_lowercase();
         if !is_supported_exchange_type(&exchange_type) {
             return Err(AppError::BadRequest("Invalid exchange type".into()));
         }
 
-        let account_name = if request.account_name.trim().is_empty() {
+        let account_name = if account_name.trim().is_empty() {
             "Default".to_string()
         } else {
-            request.account_name.trim().to_string()
+            account_name.trim().to_string()
         };
 
         let (name, exchange_kind) = exchange_name_and_type(&exchange_type);
-        validate_exchange_credentials(&exchange_type, &request)?;
+        validate_exchange_credentials(&exchange_type, &secret_key, &hyperliquid_wallet_addr)?;
         let id = Uuid::now_v7().to_string();
         let now = now_ts();
 
@@ -71,12 +77,12 @@ impl ExchangeConfigService {
                 account_name,
                 name: name.to_string(),
                 exchange_kind: exchange_kind.to_string(),
-                enabled: request.enabled,
-                api_key: request.api_key.trim().to_string(),
-                secret_key: request.secret_key.trim().to_string(),
-                passphrase: request.passphrase.trim().to_string(),
-                testnet: request.testnet,
-                hyperliquid_wallet_addr: request.hyperliquid_wallet_addr.trim().to_string(),
+                enabled,
+                api_key: api_key.trim().to_string(),
+                secret_key: secret_key.trim().to_string(),
+                passphrase: passphrase.trim().to_string(),
+                testnet,
+                hyperliquid_wallet_addr: hyperliquid_wallet_addr.trim().to_string(),
                 created_at: now,
                 updated_at: now,
             })
@@ -93,11 +99,11 @@ impl ExchangeConfigService {
 
     pub async fn update_configs(
         &self,
-        request: UpdateExchangeConfigRequest,
+        exchanges: std::collections::HashMap<String, ExchangeConfigPatch>,
     ) -> Result<MessagePayload> {
         let now = now_ts();
 
-        for (exchange_id, patch) in request.exchanges {
+        for (exchange_id, patch) in exchanges {
             let existing = self
                 .repo
                 .find_runtime_config(&exchange_id)
@@ -221,11 +227,12 @@ fn exchange_name_and_type(exchange_type: &str) -> (&'static str, &'static str) {
 
 fn validate_exchange_credentials(
     exchange_type: &str,
-    req: &CreateExchangeRequest,
+    secret_key: &str,
+    hyperliquid_wallet_addr: &str,
 ) -> Result<()> {
     match exchange_type {
         "aster" => {
-            let wallet_addr = req.hyperliquid_wallet_addr.trim();
+            let wallet_addr = hyperliquid_wallet_addr.trim();
             if wallet_addr.is_empty() {
                 return Err(AppError::BadRequest(
                     "Main wallet address is required for Aster".into(),
@@ -240,7 +247,7 @@ fn validate_exchange_credentials(
                 )));
             }
 
-            let private_key = req.secret_key.trim();
+            let private_key = secret_key.trim();
             if private_key.is_empty() {
                 return Err(AppError::BadRequest(
                     "API wallet private key is required for Aster".into(),
@@ -258,7 +265,7 @@ fn validate_exchange_credentials(
             }
         }
         "hyperliquid" => {
-            let private_key = req.secret_key.trim();
+            let private_key = secret_key.trim();
             if private_key.is_empty() {
                 return Err(AppError::BadRequest(
                     "Private key is required for Hyperliquid".into(),
@@ -341,34 +348,24 @@ mod tests {
 
     #[test]
     fn aster_validation_rejects_address_length_private_key() {
-        let req = CreateExchangeRequest {
-            exchange_type: "aster".into(),
-            account_name: "test".into(),
-            enabled: true,
-            api_key: "".into(),
-            secret_key: "0x21cf8ae13bb72632562c6ff438652ba1a151bb0".into(), // 40 hex chars - address
-            passphrase: "".into(),
-            testnet: false,
-            hyperliquid_wallet_addr: "0x63DD5aCC6b1aa0f563956C0e534DD30B6dcF7C4e".into(),
-        };
-        let err = validate_exchange_credentials("aster", &req).unwrap_err();
+        let err = validate_exchange_credentials(
+            "aster",
+            "0x21cf8ae13bb72632562c6ff438652ba1a151bb0", // 40 hex chars - address, not private key
+            "0x63DD5aCC6b1aa0f563956C0e534DD30B6dcF7C4e",
+        )
+        .unwrap_err();
         assert!(matches!(err, AppError::BadRequest(_)));
         assert!(err.to_string().contains("64 hex chars"));
     }
 
     #[test]
     fn aster_validation_accepts_correct_private_key() {
-        let req = CreateExchangeRequest {
-            exchange_type: "aster".into(),
-            account_name: "test".into(),
-            enabled: true,
-            api_key: "".into(),
-            secret_key: "4fd0a42218f3eae43a6ce26d22544e986139a01e5b34a62db53757ffca81bae1".into(),
-            passphrase: "".into(),
-            testnet: false,
-            hyperliquid_wallet_addr: "0x63DD5aCC6b1aa0f563956C0e534DD30B6dcF7C4e".into(),
-        };
-        assert!(validate_exchange_credentials("aster", &req).is_ok());
+        assert!(validate_exchange_credentials(
+            "aster",
+            "4fd0a42218f3eae43a6ce26d22544e986139a01e5b34a62db53757ffca81bae1",
+            "0x63DD5aCC6b1aa0f563956C0e534DD30B6dcF7C4e",
+        )
+        .is_ok());
     }
 
     #[test]

@@ -32,8 +32,16 @@ pub async fn close_position(
     Path(id): Path<String>,
     Json(request): Json<ClosePositionRequest>,
 ) -> Result<Json<ApiResponse<ClosePositionPayload>>> {
+    let symbol = request.symbol.trim().to_string();
+    let side = request.side.trim().to_string();
+    let local_only = request.local_only;
+    if symbol.is_empty() || (side != "LONG" && side != "SHORT") {
+        return Err(crate::error::AppError::BadRequest(
+            "symbol and side(LONG/SHORT) are required".into(),
+        ));
+    }
     let payload = trading_service(&app)
-        .close_position(&id, request)
+        .close_position(&id, &symbol, &side, local_only)
         .await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
@@ -50,7 +58,7 @@ pub async fn account(
     State(app): State<state::AppState>,
     Query(q): Query<TraderQuery>,
 ) -> Result<Json<ApiResponse<TraderAccountPayload>>> {
-    let payload = trading_service(&app).account(q).await?;
+    let payload = trading_service(&app).account(q.trader_id).await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 
@@ -58,7 +66,7 @@ pub async fn positions(
     State(app): State<state::AppState>,
     Query(q): Query<PositionQuery>,
 ) -> Result<Json<ApiResponse<PositionListPayload>>> {
-    let payload = trading_service(&app).positions(q).await?;
+    let payload = trading_service(&app).positions(q.trader_id, q.status).await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 
@@ -67,7 +75,7 @@ pub async fn positions_history(
     Query(q): Query<PaginationQuery>,
 ) -> Result<Json<ApiResponse<PositionListPayload>>> {
     let payload = trading_service(&app)
-        .positions_history(q)
+        .positions_history(q.trader_id, q.limit, q.offset)
         .await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }

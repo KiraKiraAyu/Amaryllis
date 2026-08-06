@@ -4,15 +4,12 @@ use crate::{
         fetch_bitget_klines, fetch_bitget_symbols, fetch_hyperliquid_klines,
         fetch_hyperliquid_symbols, fetch_okx_klines, fetch_okx_symbols, normalize_crypto_symbol,
     },
-    contracts::public::{
-        ExchangeSymbolPayload, ExchangeSymbolsPayload, KlinePayload, KlinesQuery, SymbolsQuery,
-    },
+    contracts::public::{ExchangeSymbolPayload, ExchangeSymbolsPayload, KlinePayload},
     error::{AppError, Result},
 };
 
-pub async fn symbols(query: SymbolsQuery) -> Result<ExchangeSymbolsPayload> {
-    let exchange = query
-        .exchange
+pub async fn symbols(exchange: Option<String>) -> Result<ExchangeSymbolsPayload> {
+    let exchange = exchange
         .unwrap_or_else(|| "hyperliquid".to_string())
         .to_ascii_lowercase();
 
@@ -85,16 +82,20 @@ pub async fn symbols(query: SymbolsQuery) -> Result<ExchangeSymbolsPayload> {
     ))
 }
 
-pub async fn klines(query: KlinesQuery) -> Result<Vec<KlinePayload>> {
-    let symbol = query.symbol.trim().to_uppercase();
+pub async fn klines(
+    symbol: String,
+    interval: Option<String>,
+    limit: Option<i64>,
+    exchange: Option<String>,
+) -> Result<Vec<KlinePayload>> {
+    let symbol = symbol.trim().to_uppercase();
     if symbol.is_empty() {
         return Err(AppError::BadRequest("symbol parameter is required".into()));
     }
 
-    let interval = query.interval.unwrap_or_else(|| "5m".to_string());
-    let limit = query.limit.unwrap_or(1000).clamp(1, 1500) as usize;
-    let exchange = query
-        .exchange
+    let interval = interval.unwrap_or_else(|| "5m".to_string());
+    let limit = limit.unwrap_or(1000).clamp(1, 1500) as usize;
+    let exchange = exchange
         .unwrap_or_else(|| "binance".to_string())
         .to_ascii_lowercase();
 

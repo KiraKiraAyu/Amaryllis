@@ -4,31 +4,32 @@ use reqwest::Method;
 
 pub async fn runtime_alerts(
     app: &SharedState,
-    q: RuntimeAlertsQuery,
+    trader_id: Option<String>,
+    window_hours: Option<i64>,
+    open_market_fallback_rate_max_pct: Option<f64>,
+    replace_throttle_rate_max_pct: Option<f64>,
+    stale_reconcile_terminal_rate_max_pct: Option<f64>,
+    persist_min_interval_secs: Option<i64>,
 ) -> AppResult<RuntimeAlertsPayload> {
-    let trader_id = match resolve_trader_id(app, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
 
-    let window_hours = q.window_hours.unwrap_or(24).clamp(1, 24 * 365);
+    let window_hours = window_hours.unwrap_or(24).clamp(1, 24 * 365);
     let now = now_ts();
     let from_ts = now - window_hours * 3600;
-    let persist_min_interval_secs = q
-        .persist_min_interval_secs
+    let persist_min_interval_secs = persist_min_interval_secs
         .unwrap_or(300)
         .clamp(30, 24 * 3600);
 
-    let open_market_fallback_rate_max_pct = q
-        .open_market_fallback_rate_max_pct
+    let open_market_fallback_rate_max_pct = open_market_fallback_rate_max_pct
         .unwrap_or(15.0)
         .clamp(0.0, 100.0);
-    let replace_throttle_rate_max_pct = q
-        .replace_throttle_rate_max_pct
+    let replace_throttle_rate_max_pct = replace_throttle_rate_max_pct
         .unwrap_or(20.0)
         .clamp(0.0, 100.0);
-    let stale_reconcile_terminal_rate_max_pct = q
-        .stale_reconcile_terminal_rate_max_pct
+    let stale_reconcile_terminal_rate_max_pct = stale_reconcile_terminal_rate_max_pct
         .unwrap_or(20.0)
         .clamp(0.0, 100.0);
 
@@ -267,23 +268,28 @@ pub async fn runtime_alerts(
 
 pub async fn runtime_alert_history(
     app: &SharedState,
-    q: RuntimeAlertHistoryQuery,
+    trader_id: Option<String>,
+    window_hours: Option<i64>,
+    limit: Option<i64>,
+    offset: Option<i64>,
+    breached_only: Option<bool>,
+    severity: Option<String>,
 ) -> AppResult<RuntimeAlertHistoryPayload> {
-    let trader_id = match resolve_trader_id(app, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
 
-    let window_hours = q.window_hours.unwrap_or(24 * 7).clamp(1, 24 * 365);
+    let window_hours = window_hours.unwrap_or(24 * 7).clamp(1, 24 * 365);
     let from_ts = now_ts() - window_hours * 3600;
-    let limit = q.limit.unwrap_or(100).clamp(1, 1000);
-    let offset = q.offset.unwrap_or(0).max(0);
-    let breached_filter = match q.breached_only {
+    let limit = limit.unwrap_or(100).clamp(1, 1000);
+    let offset = offset.unwrap_or(0).max(0);
+    let breached_filter = match breached_only {
         Some(true) => 1_i64,
         Some(false) => 0_i64,
         None => -1_i64,
     };
-    let severity_filter = q.severity.unwrap_or_default().trim().to_ascii_lowercase();
+    let severity_filter = severity.unwrap_or_default().trim().to_ascii_lowercase();
 
     let breached = match breached_filter {
         0 => Some(false),
@@ -314,7 +320,7 @@ pub async fn runtime_alert_history(
                 limit,
                 offset,
                 filters: RuntimeAlertHistoryFiltersPayload {
-                    breached_only: q.breached_only,
+                    breached_only,
                     severity: severity_filter,
                 },
                 total: total_count,
@@ -330,24 +336,28 @@ pub async fn runtime_alert_history(
 
 pub async fn runtime_alert_deliveries(
     app: &SharedState,
-    q: RuntimeAlertDeliveriesQuery,
+    trader_id: Option<String>,
+    window_hours: Option<i64>,
+    limit: Option<i64>,
+    offset: Option<i64>,
+    success: Option<bool>,
+    destination: Option<String>,
 ) -> AppResult<RuntimeAlertDeliveriesPayload> {
-    let trader_id = match resolve_trader_id(app, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
 
-    let window_hours = q.window_hours.unwrap_or(24 * 7).clamp(1, 24 * 365);
+    let window_hours = window_hours.unwrap_or(24 * 7).clamp(1, 24 * 365);
     let from_ts = now_ts() - window_hours * 3600;
-    let limit = q.limit.unwrap_or(100).clamp(1, 1000);
-    let offset = q.offset.unwrap_or(0).max(0);
-    let success_filter = match q.success {
+    let limit = limit.unwrap_or(100).clamp(1, 1000);
+    let offset = offset.unwrap_or(0).max(0);
+    let success_filter = match success {
         Some(true) => 1_i64,
         Some(false) => 0_i64,
         None => -1_i64,
     };
-    let destination_filter = q
-        .destination
+    let destination_filter = destination
         .unwrap_or_default()
         .trim()
         .to_ascii_lowercase();
@@ -381,7 +391,7 @@ pub async fn runtime_alert_deliveries(
                 limit,
                 offset,
                 filters: RuntimeAlertDeliveriesFiltersPayload {
-                    success: q.success,
+                    success,
                     destination: destination_filter,
                 },
                 total: total_count,
@@ -397,9 +407,9 @@ pub async fn runtime_alert_deliveries(
 
 pub async fn runtime_alert_controls(
     app: &SharedState,
-    q: RuntimeAlertControlsQuery,
+    trader_id: Option<String>,
 ) -> AppResult<RuntimeAlertControlsPayload> {
-    let trader_id = match resolve_trader_id(app, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
@@ -420,19 +430,21 @@ pub async fn runtime_alert_controls(
 
 pub async fn mute_runtime_alerts(
     app: &SharedState,
-    req: RuntimeAlertMuteRequest,
+    trader_id: Option<String>,
+    mute_minutes: Option<i64>,
+    mute_until: Option<i64>,
+    reason: Option<String>,
 ) -> AppResult<RuntimeAlertMutePayload> {
-    let trader_id = match resolve_trader_id(app, req.trader_id).await {
+    let trader_id = match resolve_trader_id(app, trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
 
     let now = now_ts();
-    let mute_until = req
-        .mute_until
+    let mute_until = mute_until
         .filter(|v| *v > now)
-        .unwrap_or_else(|| now + req.mute_minutes.unwrap_or(60).clamp(1, 24 * 365 * 24 * 60) * 60);
-    let reason = req.reason.unwrap_or_default().trim().to_string();
+        .unwrap_or_else(|| now + mute_minutes.unwrap_or(60).clamp(1, 24 * 365 * 24 * 60) * 60);
+    let reason = reason.unwrap_or_default().trim().to_string();
 
     let result = app
         .trading_repo
@@ -456,9 +468,9 @@ pub async fn mute_runtime_alerts(
 
 pub async fn unmute_runtime_alerts(
     app: &SharedState,
-    req: RuntimeAlertControlTargetRequest,
+    trader_id: Option<String>,
 ) -> AppResult<RuntimeAlertMutePayload> {
-    let trader_id = match resolve_trader_id(app, req.trader_id).await {
+    let trader_id = match resolve_trader_id(app, trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
@@ -486,15 +498,16 @@ pub async fn unmute_runtime_alerts(
 
 pub async fn ack_runtime_alerts(
     app: &SharedState,
-    req: RuntimeAlertAckRequest,
+    trader_id: Option<String>,
+    note: Option<String>,
 ) -> AppResult<RuntimeAlertAckPayload> {
-    let trader_id = match resolve_trader_id(app, req.trader_id).await {
+    let trader_id = match resolve_trader_id(app, trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
 
     let now = now_ts();
-    let note = req.note.unwrap_or_default().trim().to_string();
+    let note = note.unwrap_or_default().trim().to_string();
 
     let result = app
         .trading_repo

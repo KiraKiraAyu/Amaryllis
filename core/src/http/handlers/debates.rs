@@ -9,7 +9,7 @@ use crate::{
         DebateListPayload, DebateMessagePayload, DebateMessagesPayload, DebatePersonalitiesPayload,
         DebateVotesPayload, StartDebateRequest,
     },
-    error::Result,
+    error::{AppError, Result},
     http::response::ApiResponse,
     state,
 };
@@ -23,12 +23,39 @@ pub async fn handle_get_debates(
 
 pub async fn handle_create_debate(
     State(app): State<state::AppState>,
-    Json(request): Json<CreateDebateRequest>,
+    Json(CreateDebateRequest {
+        name,
+        symbol,
+        max_rounds,
+        prompt_variant,
+        participants,
+    }): Json<CreateDebateRequest>,
 ) -> Result<Json<ApiResponse<DebateActionPayload>>> {
+    if let Some(ref n) = name {
+        if n.trim().is_empty() {
+            return Err(AppError::BadRequest(
+                "name cannot be empty if provided".into(),
+            ));
+        }
+    }
+    if let Some(ref s) = symbol {
+        if s.trim().is_empty() {
+            return Err(AppError::BadRequest(
+                "symbol cannot be empty if provided".into(),
+            ));
+        }
+    }
+    if let Some(r) = max_rounds {
+        if r < 1 {
+            return Err(AppError::BadRequest(
+                "max_rounds must be positive".into(),
+            ));
+        }
+    }
     let payload = app
         .services
         .debate_service
-        .create(request)
+        .create(name, symbol, max_rounds, prompt_variant, participants)
         .await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }

@@ -2,20 +2,26 @@ use super::service::*;
 
 pub async fn runtime_events(
     app: &SharedState,
-    q: RuntimeEventsQuery,
+    trader_id: Option<String>,
+    window_hours: Option<i64>,
+    limit: Option<i64>,
+    offset: Option<i64>,
+    event_type: Option<String>,
+    risk_level: Option<String>,
+    correlation_id: Option<String>,
 ) -> AppResult<RuntimeEventsPayload> {
-    let trader_id = match resolve_trader_id(app, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
 
-    let window_hours = q.window_hours.unwrap_or(24).clamp(1, 24 * 365);
+    let window_hours = window_hours.unwrap_or(24).clamp(1, 24 * 365);
     let from_ts = now_ts() - window_hours * 3600;
-    let limit = q.limit.unwrap_or(100).clamp(1, 1000);
-    let offset = q.offset.unwrap_or(0).max(0);
-    let event_type = q.event_type.unwrap_or_default().trim().to_string();
-    let risk_level = q.risk_level.unwrap_or_default().trim().to_ascii_lowercase();
-    let correlation_id = q.correlation_id.unwrap_or_default().trim().to_string();
+    let limit = limit.unwrap_or(100).clamp(1, 1000);
+    let offset = offset.unwrap_or(0).max(0);
+    let event_type = event_type.unwrap_or_default().trim().to_string();
+    let risk_level = risk_level.unwrap_or_default().trim().to_ascii_lowercase();
+    let correlation_id = correlation_id.unwrap_or_default().trim().to_string();
 
     match app
         .trading_repo
@@ -57,14 +63,15 @@ pub async fn runtime_events(
 
 pub async fn runtime_event_types(
     app: &SharedState,
-    q: RuntimeEventTypesQuery,
+    trader_id: Option<String>,
+    window_hours: Option<i64>,
 ) -> AppResult<RuntimeEventTypesPayload> {
-    let trader_id = match resolve_trader_id(app, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
 
-    let window_hours = q.window_hours.unwrap_or(24).clamp(1, 24 * 365);
+    let window_hours = window_hours.unwrap_or(24).clamp(1, 24 * 365);
     let from_ts = now_ts() - window_hours * 3600;
 
     match app
@@ -131,14 +138,15 @@ pub async fn runtime_event_types(
 
 pub async fn runtime_metrics(
     app: &SharedState,
-    q: RuntimeMetricsQuery,
+    trader_id: Option<String>,
+    window_hours: Option<i64>,
 ) -> AppResult<RuntimeMetricsPayload> {
-    let trader_id = match resolve_trader_id(app, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
 
-    let window_hours = q.window_hours.unwrap_or(24).clamp(1, 24 * 365);
+    let window_hours = window_hours.unwrap_or(24).clamp(1, 24 * 365);
     let from_ts = now_ts() - window_hours * 3600;
 
     let total_runtime_events =
@@ -274,16 +282,18 @@ pub async fn runtime_metrics(
 
 pub async fn runtime_metrics_series(
     app: &SharedState,
-    q: RuntimeMetricsSeriesQuery,
+    trader_id: Option<String>,
+    window_hours: Option<i64>,
+    bucket_minutes: Option<i64>,
 ) -> AppResult<RuntimeMetricsSeriesPayload> {
-    let trader_id = match resolve_trader_id(app, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
 
-    let window_hours = q.window_hours.unwrap_or(24).clamp(1, 24 * 365);
+    let window_hours = window_hours.unwrap_or(24).clamp(1, 24 * 365);
     let from_ts = now_ts() - window_hours * 3600;
-    let bucket_minutes = q.bucket_minutes.unwrap_or(60).clamp(1, 24 * 60);
+    let bucket_minutes = bucket_minutes.unwrap_or(60).clamp(1, 24 * 60);
     let bucket_secs = bucket_minutes * 60;
     let pct = |part: i64, total: i64| -> f64 {
         if total > 0 {

@@ -141,19 +141,41 @@ impl TradingService {
 
     pub async fn create_trader(
         &self,
-        req: CreateTraderRequest,
+        name: &str,
+        ai_model_id: &str,
+        exchange_id: &str,
+        strategy_id: &str,
+        initial_balance: f64,
+        scan_interval_minutes: i64,
+        is_cross_margin: Option<bool>,
+        use_ai500: bool,
+        use_oi_top: bool,
+        custom_prompt: &str,
+        override_base_prompt: bool,
+        system_prompt_template: &str,
     ) -> AppResult<TraderCreatedPayload> {
         let state = self.state();
-        create_trader(&state, req).await
+        create_trader(&state, name, ai_model_id, exchange_id, strategy_id, initial_balance, scan_interval_minutes, is_cross_margin, use_ai500, use_oi_top, custom_prompt, override_base_prompt, system_prompt_template).await
     }
 
     pub async fn update_trader(
         &self,
         id: &str,
-        req: UpdateTraderRequest,
+        name: Option<String>,
+        ai_model_id: Option<String>,
+        exchange_id: Option<String>,
+        strategy_id: Option<String>,
+        initial_balance: Option<f64>,
+        scan_interval_minutes: Option<i64>,
+        is_cross_margin: Option<bool>,
+        use_ai500: Option<bool>,
+        use_oi_top: Option<bool>,
+        custom_prompt: Option<String>,
+        override_base_prompt: Option<bool>,
+        system_prompt_template: Option<String>,
     ) -> AppResult<TraderMessagePayload> {
         let state = self.state();
-        update_trader(&state, id, req).await
+        update_trader(&state, id, name, ai_model_id, exchange_id, strategy_id, initial_balance, scan_interval_minutes, is_cross_margin, use_ai500, use_oi_top, custom_prompt, override_base_prompt, system_prompt_template).await
     }
 
     pub async fn delete_trader(&self, id: &str) -> AppResult<TraderMessagePayload> {
@@ -172,17 +194,18 @@ impl TradingService {
     pub async fn update_trader_prompt(
         &self,
         id: &str,
-        req: UpdatePromptRequest,
+        custom_prompt: &str,
+        override_base_prompt: bool,
     ) -> AppResult<TraderMessagePayload> {
         let state = self.state();
-        update_trader_prompt(&state, id, req).await
+        update_trader_prompt(&state, id, custom_prompt, override_base_prompt).await
     }
 
     pub async fn equity_history(
         &self,
-        query: EquityHistoryQuery,
+        trader_id: Option<String>,
     ) -> AppResult<Vec<EquityHistoryPointPayload>> {
-        let trader_id = if let Some(v) = query.trader_id {
+        let trader_id = if let Some(v) = trader_id {
             v.trim().to_string()
         } else {
             match self
@@ -222,14 +245,18 @@ impl TradingService {
     pub async fn close_position(
         &self,
         id: &str,
-        req: ClosePositionRequest,
+        symbol: &str,
+        side: &str,
+        local_only: bool,
     ) -> AppResult<ClosePositionPayload> {
         let state = self.state();
         close_position(
             &state,
             self.trading_runtime_service.as_ref(),
             id,
-            req,
+            symbol,
+            side,
+            local_only,
         )
         .await
     }
@@ -241,179 +268,221 @@ impl TradingService {
 
     pub async fn status(
         &self,
-        query: TraderQuery,
+        trader_id: Option<String>,
     ) -> AppResult<TraderStatusPayload> {
         let state = self.state();
-        status(&state, query).await
+        status(&state, trader_id).await
     }
 
     pub async fn account(
         &self,
-        query: TraderQuery,
+        trader_id: Option<String>,
     ) -> AppResult<TraderAccountPayload> {
         let state = self.state();
-        account(&state, query).await
+        account(&state, trader_id).await
     }
 
     pub async fn positions(
         &self,
-        query: PositionQuery,
+        trader_id: Option<String>,
+        status_filter: Option<String>,
     ) -> AppResult<PositionListPayload> {
         let state = self.state();
-        positions(&state, query).await
+        positions(&state, trader_id, status_filter).await
     }
 
     pub async fn positions_history(
         &self,
-        query: PaginationQuery,
+        trader_id: Option<String>,
+        limit: Option<i64>,
+        offset: Option<i64>,
     ) -> AppResult<PositionListPayload> {
         let state = self.state();
-        positions_history(&state, query).await
+        positions_history(&state, trader_id, limit, offset).await
     }
 
     pub async fn decisions(
         &self,
-        query: DecisionQuery,
+        trader_id: Option<String>,
+        limit: Option<i64>,
+        offset: Option<i64>,
+        symbol: Option<String>,
     ) -> AppResult<DecisionListPayload> {
         let state = self.state();
-        decisions(&state, query).await
+        decisions(&state, trader_id, limit, offset, symbol).await
     }
 
     pub async fn latest_decisions(
         &self,
-        query: TraderQuery,
+        trader_id: Option<String>,
     ) -> AppResult<LatestDecisionsPayload> {
         let state = self.state();
-        latest_decisions(&state, query).await
+        latest_decisions(&state, trader_id).await
     }
 
     pub async fn trades(
         &self,
-        query: PaginationQuery,
+        trader_id: Option<String>,
+        limit: Option<i64>,
+        offset: Option<i64>,
     ) -> AppResult<TradeListPayload> {
         let state = self.state();
-        trades(&state, query).await
+        trades(&state, trader_id, limit, offset).await
     }
 
     pub async fn orders(
         &self,
-        query: PaginationQuery,
+        trader_id: Option<String>,
+        limit: Option<i64>,
+        offset: Option<i64>,
     ) -> AppResult<OrderListPayload> {
         let state = self.state();
-        orders(&state, query).await
+        orders(&state, trader_id, limit, offset).await
     }
 
     pub async fn order_fills(
         &self,
         order_id: &str,
-        query: TraderQuery,
+        trader_id: Option<String>,
     ) -> AppResult<FillListPayload> {
         let state = self.state();
-        order_fills(&state, order_id, query).await
+        order_fills(&state, order_id, trader_id).await
     }
 
     pub async fn open_orders(
         &self,
-        query: PaginationQuery,
+        trader_id: Option<String>,
+        limit: Option<i64>,
+        offset: Option<i64>,
     ) -> AppResult<OrderListPayload> {
         let state = self.state();
-        open_orders(&state, query).await
+        open_orders(&state, trader_id, limit, offset).await
     }
 
     pub async fn runtime_events(
         &self,
-        query: RuntimeEventsQuery,
+        trader_id: Option<String>,
+        window_hours: Option<i64>,
+        limit: Option<i64>,
+        offset: Option<i64>,
+        event_type: Option<String>,
+        risk_level: Option<String>,
+        correlation_id: Option<String>,
     ) -> AppResult<RuntimeEventsPayload> {
         let state = self.state();
-        runtime_events(&state, query).await
+        runtime_events(&state, trader_id, window_hours, limit, offset, event_type, risk_level, correlation_id).await
     }
 
     pub async fn runtime_event_types(
         &self,
-        query: RuntimeEventTypesQuery,
+        trader_id: Option<String>,
+        window_hours: Option<i64>,
     ) -> AppResult<RuntimeEventTypesPayload> {
         let state = self.state();
-        runtime_event_types(&state, query).await
+        runtime_event_types(&state, trader_id, window_hours).await
     }
 
     pub async fn runtime_metrics(
         &self,
-        query: RuntimeMetricsQuery,
+        trader_id: Option<String>,
+        window_hours: Option<i64>,
     ) -> AppResult<RuntimeMetricsPayload> {
         let state = self.state();
-        runtime_metrics(&state, query).await
+        runtime_metrics(&state, trader_id, window_hours).await
     }
 
     pub async fn runtime_metrics_series(
         &self,
-        query: RuntimeMetricsSeriesQuery,
+        trader_id: Option<String>,
+        window_hours: Option<i64>,
+        bucket_minutes: Option<i64>,
     ) -> AppResult<RuntimeMetricsSeriesPayload> {
         let state = self.state();
-        runtime_metrics_series(&state, query).await
+        runtime_metrics_series(&state, trader_id, window_hours, bucket_minutes).await
     }
 
     pub async fn runtime_alerts(
         &self,
-        query: RuntimeAlertsQuery,
+        trader_id: Option<String>,
+        window_hours: Option<i64>,
+        open_market_fallback_rate_max_pct: Option<f64>,
+        replace_throttle_rate_max_pct: Option<f64>,
+        stale_reconcile_terminal_rate_max_pct: Option<f64>,
+        persist_min_interval_secs: Option<i64>,
     ) -> AppResult<RuntimeAlertsPayload> {
         let state = self.state();
-        runtime_alerts(&state, query).await
+        runtime_alerts(&state, trader_id, window_hours, open_market_fallback_rate_max_pct, replace_throttle_rate_max_pct, stale_reconcile_terminal_rate_max_pct, persist_min_interval_secs).await
     }
 
     pub async fn runtime_alert_history(
         &self,
-        query: RuntimeAlertHistoryQuery,
+        trader_id: Option<String>,
+        window_hours: Option<i64>,
+        limit: Option<i64>,
+        offset: Option<i64>,
+        breached_only: Option<bool>,
+        severity: Option<String>,
     ) -> AppResult<RuntimeAlertHistoryPayload> {
         let state = self.state();
-        runtime_alert_history(&state, query).await
+        runtime_alert_history(&state, trader_id, window_hours, limit, offset, breached_only, severity).await
     }
 
     pub async fn runtime_alert_deliveries(
         &self,
-        query: RuntimeAlertDeliveriesQuery,
+        trader_id: Option<String>,
+        window_hours: Option<i64>,
+        limit: Option<i64>,
+        offset: Option<i64>,
+        success: Option<bool>,
+        destination: Option<String>,
     ) -> AppResult<RuntimeAlertDeliveriesPayload> {
         let state = self.state();
-        runtime_alert_deliveries(&state, query).await
+        runtime_alert_deliveries(&state, trader_id, window_hours, limit, offset, success, destination).await
     }
 
     pub async fn runtime_alert_controls(
         &self,
-        query: RuntimeAlertControlsQuery,
+        trader_id: Option<String>,
     ) -> AppResult<RuntimeAlertControlsPayload> {
         let state = self.state();
-        runtime_alert_controls(&state, query).await
+        runtime_alert_controls(&state, trader_id).await
     }
 
     pub async fn mute_runtime_alerts(
         &self,
-        req: RuntimeAlertMuteRequest,
+        trader_id: Option<String>,
+        mute_minutes: Option<i64>,
+        mute_until: Option<i64>,
+        reason: Option<String>,
     ) -> AppResult<RuntimeAlertMutePayload> {
         let state = self.state();
-        mute_runtime_alerts(&state, req).await
+        mute_runtime_alerts(&state, trader_id, mute_minutes, mute_until, reason).await
     }
 
     pub async fn unmute_runtime_alerts(
         &self,
-        req: RuntimeAlertControlTargetRequest,
+        trader_id: Option<String>,
     ) -> AppResult<RuntimeAlertMutePayload> {
         let state = self.state();
-        unmute_runtime_alerts(&state, req).await
+        unmute_runtime_alerts(&state, trader_id).await
     }
 
     pub async fn ack_runtime_alerts(
         &self,
-        req: RuntimeAlertAckRequest,
+        trader_id: Option<String>,
+        note: Option<String>,
     ) -> AppResult<RuntimeAlertAckPayload> {
         let state = self.state();
-        ack_runtime_alerts(&state, req).await
+        ack_runtime_alerts(&state, trader_id, note).await
     }
 
     pub async fn statistics(
         &self,
-        query: StatisticsQuery,
+        trader_id: Option<String>,
+        days: Option<i64>,
     ) -> AppResult<TraderStatisticsPayload> {
         let state = self.state();
-        statistics(&state, query).await
+        statistics(&state, trader_id, days).await
     }
 }
 

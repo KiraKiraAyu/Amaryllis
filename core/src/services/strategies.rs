@@ -5,11 +5,9 @@ use uuid::Uuid;
 use crate::{
     clients::market_data::{now_ts, parse_json_value, ts_to_rfc3339},
     contracts::strategies::{
-        CreateStrategyRequest, DefaultStrategyConfigQuery, DuplicateStrategyRequest,
-        PreviewPromptPayload, PreviewPromptRequest, StrategyCreatedPayload,
+        PreviewPromptPayload, StrategyCreatedPayload,
         StrategyDefaultConfigPayload, StrategyListPayload,
-        StrategyMessagePayload, StrategyPayload, StrategyTestRunPayload, StrategyTestRunRequest,
-        UpdateStrategyRequest,
+        StrategyMessagePayload, StrategyPayload, StrategyTestRunPayload,
     },
     error::{AppError, AppErrorKind, Result},
     repositories::strategies::{
@@ -56,30 +54,19 @@ impl StrategyService {
 
     pub async fn create_strategy(
         &self,
-        request: CreateStrategyRequest,
+        name: String,
+        description: String,
+        config: Value,
     ) -> Result<StrategyCreatedPayload> {
-        if request.name.trim().is_empty() {
-            return Err(strategy_error(
-                AppErrorKind::BadRequest,
-                "Strategy name is required",
-            ));
-        }
-        if !request.config.is_object() {
-            return Err(strategy_error(
-                AppErrorKind::BadRequest,
-                "Invalid strategy config",
-            ));
-        }
-
         let id = Uuid::now_v7().to_string();
         let now = now_ts();
-        let config = serde_json::to_string(&request.config).unwrap_or_else(|_| "{}".to_string());
+        let config_str = serde_json::to_string(&config).unwrap_or_else(|_| "{}".to_string());
         self.strategy_repo
             .create(CreateStrategyRecord {
                 id: id.clone(),
-                name: request.name.trim().to_string(),
-                description: request.description.trim().to_string(),
-                config,
+                name,
+                description,
+                config: config_str,
                 created_at: now,
                 updated_at: now,
             })
@@ -95,7 +82,9 @@ impl StrategyService {
     pub async fn update_strategy(
         &self,
         id: String,
-        request: UpdateStrategyRequest,
+        name: String,
+        description: String,
+        config: Value,
     ) -> Result<StrategyMessagePayload> {
         let existing = self
             .strategy_repo
@@ -104,18 +93,18 @@ impl StrategyService {
             .map_err(|_| strategy_error(AppErrorKind::Internal, "Failed to update strategy"))?
             .ok_or_else(|| strategy_error(AppErrorKind::NotFound, "Strategy not found"))?;
 
-        let name = if request.name.trim().is_empty() {
+        let name = if name.is_empty() {
             existing.name
         } else {
-            request.name.trim().to_string()
+            name
         };
-        let description = if request.description.trim().is_empty() {
+        let description = if description.is_empty() {
             existing.description
         } else {
-            request.description.trim().to_string()
+            description
         };
-        let config = if request.config.is_object() {
-            serde_json::to_string(&request.config).unwrap_or_else(|_| "{}".to_string())
+        let config = if config.is_object() {
+            serde_json::to_string(&config).unwrap_or_else(|_| "{}".to_string())
         } else {
             existing.config
         };
@@ -181,7 +170,7 @@ impl StrategyService {
     pub async fn duplicate_strategy(
         &self,
         id: String,
-        request: DuplicateStrategyRequest,
+        name: String,
     ) -> Result<StrategyCreatedPayload> {
         let source = self
             .strategy_repo
@@ -191,10 +180,10 @@ impl StrategyService {
             .ok_or_else(|| strategy_error(AppErrorKind::NotFound, "Strategy not found"))?;
 
         let new_id = Uuid::now_v7().to_string();
-        let new_name = if request.name.trim().is_empty() {
+        let new_name = if name.is_empty() {
             format!("{} Copy", source.name)
         } else {
-            request.name.trim().to_string()
+            name
         };
         let now = now_ts();
 
@@ -229,9 +218,9 @@ impl StrategyService {
 
     pub fn default_strategy_config(
         &self,
-        query: DefaultStrategyConfigQuery,
+        lang: Option<String>,
     ) -> Result<StrategyDefaultConfigPayload> {
-        let language = query.lang.unwrap_or_else(|| "en".to_string());
+        let language = lang.unwrap_or_else(|| "en".to_string());
         let payload = StrategyDefaultConfigPayload {
             config: default_strategy_config(&language),
             language,
@@ -240,22 +229,20 @@ impl StrategyService {
         Ok(payload)
     }
 
-    pub fn preview_prompt(&self, request: PreviewPromptRequest) -> Result<PreviewPromptPayload> {
-        if !request.config.is_object() {
-            return Err(strategy_error(
-                AppErrorKind::BadRequest,
-                "Invalid strategy config",
-            ));
-        }
-        let prompt_variant = request
-            .prompt_variant
+    pub fn preview_prompt(
+        &self,
+        config: Value,
+        _account_equity: Option<f64>,
+        prompt_variant: Option<String>,
+    ) -> Result<PreviewPromptPayload> {
+        let prompt_variant = prompt_variant
             .unwrap_or_else(|| "balanced".to_string())
             .trim()
             .to_string();
 
         // Use the unified prompt builder shared with live trading, backtest, and test run
         let system_prompt = build_system_prompt_from_config(
-            &request.config,
+            &config,
             true, // is_cross_margin: default for preview (no trader context)
             "",   // no trader-specific custom prompt
             false,
@@ -271,40 +258,35 @@ impl StrategyService {
 
     pub async fn test_run(
         &self,
-        request: StrategyTestRunRequest,
+        config: Value,
+        prompt_variant: Option<String>,
+        ai_model_id: Option<String>,
+        run_real_ai: Option<bool>,
     ) -> Result<StrategyTestRunPayload> {
-        if !request.config.is_object() {
-            return Err(strategy_error(
-                AppErrorKind::BadRequest,
-                "Invalid strategy config",
-            ));
-        }
-
         let started = std::time::Instant::now();
-        let prompt_variant = request
-            .prompt_variant
+        let prompt_variant = prompt_variant
             .unwrap_or_else(|| "balanced".to_string())
             .trim()
             .to_string();
         let resolved_model = self
             .llm_service
-            .resolve_for_user(request.ai_model_id.as_deref())
+            .resolve_for_user(ai_model_id.as_deref())
             .await?;
         let ai_model_id = resolved_model.id.clone();
-        let run_real_ai = request.run_real_ai.unwrap_or(false);
+        let run_real_ai = run_real_ai.unwrap_or(false);
 
         let system_prompt = build_system_prompt_from_config(
-            &request.config,
+            &config,
             true, // is_cross_margin: default for test run (no trader context)
             "",   // no trader-specific custom prompt
             false,
         );
 
         let config_str =
-            serde_json::to_string_pretty(&request.config).unwrap_or_else(|_| "{}".to_string());
+            serde_json::to_string_pretty(&config).unwrap_or_else(|_| "{}".to_string());
 
         let mut symbols: Vec<String> = Vec::new();
-        if let Some(symbols_arr) = request.config.get("symbols").and_then(|v| v.as_array()) {
+        if let Some(symbols_arr) = config.get("symbols").and_then(|v| v.as_array()) {
             for item in symbols_arr {
                 if let Some(symbol) = item.get("symbol").and_then(|v| v.as_str()) {
                     let s_trim = symbol.trim().to_uppercase();
@@ -315,8 +297,7 @@ impl StrategyService {
             }
         }
         if symbols.is_empty() {
-            if let Some(s) = request
-                .config
+            if let Some(s) = config
                 .get("trading_symbols")
                 .and_then(|v| v.as_str())
             {

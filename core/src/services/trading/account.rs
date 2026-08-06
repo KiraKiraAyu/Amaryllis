@@ -102,16 +102,12 @@ pub async fn close_position(
     app: &SharedState,
     runtime: &TradingRuntimeService,
     id: &str,
-    req: ClosePositionRequest,
+    symbol: &str,
+    side: &str,
+    local_only: bool,
 ) -> AppResult<ClosePositionPayload> {
-    let symbol = req.symbol.trim().to_uppercase();
-    let side = req.side.trim().to_uppercase();
-    if symbol.is_empty() || (side != "LONG" && side != "SHORT") {
-        return Err(app_error(
-            AppErrorKind::BadRequest,
-            "symbol and side(LONG/SHORT) are required",
-        ));
-    }
+    let symbol = symbol.trim().to_uppercase();
+    let side = side.trim().to_uppercase();
 
     let trader = match get_trader_by_owner(app, id).await {
         Ok(Some(t)) => t,
@@ -139,7 +135,7 @@ pub async fn close_position(
     };
     let position_count = open_positions.len();
 
-    if !req.local_only {
+    if !local_only {
         if let Some(adapter) = enabled_live_adapter(app, &trader).await? {
             let order_id = submit_live_close_order(
                 &runtime.inner.state,
@@ -384,9 +380,9 @@ pub async fn grid_risk_info(
 
 pub async fn status(
     app: &SharedState,
-    q: TraderQuery,
+    trader_id: Option<String>,
 ) -> AppResult<TraderStatusPayload> {
-    let trader_id = match resolve_trader_id(app, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
@@ -420,9 +416,9 @@ pub async fn status(
 
 pub async fn account(
     app: &SharedState,
-    q: TraderQuery,
+    trader_id: Option<String>,
 ) -> AppResult<TraderAccountPayload> {
-    let trader_id = match resolve_trader_id(app, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
@@ -439,15 +435,15 @@ pub async fn account(
 
 pub async fn positions(
     app: &SharedState,
-    q: PositionQuery,
+    trader_id: Option<String>,
+    status: Option<String>,
 ) -> AppResult<PositionListPayload> {
-    let trader_id = match resolve_trader_id(app, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
 
-    let status = q
-        .status
+    let status = status
         .unwrap_or_else(|| "open".to_string())
         .trim()
         .to_lowercase();
@@ -474,15 +470,17 @@ pub async fn positions(
 
 pub async fn positions_history(
     app: &SharedState,
-    q: PaginationQuery,
+    trader_id: Option<String>,
+    limit: Option<i64>,
+    offset: Option<i64>,
 ) -> AppResult<PositionListPayload> {
-    let trader_id = match resolve_trader_id(app, q.trader_id).await {
+    let trader_id = match resolve_trader_id(app, trader_id).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
 
-    let limit = q.limit.unwrap_or(100).clamp(1, 500);
-    let offset = q.offset.unwrap_or(0).max(0);
+    let limit = limit.unwrap_or(100).clamp(1, 500);
+    let offset = offset.unwrap_or(0).max(0);
 
     match app
         .trading_repo
