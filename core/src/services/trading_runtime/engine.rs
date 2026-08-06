@@ -518,15 +518,15 @@ pub async fn process_cycle(
     exec_ctx: &RuntimeExecutionContext,
     live_adapter: Option<&dyn LiveExchangeAdapter>,
 ) -> Result<(), AppError> {
-    let now = now_i64();
+    let cycle_started_at = now_i64();
 
     // 1) advance synthetic market baseline
-    advance_market(cfg, now as u64, symbols, market);
+    advance_market(cfg, cycle_started_at as u64, symbols, market);
 
     // 2) if live mode, pre-sync account/positions and overlay prices from exchange
     if exec_ctx.mode == RuntimeExecutionMode::LiveExchange {
         if let Some(adapter) = live_adapter {
-            sync_live_positions_and_balances(state, cfg, adapter, now).await?;
+            sync_live_positions_and_balances(state, cfg, adapter, cycle_started_at).await?;
             refresh_market_from_exchange(symbols, market, adapter).await;
         } else {
             warn!(
@@ -538,7 +538,7 @@ pub async fn process_cycle(
 
     // 3) mark-to-market open positions
     let mut open_positions = load_open_positions(state, &cfg.trader_id).await?;
-    mark_to_market_positions(state, cfg, &mut open_positions, market, now).await?;
+    mark_to_market_positions(state, cfg, &mut open_positions, market, cycle_started_at).await?;
 
     // 4) account metrics
     let metrics = compute_account_metrics(state, cfg).await?;
@@ -555,7 +555,7 @@ pub async fn process_cycle(
         let cycle_correlation_id = format!(
             "budget-breaker:{}:{}:{}",
             cfg.trader_id,
-            now,
+            cycle_started_at,
             Uuid::now_v7().simple()
         );
 
@@ -567,7 +567,7 @@ pub async fn process_cycle(
                     cfg,
                     &open_positions,
                     adapter,
-                    now,
+                    cycle_started_at,
                     open_positions.len(),
                     "critical",
                     &cycle_correlation_id,
@@ -580,7 +580,7 @@ pub async fn process_cycle(
                         .get(&p.symbol)
                         .map(|m| m.price)
                         .unwrap_or(p.mark_price.max(1e-9));
-                    close_position(state, cfg, p, px, now, "budget circuit breaker").await?;
+                    close_position(state, cfg, p, px, cycle_started_at, "budget circuit breaker").await?;
                 }
             }
         }
@@ -602,7 +602,7 @@ pub async fn process_cycle(
                 "realized_pnl": metrics.realized_pnl,
                 "total_balance": metrics.total_balance,
             }),
-            now,
+            cycle_started_at,
         )
         .await;
 
@@ -691,14 +691,14 @@ pub async fn process_cycle(
                                 .get(&p.symbol)
                                 .map(|m| m.price)
                                 .unwrap_or(p.mark_price.max(1e-9));
-                            close_position(state, cfg, p, px, now, reason).await?;
+                            close_position(state, cfg, p, px, cycle_started_at, reason).await?;
                         }
                     }
                 }
             }
             // Reload positions after TP/SL closures
             open_positions = load_open_positions(state, &cfg.trader_id).await?;
-            mark_to_market_positions(state, cfg, &mut open_positions, market, now).await?;
+            mark_to_market_positions(state, cfg, &mut open_positions, market, cycle_started_at).await?;
         }
     }
 
@@ -717,7 +717,7 @@ pub async fn process_cycle(
     let cycle_correlation_id = format!(
         "cycle:{}:{}:{}",
         cfg.trader_id,
-        now,
+        cycle_started_at,
         Uuid::now_v7().simple()
     );
 
@@ -729,6 +729,7 @@ pub async fn process_cycle(
             "ai_model"
         };
 
+        let decision_started_at = now_i64();
         let signal = generate_ai_decision(
             state,
             cfg,
@@ -739,26 +740,36 @@ pub async fn process_cycle(
             trigger_source,
             &cycle_correlation_id,
             &metrics,
-            now,
+            cycle_started_at,
         )
         .await;
 
-        persist_decision(state, cfg, &signal, &metrics, now).await?;
-        decisions.push(signal);
+        let timing = DecisionTiming {
+            cycle_started_at,
+            decision_started_at,
+            completed_at: now_i64(),
+        };
+        persist_decision(state, cfg, &signal, &metrics, timing).await?;
+        decisions.push(TimedDecision { signal, timing });
     }
 
     // 7) execute decisions (live / simulated)
+    let execution_started_at = now_i64();
+    let decision_signals: Vec<DecisionSignal> = decisions
+        .iter()
+        .map(|decision| decision.signal.clone())
+        .collect();
     match (exec_ctx.mode, live_adapter) {
         (RuntimeExecutionMode::LiveExchange, Some(adapter)) => {
             execute_decisions_live(
                 state,
                 cfg,
-                &decisions,
+                &decision_signals,
                 &open_positions,
                 &metrics,
                 market,
                 adapter,
-                now,
+                execution_started_at,
                 hard_risk_trigger,
                 &live_risk_decision,
                 &cycle_correlation_id,
@@ -767,16 +778,23 @@ pub async fn process_cycle(
         }
         _ => {
             if hard_risk_trigger {
-                close_worst_positions(state, cfg, &open_positions, market, now).await?;
+                close_worst_positions(
+                    state,
+                    cfg,
+                    &open_positions,
+                    market,
+                    execution_started_at,
+                )
+                .await?;
             } else {
                 execute_decisions(
                     state,
                     cfg,
-                    &decisions,
+                    &decision_signals,
                     &open_positions,
                     &metrics,
                     market,
-                    now,
+                    execution_started_at,
                 )
                 .await?;
             }
@@ -785,7 +803,8 @@ pub async fn process_cycle(
 
     // 8) refresh account snapshot after execution
     let refreshed = compute_account_metrics(state, cfg).await?;
-    insert_account_snapshot(state, cfg, &refreshed, now).await?;
+    let cycle_completed_at = now_i64();
+    insert_account_snapshot(state, cfg, &refreshed, cycle_completed_at).await?;
 
     // Push equity snapshot to realtime clients
     state
@@ -795,23 +814,26 @@ pub async fn process_cycle(
             equity: refreshed.total_balance,
             available_cash: refreshed.available_balance,
             unrealized_pnl: refreshed.unrealized_pnl,
-            ts: now,
+            ts: cycle_completed_at,
         });
 
     // Push each AI decision to realtime clients
-    for signal in &decisions {
+    for decision in &decisions {
         state
             .realtime_hub
             .publish(crate::realtime::RealtimeEvent::AiDecision {
                 trader_id: cfg.trader_id.clone(),
                 decision: json!({
-                    "symbol": signal.symbol,
-                    "action": signal.action,
-                    "confidence": signal.confidence,
-                    "reason": signal.reason,
-                    "timeframe": signal.timeframe,
-                    "risk_level": signal.risk_level,
-                    "correlation_id": signal.correlation_id,
+                    "symbol": decision.signal.symbol,
+                    "action": decision.signal.action,
+                    "confidence": decision.signal.confidence,
+                    "reason": decision.signal.reason,
+                    "timeframe": decision.signal.timeframe,
+                    "risk_level": decision.signal.risk_level,
+                    "correlation_id": decision.signal.correlation_id,
+                    "cycle_started_at": decision.timing.cycle_started_at,
+                    "decision_started_at": decision.timing.decision_started_at,
+                    "completed_at": decision.timing.completed_at,
                 }),
             });
     }
@@ -819,7 +841,7 @@ pub async fn process_cycle(
     // heartbeat
     state
         .trading_repo
-        .set_trader_running(&cfg.trader_id, true, now)
+        .set_trader_running(&cfg.trader_id, true, cycle_completed_at)
         .await?;
 
     Ok(())

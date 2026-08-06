@@ -622,7 +622,7 @@ pub async fn persist_decision(
     cfg: &TraderRuntimeConfig,
     d: &DecisionSignal,
     m: &AccountMetrics,
-    ts: i64,
+    timing: DecisionTiming,
 ) -> Result<(), AppError> {
     let payload = json!({
         "price": d.price,
@@ -636,7 +636,10 @@ pub async fn persist_decision(
         "risk_level": d.risk_level,
         "trigger_source": d.trigger_source,
         "action_taken": d.action_taken,
-        "correlation_id": d.correlation_id
+        "correlation_id": d.correlation_id,
+        "cycle_started_at": timing.cycle_started_at,
+        "decision_started_at": timing.decision_started_at,
+        "completed_at": timing.completed_at
     })
     .to_string();
 
@@ -651,7 +654,7 @@ pub async fn persist_decision(
             confidence: d.confidence,
             reason: d.reason.clone(),
             payload_json: payload,
-            created_at: ts,
+            created_at: timing.completed_at,
         })
         .await?;
 

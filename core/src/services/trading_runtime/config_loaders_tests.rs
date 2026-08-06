@@ -1,4 +1,5 @@
 use super::service::*;
+use super::models::DecisionTiming;
 use crate::clients::exchanges::{
     ExchangeBalance, ExchangeOpenOrder, ExchangeOrderDetail, ExchangePosition,
     ExchangeSymbolConstraints, PlaceOrderResponse,
@@ -409,7 +410,7 @@ async fn test_execution_intent_idempotency_lifecycle() {
 }
 
 #[tokio::test]
-async fn test_persist_decision_payload_includes_audit_metadata() {
+async fn test_persisted_decision_uses_completion_time_and_keeps_cycle_timing() {
     let (state, cfg) = test_state_and_cfg().await;
     let ts = 1_700_100_000_i64;
 
@@ -443,7 +444,13 @@ async fn test_persist_decision_payload_includes_audit_metadata() {
         margin_used_ratio: 0.15,
     };
 
-    persist_decision(&state, &cfg, &decision, &metrics, ts)
+    let timing = DecisionTiming {
+        cycle_started_at: ts,
+        decision_started_at: ts + 3,
+        completed_at: ts + 10,
+    };
+
+    persist_decision(&state, &cfg, &decision, &metrics, timing)
         .await
         .expect("persist decision with audit payload");
 
@@ -454,6 +461,10 @@ async fn test_persist_decision_payload_includes_audit_metadata() {
     assert_eq!(payload["trigger_source"], "market_signal");
     assert_eq!(payload["correlation_id"], "corr_decision_1");
     assert_eq!(payload["action_taken"], decision.action_taken.as_str());
+    assert_eq!(payload["cycle_started_at"], timing.cycle_started_at);
+    assert_eq!(payload["decision_started_at"], timing.decision_started_at);
+    assert_eq!(payload["completed_at"], timing.completed_at);
+    assert_eq!(crate::time::dt_to_ts(row.created_at), timing.completed_at);
 }
 
 async fn insert_test_trader(state: &TestRuntimeState, cfg: &TraderRuntimeConfig, is_running: bool) {

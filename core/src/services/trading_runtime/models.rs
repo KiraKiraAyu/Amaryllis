@@ -160,3 +160,16 @@ pub struct DecisionSignal {
     pub prompt: String,
     pub system_prompt: Option<String>,
 }
+
+#[derive(Debug, Clone, Copy)]
+pub struct DecisionTiming {
+    pub cycle_started_at: i64,
+    pub decision_started_at: i64,
+    pub completed_at: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct TimedDecision {
+    pub signal: DecisionSignal,
+    pub timing: DecisionTiming,
+}

@@ -156,6 +156,9 @@ function decisionToFeedMessages(decision: DecisionPayload): FeedMessage[] {
   const messages: FeedMessage[] = []
   const promptText = payload.prompt as string | undefined
   const systemPrompt = payload.system_prompt as string | undefined
+  const decisionStartedAt =
+    payloadNumber(payload, "decision_started_at") ?? decision.created_at
+  const decisionCompletedAt = payloadNumber(payload, "completed_at") ?? decision.created_at
 
   if (promptText && promptText.trim()) {
     messages.push({
@@ -165,7 +168,7 @@ function decisionToFeedMessages(decision: DecisionPayload): FeedMessage[] {
       content: systemPrompt
         ? `[System Prompt]\n${systemPrompt}\n\n[User Message]\n${promptText}`
         : promptText,
-      timestamp: decision.created_at,
+      timestamp: decisionStartedAt,
     })
   }
 
@@ -174,7 +177,7 @@ function decisionToFeedMessages(decision: DecisionPayload): FeedMessage[] {
     role: "trader",
     title: `AI Decision: ${decision.symbol} -> ${decision.decision}`,
     content: decision.reason || "",
-    timestamp: decision.created_at,
+    timestamp: decisionCompletedAt,
     data: {
       symbol: decision.symbol,
       decision: decision.decision,
@@ -498,6 +501,10 @@ export function useTraderDetail(traderId: Ref<string>) {
         case "ai_decision": {
           const decision = ev.decision as Record<string, unknown> | undefined
           const correlationId = decision?.correlation_id as string | undefined
+          const completedAt =
+            decision && typeof decision.completed_at === "number"
+              ? decision.completed_at
+              : nowSeconds()
 
           // Try to find and finalize an existing streaming message
           let streamingMsg: FeedMessage | undefined
@@ -515,6 +522,7 @@ export function useTraderDetail(traderId: Ref<string>) {
             streamingMsg.title = `AI Decision: ${decision?.symbol ?? "?"} → ${decision?.action ?? "?"}`
             streamingMsg.content =
               (decision?.reason as string) || streamingMsg.content
+            streamingMsg.timestamp = completedAt
             streamingMsg.streaming = false
             streamingMsg.data = {
               symbol: decision?.symbol,
@@ -534,7 +542,7 @@ export function useTraderDetail(traderId: Ref<string>) {
                 (decision?.reasoning as string) ||
                 (decision?.reason as string) ||
                 "",
-              timestamp: nowSeconds(),
+              timestamp: completedAt,
               data: {
                 symbol: decision?.symbol,
                 decision: decision?.action,
