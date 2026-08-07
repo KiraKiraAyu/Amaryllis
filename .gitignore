@@ -12,6 +12,7 @@ lerna-debug.log*
 *.pem
 
 .vscode
+.codebase-memory
 
 node_modules
 dist
