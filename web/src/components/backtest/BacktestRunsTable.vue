@@ -17,7 +17,7 @@ const emit = defineEmits<{
 }>()
 
 function returnPct(run: BacktestRun) {
-  const equity = run.summary?.equity_last ?? 0
+  const equity = run.summary?.final_equity ?? 0
   const initial = run.summary?.initial_balance ?? 1000
   return initial > 0 ? ((equity - initial) / initial) * 100 : 0
 }
@@ -74,10 +74,10 @@ function returnPct(run: BacktestRun) {
             </template>
           </Column>
 
-          <Column field="summary.equity_last" header="Equity" class="text-right" headerClass="justify-end">
+          <Column field="summary.final_equity" header="Equity" class="text-right" headerClass="justify-end">
             <template #body="{ data }">
               <span class="font-mono">
-                ${{ (data.summary?.equity_last ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}
+                ${{ (data.summary?.final_equity ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}
               </span>
             </template>
           </Column>

@@ -2,10 +2,7 @@
 #![allow(unused_imports)]
 
 pub use super::app_settings::Entity as AppSettings;
-pub use super::backtest_decisions::Entity as BacktestDecisions;
-pub use super::backtest_equity::Entity as BacktestEquity;
 pub use super::backtest_runs::Entity as BacktestRuns;
-pub use super::backtest_trades::Entity as BacktestTrades;
 pub use super::debate_messages::Entity as DebateMessages;
 pub use super::debates::Entity as Debates;
 pub use super::exchanges::Entity as Exchanges;

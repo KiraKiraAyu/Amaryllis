@@ -25,6 +25,7 @@ const emit = defineEmits<{
   sync: [id: string]
   edit: [trader: TradersPageTrader]
   delete: [id: string]
+  backtest: [id: string]
 }>()
 </script>
 
@@ -233,6 +234,18 @@ const emit = defineEmits<{
                 size="small"
                 @click.stop="emit('sync', data.id)"
                 title="Sync balance"
+                class="h-8 w-8 cursor-pointer"
+              />
+
+              <!-- Backtest -->
+              <Button
+                icon="pi pi-history"
+                severity="info"
+                text
+                rounded
+                size="small"
+                @click.stop="emit('backtest', data.id)"
+                title="Backtest"
                 class="h-8 w-8 cursor-pointer"
               />
 

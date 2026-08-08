@@ -18,22 +18,10 @@ impl MigrationTrait for Migration {
                             .primary_key(),
                     )
                     .col(
-                        ColumnDef::new(BacktestRuns::Label)
-                            .string()
-                            .not_null()
-                            .default(""),
-                    )
-                    .col(
                         ColumnDef::new(BacktestRuns::LastError)
                             .string()
                             .not_null()
                             .default(""),
-                    )
-                    .col(
-                        ColumnDef::new(BacktestRuns::Version)
-                            .integer()
-                            .not_null()
-                            .default(1),
                     )
                     .col(
                         ColumnDef::new(BacktestRuns::State)
@@ -84,9 +72,7 @@ impl MigrationTrait for Migration {
 enum BacktestRuns {
     Table,
     RunId,
-    Label,
     LastError,
-    Version,
     State,
     ConfigJson,
     SummaryJson,

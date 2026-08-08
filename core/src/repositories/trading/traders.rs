@@ -18,6 +18,7 @@ use super::{
 impl TradingRepo {
     pub async fn list_traders(&self) -> Result<Vec<TraderRecord>, DbErr> {
         entity::traders::Entity::find()
+            .filter(entity::traders::Column::Id.not_like("bt-%"))
             .order_by_desc(entity::traders::Column::CreatedAt)
             .all(&self.db)
             .await
@@ -53,6 +54,7 @@ impl TradingRepo {
     pub async fn running_traders(&self) -> Result<Vec<String>, DbErr> {
         entity::traders::Entity::find()
             .filter(entity::traders::Column::IsRunning.eq(1))
+            .filter(entity::traders::Column::Id.not_like("bt-%"))
             .order_by_desc(entity::traders::Column::UpdatedAt)
             .all(&self.db)
             .await
@@ -214,6 +216,10 @@ impl TradingRepo {
             .await?;
         entity::trader_trades::Entity::delete_many()
             .filter(entity::trader_trades::Column::TraderId.eq(trader_id.trim()))
+            .exec(&tx)
+            .await?;
+        entity::trader_decisions::Entity::delete_many()
+            .filter(entity::trader_decisions::Column::TraderId.eq(trader_id.trim()))
             .exec(&tx)
             .await?;
 

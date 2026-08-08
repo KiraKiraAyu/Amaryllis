@@ -1,10 +1,7 @@
 pub mod prelude;
 
 pub mod app_settings;
-pub mod backtest_decisions;
-pub mod backtest_equity;
 pub mod backtest_runs;
-pub mod backtest_trades;
 pub mod debate_messages;
 pub mod debates;
 pub mod exchanges;

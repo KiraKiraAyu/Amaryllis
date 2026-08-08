@@ -31,11 +31,6 @@ const router = createRouter({
           component: () => import("@/pages/StrategyPage.vue"),
         },
         {
-          path: "backtest",
-          name: "backtest",
-          component: () => import("@/pages/BacktestPage.vue"),
-        },
-        {
           path: "debate",
           name: "debate",
           component: () => import("@/pages/DebatePage.vue"),
@@ -50,6 +45,12 @@ const router = createRouter({
           name: "trader-detail",
           component: () => import("@/pages/TraderDetailPage.vue"),
           meta: { depth: 1 },
+        },
+        {
+          path: "traders/:id/backtest",
+          name: "trader-backtest",
+          component: () => import("@/pages/TraderBacktestPage.vue"),
+          meta: { depth: 2 },
         },
         {
           path: "data",

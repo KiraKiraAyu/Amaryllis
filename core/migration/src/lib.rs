@@ -6,9 +6,6 @@ mod m20260409_000003_create_llm_models;
 mod m20260409_000004_create_exchanges;
 mod m20260409_000005_create_strategies;
 mod m20260409_000006_create_backtest_runs;
-mod m20260409_000007_create_backtest_equity;
-mod m20260409_000008_create_backtest_trades;
-mod m20260409_000009_create_backtest_decisions;
 mod m20260409_000010_create_traders;
 mod m20260409_000011_create_trader_accounts;
 mod m20260409_000012_create_trader_positions;
@@ -23,6 +20,7 @@ mod m20260409_000020_create_runtime_alert_delivery_log;
 mod m20260409_000021_create_trader_decisions;
 mod m20260409_000022_create_debates;
 mod m20260409_000023_create_debate_messages;
+mod m20260807_000001_drop_legacy_backtest_tables;
 
 pub struct Migrator;
 
@@ -36,9 +34,6 @@ impl MigratorTrait for Migrator {
             Box::new(m20260409_000004_create_exchanges::Migration),
             Box::new(m20260409_000005_create_strategies::Migration),
             Box::new(m20260409_000006_create_backtest_runs::Migration),
-            Box::new(m20260409_000007_create_backtest_equity::Migration),
-            Box::new(m20260409_000008_create_backtest_trades::Migration),
-            Box::new(m20260409_000009_create_backtest_decisions::Migration),
             Box::new(m20260409_000010_create_traders::Migration),
             Box::new(m20260409_000011_create_trader_accounts::Migration),
             Box::new(m20260409_000012_create_trader_positions::Migration),
@@ -53,6 +48,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260409_000021_create_trader_decisions::Migration),
             Box::new(m20260409_000022_create_debates::Migration),
             Box::new(m20260409_000023_create_debate_messages::Migration),
+            Box::new(m20260807_000001_drop_legacy_backtest_tables::Migration),
         ]
     }
 }

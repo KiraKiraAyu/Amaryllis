@@ -1,12 +1,13 @@
 use std::{
     collections::HashMap,
-    sync::{Arc, RwLock},
+    sync::{Arc, Mutex, RwLock},
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use axum::extract::FromRef;
 use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
+use tokio::sync::oneshot;
 
 pub use crate::config::AppConfig;
 use crate::{
@@ -102,12 +103,48 @@ impl RuntimeEngineManager {
     }
 }
 
+#[derive(Debug, Default)]
+pub struct BacktestManager {
+    runs: HashMap<String, BacktestRunEntry>,
+}
+
+#[derive(Debug)]
+pub struct BacktestRunEntry {
+    pub stop_tx: oneshot::Sender<()>,
+}
+
+impl BacktestManager {
+    pub fn new() -> Self {
+        Self {
+            runs: HashMap::new(),
+        }
+    }
+
+    pub fn insert(&mut self, run_id: String, entry: BacktestRunEntry) {
+        self.runs.insert(run_id, entry);
+    }
+
+    pub fn remove(&mut self, run_id: &str) -> Option<BacktestRunEntry> {
+        self.runs.remove(run_id)
+    }
+
+    pub fn stop(&mut self, run_id: &str) -> Result<(), String> {
+        if let Some(entry) = self.runs.remove(run_id) {
+            let _ = entry.stop_tx.send(());
+            Ok(())
+        } else {
+            Err("run not found or already finished".into())
+        }
+    }
+}
+
 #[derive(Debug, Clone, FromRef)]
 pub struct AppState {
     pub config: AppConfig,
     pub db: DatabaseConnection,
     pub boot_unix_ts: u64,
     pub runtime_engine_manager: Arc<RwLock<RuntimeEngineManager>>,
+    pub backtest_manager: Arc<Mutex<BacktestManager>>,
     pub realtime_hub: RealtimeHub,
     pub services: Services,
 }
@@ -142,20 +179,6 @@ impl Services {
         let model_repo = Arc::new(ModelRepo::new(db.clone()));
         let llm_service = Arc::new(LlmService::new(model_repo.clone()));
         let backtest_repo = Arc::new(BacktestRepo::new(db.clone()));
-        let backtest_service = Arc::new(BacktestService::new(
-            backtest_repo,
-            realtime_hub.clone(),
-            llm_service.clone(),
-        ));
-        let debate_repo = Arc::new(DebateRepo::new(db.clone()));
-        let debate_service = Arc::new(DebateService::new(
-            debate_repo,
-            realtime_hub.clone(),
-            llm_service.clone(),
-        ));
-        let model_service = Arc::new(ModelService::new(model_repo.clone(), llm_service.clone()));
-        let strategy_repo = Arc::new(StrategyRepo::new(db.clone()));
-        let strategy_service = Arc::new(StrategyService::new(strategy_repo, llm_service.clone()));
 
         let exchange_repo = Arc::new(ExchangeRepo::new(db.clone()));
         let exchange_config_service = Arc::new(ExchangeConfigService::new(exchange_repo.clone()));
@@ -167,8 +190,26 @@ impl Services {
             config.live.clone(),
             runtime_engine_manager.clone(),
             llm_service.clone(),
-            realtime_hub,
+            realtime_hub.clone(),
         ));
+        let backtest_manager = Arc::new(Mutex::new(BacktestManager::new()));
+        let backtest_service = Arc::new(BacktestService::new(
+            backtest_repo,
+            realtime_hub.clone(),
+            trading_runtime_service.state(),
+            backtest_manager.clone(),
+        ));
+
+        let debate_repo = Arc::new(DebateRepo::new(db.clone()));
+        let debate_service = Arc::new(DebateService::new(
+            debate_repo,
+            realtime_hub.clone(),
+            llm_service.clone(),
+        ));
+        let model_service = Arc::new(ModelService::new(model_repo.clone(), llm_service.clone()));
+        let strategy_repo = Arc::new(StrategyRepo::new(db.clone()));
+        let strategy_service = Arc::new(StrategyService::new(strategy_repo, llm_service.clone()));
+
         let trading_service = Arc::new(TradingService::new(
             trading_repo,
             exchange_repo.clone(),
@@ -201,6 +242,7 @@ impl AppState {
             .expect("Failed to init database");
 
         let runtime_engine_manager = Arc::new(RwLock::new(RuntimeEngineManager::default()));
+        let backtest_manager = Arc::new(Mutex::new(BacktestManager::new()));
         let realtime_hub = RealtimeHub::new();
         let services = Services::new(
             &config,
@@ -215,6 +257,7 @@ impl AppState {
             db,
             boot_unix_ts: now_unix_ts(),
             runtime_engine_manager,
+            backtest_manager,
             realtime_hub,
             services,
         }

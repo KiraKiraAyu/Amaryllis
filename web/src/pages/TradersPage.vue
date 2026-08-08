@@ -38,6 +38,10 @@ function goToDetail(trader: TradersPageTrader) {
   router.push({ name: "trader-detail", params: { id: trader.id } })
 }
 
+function goToBacktest(id: string) {
+  router.push({ name: "trader-backtest", params: { id } })
+}
+
 // Sub-page state: 0 = list, 1 = create, 2 = edit
 const showCreate = ref(false)
 const editingTrader = ref<TradersPageTrader | null>(null)
@@ -123,6 +127,7 @@ function handleUpdated() {
             @sync="syncBalance"
             @edit="editingTrader = $event"
             @delete="deleteTrader"
+            @backtest="goToBacktest"
           />
         </div>
 

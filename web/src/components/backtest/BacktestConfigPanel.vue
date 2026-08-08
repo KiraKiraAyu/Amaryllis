@@ -3,11 +3,7 @@ import Card from "primevue/card"
 import Select from "primevue/select"
 import InputText from "primevue/inputtext"
 import InputNumber from "primevue/inputnumber"
-import type { BacktestConfig, BacktestModelOption } from "@/types/backtest-ui"
-
-defineProps<{
-  modelOptions: BacktestModelOption[]
-}>()
+import type { BacktestConfig } from "@/types/backtest-ui"
 
 const cfg = defineModel<BacktestConfig>({ required: true })
 const intervals = ["1m", "5m", "15m", "1h", "4h", "1d"]
@@ -16,12 +12,8 @@ const intervals = ["1m", "5m", "15m", "1h", "4h", "1d"]
 <template>
   <Card class="border border-surface-200 dark:border-surface-800 bg-surface-0 dark:bg-surface-900 shadow-none!">
     <template #content>
-      <h2 class="font-bold text-lg text-surface-900 dark:text-white mb-5">Configuration</h2>
+      <h2 class="font-bold text-lg text-surface-900 dark:text-white mb-5">Backtest Configuration</h2>
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div class="flex flex-col gap-1.5">
-          <label class="text-xs font-bold text-surface-500">Trading Symbols</label>
-          <InputText v-model="cfg.symbols" placeholder="BTC,ETH" class="h-10 rounded-xl" />
-        </div>
         <div class="flex flex-col gap-1.5">
           <label class="text-xs font-bold text-surface-500">Time Interval</label>
           <Select
@@ -49,37 +41,6 @@ const intervals = ["1m", "5m", "15m", "1h", "4h", "1d"]
             locale="en-US"
             class="h-10 rounded-xl"
             inputClass="font-mono"
-          />
-        </div>
-        <div class="flex flex-col gap-1.5">
-          <label class="text-xs font-bold text-surface-500">Fee (bps)</label>
-          <InputNumber
-            v-model="cfg.fee_bps"
-            :min="0"
-            suffix=" bps"
-            class="h-10 rounded-xl"
-            inputClass="font-mono text-center"
-          />
-        </div>
-        <div class="flex flex-col gap-1.5">
-          <label class="text-xs font-bold text-surface-500">Slippage (bps)</label>
-          <InputNumber
-            v-model="cfg.slippage_bps"
-            :min="0"
-            suffix=" bps"
-            class="h-10 rounded-xl"
-            inputClass="font-mono text-center"
-          />
-        </div>
-        <div class="flex flex-col gap-1.5">
-          <label class="text-xs font-bold text-surface-500">AI Model</label>
-          <Select
-            v-model="cfg.ai_model_id"
-            :options="modelOptions"
-            optionLabel="label"
-            optionValue="id"
-            placeholder="Select model..."
-            class="h-10 rounded-xl flex items-center"
           />
         </div>
       </div>

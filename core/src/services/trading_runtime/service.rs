@@ -84,7 +84,7 @@ impl TradingRuntimeService {
         }
     }
 
-    fn state(&self) -> SharedState {
+    pub fn state(&self) -> SharedState {
         self.inner.state.clone()
     }
 

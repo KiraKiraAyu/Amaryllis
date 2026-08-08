@@ -268,6 +268,8 @@ pub async fn run_trader_loop(
             &mut market,
             &exec_ctx,
             live_adapter.as_deref(),
+            now_i64(),
+            false,
         )
         .await;
         match result {
@@ -520,11 +522,16 @@ pub async fn process_cycle(
     market: &mut HashMap<String, MarketState>,
     exec_ctx: &RuntimeExecutionContext,
     live_adapter: Option<&dyn LiveExchangeAdapter>,
+    now_ts: i64,
+    backtest_mode: bool,
 ) -> Result<(), AppError> {
-    let cycle_started_at = now_i64();
+    let cycle_started_at = now_ts;
 
-    // 1) advance synthetic market baseline
-    advance_market(cfg, cycle_started_at as u64, symbols, market);
+    // 1) advance synthetic market baseline (skipped in backtest mode — prices
+    //    are injected from historical klines by the backtest runner)
+    if !backtest_mode {
+        advance_market(cfg, cycle_started_at as u64, symbols, market);
+    }
 
     // 2) if live mode, pre-sync account/positions and overlay prices from exchange
     if exec_ctx.mode == RuntimeExecutionMode::LiveExchange {
@@ -699,7 +706,7 @@ pub async fn process_cycle(
             "ai_model"
         };
 
-        let decision_started_at = now_i64();
+        let decision_started_at = now_ts;
         let signal = generate_ai_decision(
             state,
             cfg,
@@ -717,14 +724,14 @@ pub async fn process_cycle(
         let timing = DecisionTiming {
             cycle_started_at,
             decision_started_at,
-            completed_at: now_i64(),
+            completed_at: now_ts,
         };
         persist_decision(state, cfg, &signal, &metrics, timing).await?;
         decisions.push(TimedDecision { signal, timing });
     }
 
     // 7) execute decisions (live / simulated)
-    let execution_started_at = now_i64();
+    let execution_started_at = now_ts;
     let decision_signals: Vec<DecisionSignal> = decisions
         .iter()
         .map(|decision| decision.signal.clone())
@@ -773,7 +780,7 @@ pub async fn process_cycle(
 
     // 8) refresh account snapshot after execution
     let refreshed = compute_account_metrics(state, cfg).await?;
-    let cycle_completed_at = now_i64();
+    let cycle_completed_at = now_ts;
     insert_account_snapshot(state, cfg, &refreshed, cycle_completed_at).await?;
 
     // Push equity snapshot to realtime clients
@@ -808,11 +815,13 @@ pub async fn process_cycle(
             });
     }
 
-    // heartbeat
-    state
-        .trading_repo
-        .set_trader_running(&cfg.trader_id, true, cycle_completed_at)
-        .await?;
+    // heartbeat (skipped in backtest mode — the backtest runner manages lifecycle)
+    if !backtest_mode {
+        state
+            .trading_repo
+            .set_trader_running(&cfg.trader_id, true, cycle_completed_at)
+            .await?;
+    }
 
     Ok(())
 }

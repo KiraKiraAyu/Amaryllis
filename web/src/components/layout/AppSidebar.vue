@@ -13,7 +13,6 @@ const nav = computed(() => [
   { label: "Dashboard", to: "/", icon: "pi pi-chart-bar" },
   { label: "Market Data", to: "/data", icon: "pi pi-chart-line" },
   { label: "Strategy", to: "/strategy", icon: "pi pi-sliders-h" },
-  { label: "Backtest", to: "/backtest", icon: "pi pi-history" },
   { label: "AI Debate", to: "/debate", icon: "pi pi-comments" },
   { label: "Traders", to: "/traders", icon: "pi pi-users" },
   { label: "Monitor", to: "/monitor", icon: "pi pi-server" },
