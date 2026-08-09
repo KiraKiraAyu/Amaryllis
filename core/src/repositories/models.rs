@@ -448,7 +448,7 @@ impl ModelRepo {
                 id: Set(provider.id.to_string()),
                 name: Set(provider.name.to_string()),
                 provider_type: Set(provider.provider_type.to_string()),
-                enabled: Set(1),
+                enabled: Set(0),
                 api_key: Set(String::new()),
                 base_url: Set(provider.base_url.to_string()),
                 created_at: Set(now),
