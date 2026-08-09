@@ -11,10 +11,7 @@ pub struct CreateDebateRequest {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct StartDebateRequest {
-    #[allow(dead_code)]
-    pub model_ids: Option<Vec<String>>,
-}
+pub struct StartDebateRequest {}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct DebateListPayload {

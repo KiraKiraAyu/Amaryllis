@@ -645,8 +645,6 @@ struct AsterApiErrorPayload {
 
 #[derive(Debug, Deserialize)]
 struct AsterTickerPrice {
-    #[allow(dead_code)]
-    symbol: String,
     price: String,
 }
 

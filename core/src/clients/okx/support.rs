@@ -9,10 +9,7 @@ pub(super) struct OkxEnvelope<T> {
 }
 
 #[derive(Debug, Deserialize)]
-pub(super) struct OkxTimePayload {
-    #[allow(dead_code)]
-    pub(super) ts: String,
-}
+pub(super) struct OkxTimePayload {}
 
 #[derive(Debug, Deserialize)]
 pub(super) struct OkxTicker {

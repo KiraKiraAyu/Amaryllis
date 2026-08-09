@@ -20,9 +20,7 @@
   "dependencies": {
     "@iconify/vue": "^5.0.1",
     "@primeuix/themes": "^2.0.3",
-    "@vueuse/core": "^14.3.0",
     "axios": "^1.16.1",
-    "gsap": "^3.15.0",
     "lightweight-charts": "^5.2.0",
     "pinia": "^3.0.4",
     "primeicons": "^7.0.0",

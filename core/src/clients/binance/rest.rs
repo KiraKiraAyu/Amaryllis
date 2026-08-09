@@ -703,8 +703,6 @@ struct BinanceApiErrorPayload {
 
 #[derive(Debug, Deserialize)]
 struct BinanceTickerPrice {
-    #[allow(dead_code)]
-    symbol: String,
     price: String,
 }
 

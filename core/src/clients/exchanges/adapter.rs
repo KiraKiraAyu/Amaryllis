@@ -17,7 +17,6 @@ use super::user_stream::ExchangeUserStreamSession;
 
 #[async_trait]
 pub trait LiveExchangeAdapter: Send + Sync {
-    #[allow(dead_code)]
     fn exchange_type(&self) -> &'static str;
     async fn ping(&self) -> Result<(), AppError>;
     async fn get_price(&self, symbol: &str) -> Result<f64, AppError>;

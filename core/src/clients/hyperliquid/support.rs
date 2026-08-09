@@ -5,7 +5,6 @@ pub(super) struct HyperliquidAsset {
     pub(super) index: usize,
     pub(super) coin: String,
     pub(super) sz_decimals: i32,
-    #[allow(dead_code)]
     pub(super) max_leverage: i64,
 }
 

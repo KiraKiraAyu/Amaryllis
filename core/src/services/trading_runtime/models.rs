@@ -93,7 +93,6 @@ pub struct SymbolConfig {
 #[derive(Debug, Clone)]
 pub struct TraderRuntimeConfig {
     pub trader_id: String,
-    #[allow(dead_code)]
     pub name: String,
     pub ai_model_id: String,
     pub ai_model_name: String,
@@ -107,7 +106,6 @@ pub struct TraderRuntimeConfig {
     pub trading_symbols: String,
     pub custom_prompt: String,
     pub override_base_prompt: bool,
-    #[allow(dead_code)]
     pub system_prompt_template: String,
     pub symbols_config: Vec<SymbolConfig>,
     pub strategy_config: serde_json::Value,
@@ -132,7 +130,6 @@ pub struct PositionView {
     pub quantity: f64,
     pub entry_price: f64,
     pub mark_price: f64,
-    #[allow(dead_code)]
     pub leverage: i64,
     pub opened_at: i64,
 }

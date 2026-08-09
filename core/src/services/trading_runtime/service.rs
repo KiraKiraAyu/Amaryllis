@@ -267,16 +267,9 @@ impl TradingRuntimeService {
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub async fn is_running(&self, trader_id: &str) -> bool {
         let workers = self.inner.workers.lock().await;
         workers.contains_key(trader_id)
-    }
-
-    #[allow(dead_code)]
-    pub async fn running_traders(&self) -> Vec<String> {
-        let workers = self.inner.workers.lock().await;
-        workers.keys().cloned().collect()
     }
 }
 

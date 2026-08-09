@@ -20,7 +20,6 @@ mod m20260409_000020_create_runtime_alert_delivery_log;
 mod m20260409_000021_create_trader_decisions;
 mod m20260409_000022_create_debates;
 mod m20260409_000023_create_debate_messages;
-mod m20260807_000001_drop_legacy_backtest_tables;
 
 pub struct Migrator;
 
@@ -48,7 +47,6 @@ impl MigratorTrait for Migrator {
             Box::new(m20260409_000021_create_trader_decisions::Migration),
             Box::new(m20260409_000022_create_debates::Migration),
             Box::new(m20260409_000023_create_debate_messages::Migration),
-            Box::new(m20260807_000001_drop_legacy_backtest_tables::Migration),
         ]
     }
 }
