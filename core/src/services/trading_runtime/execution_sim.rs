@@ -61,7 +61,11 @@ pub async fn execute_decisions(
 
         let leverage = leverage_for_symbol(cfg, &d.symbol).max(1);
         let mut risk_budget = (metrics.total_balance * 0.06).max(5.0); // 6% capital-at-risk per position
-        if let Some(sym_cfg) = cfg.symbols_config.iter().find(|s| s.symbol.to_uppercase() == d.symbol.to_uppercase()) {
+        if let Some(sym_cfg) = cfg
+            .symbols_config
+            .iter()
+            .find(|s| s.symbol.to_uppercase() == d.symbol.to_uppercase())
+        {
             if let Some(fixed) = sym_cfg.fixed_cost {
                 risk_budget = fixed;
             } else {

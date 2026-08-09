@@ -149,8 +149,7 @@ pub async fn runtime_metrics(
     let window_hours = window_hours.unwrap_or(24).clamp(1, 24 * 365);
     let from_ts = now_ts() - window_hours * 3600;
 
-    let total_runtime_events =
-        count_runtime_events(app, &trader_id, None, None, from_ts).await;
+    let total_runtime_events = count_runtime_events(app, &trader_id, None, None, from_ts).await;
     let replace_succeeded = count_runtime_events(
         app,
         &trader_id,

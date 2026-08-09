@@ -530,7 +530,11 @@ pub async fn execute_decisions_live(
 
         let leverage = leverage_for_symbol(cfg, &d.symbol).max(1);
         let mut risk_budget = (metrics.total_balance * 0.06).max(5.0);
-        if let Some(sym_cfg) = cfg.symbols_config.iter().find(|s| s.symbol.to_uppercase() == d.symbol.to_uppercase()) {
+        if let Some(sym_cfg) = cfg
+            .symbols_config
+            .iter()
+            .find(|s| s.symbol.to_uppercase() == d.symbol.to_uppercase())
+        {
             if let Some(fixed) = sym_cfg.fixed_cost {
                 risk_budget = fixed;
             } else {
@@ -943,10 +947,7 @@ pub async fn finalize_execution_intent_for_exchange_order(
 
     let intents = state
         .trading_repo
-        .submitted_execution_intents_by_exchange_order(
-            &cfg.trader_id,
-            exchange_order_id,
-        )
+        .submitted_execution_intents_by_exchange_order(&cfg.trader_id, exchange_order_id)
         .await?;
 
     for intent in intents {
@@ -1153,13 +1154,7 @@ pub async fn cancel_stale_live_open_orders(
             Err(err) if err.is_exchange_order_missing() => {
                 state
                     .trading_repo
-                    .update_order_status(
-                        &cfg.trader_id,
-                        &order_id,
-                        "expired",
-                        now_ts,
-                        Some(now_ts),
-                    )
+                    .update_order_status(&cfg.trader_id, &order_id, "expired", now_ts, Some(now_ts))
                     .await?;
 
                 finalize_execution_intent_for_exchange_order(

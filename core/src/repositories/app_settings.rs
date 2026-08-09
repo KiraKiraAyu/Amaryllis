@@ -1,6 +1,5 @@
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set,
-    prelude::Expr,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set, prelude::Expr,
 };
 
 use crate::entity::app_settings;

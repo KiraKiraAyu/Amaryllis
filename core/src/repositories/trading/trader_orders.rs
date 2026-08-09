@@ -53,10 +53,10 @@ impl TradingRepo {
             .filter(entity::trader_orders::Column::TraderId.eq(trader_id.trim()))
             .filter(entity::trader_orders::Column::ReduceOnly.eq(0))
             .filter(entity::trader_orders::Column::OrderType.ne("limit"))
-            .filter(entity::trader_orders::Column::OrderType.is_not_in([
-                "stop_market",
-                "take_profit_market",
-            ]))
+            .filter(
+                entity::trader_orders::Column::OrderType
+                    .is_not_in(["stop_market", "take_profit_market"]),
+            )
             .filter(entity::trader_orders::Column::ExchangeOrderId.ne(""))
             .filter(entity::trader_orders::Column::Status.is_in([
                 "new",

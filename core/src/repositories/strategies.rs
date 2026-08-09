@@ -48,9 +48,7 @@ impl StrategyRepo {
         Self { db }
     }
 
-    pub async fn list_for_user_with_defaults(
-        &self,
-    ) -> Result<Vec<StrategyRecord>, DbErr> {
+    pub async fn list_for_user_with_defaults(&self) -> Result<Vec<StrategyRecord>, DbErr> {
         // Strategies are global (no per-user ownership column), so the list
         // includes every record, newest first.
         strategies::Entity::find()
@@ -60,30 +58,21 @@ impl StrategyRepo {
             .map(map_strategy_rows)
     }
 
-    pub async fn get_accessible(
-        &self,
-        id: &str,
-    ) -> Result<Option<StrategyRecord>, DbErr> {
+    pub async fn get_accessible(&self, id: &str) -> Result<Option<StrategyRecord>, DbErr> {
         strategies::Entity::find_by_id(id.trim().to_string())
             .one(&self.db)
             .await
             .map(|row| row.map(map_strategy_row))
     }
 
-    pub async fn get_owned(
-        &self,
-        id: &str,
-    ) -> Result<Option<StrategyRecord>, DbErr> {
+    pub async fn get_owned(&self, id: &str) -> Result<Option<StrategyRecord>, DbErr> {
         strategies::Entity::find_by_id(id.trim().to_string())
             .one(&self.db)
             .await
             .map(|row| row.map(map_strategy_row))
     }
 
-    pub async fn get_duplicable(
-        &self,
-        id: &str,
-    ) -> Result<Option<StrategyRecord>, DbErr> {
+    pub async fn get_duplicable(&self, id: &str) -> Result<Option<StrategyRecord>, DbErr> {
         strategies::Entity::find_by_id(id.trim().to_string())
             .one(&self.db)
             .await
@@ -105,11 +94,7 @@ impl StrategyRepo {
         .map(|_| ())
     }
 
-    pub async fn update_owned(
-        &self,
-        id: &str,
-        patch: UpdateStrategyRecord,
-    ) -> Result<u64, DbErr> {
+    pub async fn update_owned(&self, id: &str, patch: UpdateStrategyRecord) -> Result<u64, DbErr> {
         strategies::Entity::update_many()
             .col_expr(strategies::Column::Name, Expr::value(patch.name))
             .col_expr(
@@ -135,10 +120,7 @@ impl StrategyRepo {
             .map(|res| res.rows_affected)
     }
 
-    pub async fn deactivate_all_for_user(
-        &self,
-        updated_at: i64,
-    ) -> Result<(), DbErr> {
+    pub async fn deactivate_all_for_user(&self, updated_at: i64) -> Result<(), DbErr> {
         strategies::Entity::update_many()
             .col_expr(strategies::Column::IsActive, Expr::value(0))
             .col_expr(
@@ -150,11 +132,7 @@ impl StrategyRepo {
             .map(|_| ())
     }
 
-    pub async fn activate_owned(
-        &self,
-        id: &str,
-        updated_at: i64,
-    ) -> Result<u64, DbErr> {
+    pub async fn activate_owned(&self, id: &str, updated_at: i64) -> Result<u64, DbErr> {
         strategies::Entity::update_many()
             .col_expr(strategies::Column::IsActive, Expr::value(1))
             .col_expr(

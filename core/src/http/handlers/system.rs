@@ -2,7 +2,9 @@ use axum::{Json, extract::State};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{
-    contracts::system::{HealthResponse, SettingsResponse, SystemConfigResponse, UpdateSettingsRequest},
+    contracts::system::{
+        HealthResponse, SettingsResponse, SystemConfigResponse, UpdateSettingsRequest,
+    },
     error::Result,
     http::response::ApiResponse,
     repositories::AppSettingsRepo,

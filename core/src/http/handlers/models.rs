@@ -22,15 +22,9 @@ pub async fn update_model_configs(
     Json(UpdateModelConfigRequest { providers }): Json<UpdateModelConfigRequest>,
 ) -> Result<Json<ApiResponse<MessagePayload>>> {
     if providers.is_empty() {
-        return Err(AppError::BadRequest(
-            "providers list is required".into(),
-        ));
+        return Err(AppError::BadRequest("providers list is required".into()));
     }
-    let payload = app
-        .services
-        .model_service
-        .update_configs(providers)
-        .await?;
+    let payload = app.services.model_service.update_configs(providers).await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 
@@ -43,9 +37,7 @@ pub async fn list_available_models(
     }): Json<ModelProviderProbeRequest>,
 ) -> Result<Json<ApiResponse<AvailableModelListPayload>>> {
     if provider_type.trim().is_empty() {
-        return Err(AppError::BadRequest(
-            "providerType is required".into(),
-        ));
+        return Err(AppError::BadRequest("providerType is required".into()));
     }
     let payload = app
         .services
@@ -65,9 +57,7 @@ pub async fn check_provider_availability(
     }): Json<ProviderAvailabilityRequest>,
 ) -> Result<Json<ApiResponse<ProviderAvailabilityPayload>>> {
     if provider_type.trim().is_empty() {
-        return Err(AppError::BadRequest(
-            "providerType is required".into(),
-        ));
+        return Err(AppError::BadRequest("providerType is required".into()));
     }
     let payload = app
         .services

@@ -153,10 +153,7 @@ impl ExchangeConfigService {
         })
     }
 
-    pub async fn delete_exchange(
-        &self,
-        exchange_id: &str,
-    ) -> Result<MessagePayload> {
+    pub async fn delete_exchange(&self, exchange_id: &str) -> Result<MessagePayload> {
         if exchange_id.trim().is_empty() {
             return Err(AppError::BadRequest("Exchange ID is required".into()));
         }
@@ -173,13 +170,9 @@ impl ExchangeConfigService {
             ));
         }
 
-        let deleted = self
-            .repo
-            .delete(exchange_id)
-            .await
-            .map_err(|err| {
-                AppError::Internal(format!("Failed to delete exchange account: {err}"))
-            })?;
+        let deleted = self.repo.delete(exchange_id).await.map_err(|err| {
+            AppError::Internal(format!("Failed to delete exchange account: {err}"))
+        })?;
 
         if deleted == 0 {
             return Err(AppError::NotFound("Exchange not found".into()));
@@ -360,12 +353,14 @@ mod tests {
 
     #[test]
     fn aster_validation_accepts_correct_private_key() {
-        assert!(validate_exchange_credentials(
-            "aster",
-            "4fd0a42218f3eae43a6ce26d22544e986139a01e5b34a62db53757ffca81bae1",
-            "0x63DD5aCC6b1aa0f563956C0e534DD30B6dcF7C4e",
-        )
-        .is_ok());
+        assert!(
+            validate_exchange_credentials(
+                "aster",
+                "4fd0a42218f3eae43a6ce26d22544e986139a01e5b34a62db53757ffca81bae1",
+                "0x63DD5aCC6b1aa0f563956C0e534DD30B6dcF7C4e",
+            )
+            .is_ok()
+        );
     }
 
     #[test]
@@ -382,19 +377,23 @@ mod tests {
 
     #[test]
     fn update_validation_accepts_correct_credentials() {
-        assert!(validate_updated_credentials(
-            "aster",
-            "0x63DD5aCC6b1aa0f563956C0e534DD30B6dcF7C4e",
-            "4fd0a42218f3eae43a6ce26d22544e986139a01e5b34a62db53757ffca81bae1",
-        )
-        .is_ok());
+        assert!(
+            validate_updated_credentials(
+                "aster",
+                "0x63DD5aCC6b1aa0f563956C0e534DD30B6dcF7C4e",
+                "4fd0a42218f3eae43a6ce26d22544e986139a01e5b34a62db53757ffca81bae1",
+            )
+            .is_ok()
+        );
 
-        assert!(validate_updated_credentials(
-            "hyperliquid",
-            "",
-            "4fd0a42218f3eae43a6ce26d22544e986139a01e5b34a62db53757ffca81bae1",
-        )
-        .is_ok());
+        assert!(
+            validate_updated_credentials(
+                "hyperliquid",
+                "",
+                "4fd0a42218f3eae43a6ce26d22544e986139a01e5b34a62db53757ffca81bae1",
+            )
+            .is_ok()
+        );
     }
 
     #[test]

@@ -155,7 +155,22 @@ impl TradingService {
         system_prompt_template: &str,
     ) -> AppResult<TraderCreatedPayload> {
         let state = self.state();
-        create_trader(&state, name, ai_model_id, exchange_id, strategy_id, initial_balance, scan_interval_minutes, is_cross_margin, use_ai500, use_oi_top, custom_prompt, override_base_prompt, system_prompt_template).await
+        create_trader(
+            &state,
+            name,
+            ai_model_id,
+            exchange_id,
+            strategy_id,
+            initial_balance,
+            scan_interval_minutes,
+            is_cross_margin,
+            use_ai500,
+            use_oi_top,
+            custom_prompt,
+            override_base_prompt,
+            system_prompt_template,
+        )
+        .await
     }
 
     pub async fn update_trader(
@@ -175,7 +190,23 @@ impl TradingService {
         system_prompt_template: Option<String>,
     ) -> AppResult<TraderMessagePayload> {
         let state = self.state();
-        update_trader(&state, id, name, ai_model_id, exchange_id, strategy_id, initial_balance, scan_interval_minutes, is_cross_margin, use_ai500, use_oi_top, custom_prompt, override_base_prompt, system_prompt_template).await
+        update_trader(
+            &state,
+            id,
+            name,
+            ai_model_id,
+            exchange_id,
+            strategy_id,
+            initial_balance,
+            scan_interval_minutes,
+            is_cross_margin,
+            use_ai500,
+            use_oi_top,
+            custom_prompt,
+            override_base_prompt,
+            system_prompt_template,
+        )
+        .await
     }
 
     pub async fn delete_trader(&self, id: &str) -> AppResult<TraderMessagePayload> {
@@ -234,10 +265,7 @@ impl TradingService {
         Ok(rows.into_iter().map(equity_history_payload).collect())
     }
 
-    pub async fn sync_balance(
-        &self,
-        id: &str,
-    ) -> AppResult<TraderBalanceSyncPayload> {
+    pub async fn sync_balance(&self, id: &str) -> AppResult<TraderBalanceSyncPayload> {
         let state = self.state();
         sync_balance(&state, id).await
     }
@@ -266,18 +294,12 @@ impl TradingService {
         grid_risk_info(&state, id).await
     }
 
-    pub async fn status(
-        &self,
-        trader_id: Option<String>,
-    ) -> AppResult<TraderStatusPayload> {
+    pub async fn status(&self, trader_id: Option<String>) -> AppResult<TraderStatusPayload> {
         let state = self.state();
         status(&state, trader_id).await
     }
 
-    pub async fn account(
-        &self,
-        trader_id: Option<String>,
-    ) -> AppResult<TraderAccountPayload> {
+    pub async fn account(&self, trader_id: Option<String>) -> AppResult<TraderAccountPayload> {
         let state = self.state();
         account(&state, trader_id).await
     }
@@ -370,7 +392,17 @@ impl TradingService {
         correlation_id: Option<String>,
     ) -> AppResult<RuntimeEventsPayload> {
         let state = self.state();
-        runtime_events(&state, trader_id, window_hours, limit, offset, event_type, risk_level, correlation_id).await
+        runtime_events(
+            &state,
+            trader_id,
+            window_hours,
+            limit,
+            offset,
+            event_type,
+            risk_level,
+            correlation_id,
+        )
+        .await
     }
 
     pub async fn runtime_event_types(
@@ -411,7 +443,16 @@ impl TradingService {
         persist_min_interval_secs: Option<i64>,
     ) -> AppResult<RuntimeAlertsPayload> {
         let state = self.state();
-        runtime_alerts(&state, trader_id, window_hours, open_market_fallback_rate_max_pct, replace_throttle_rate_max_pct, stale_reconcile_terminal_rate_max_pct, persist_min_interval_secs).await
+        runtime_alerts(
+            &state,
+            trader_id,
+            window_hours,
+            open_market_fallback_rate_max_pct,
+            replace_throttle_rate_max_pct,
+            stale_reconcile_terminal_rate_max_pct,
+            persist_min_interval_secs,
+        )
+        .await
     }
 
     pub async fn runtime_alert_history(
@@ -424,7 +465,16 @@ impl TradingService {
         severity: Option<String>,
     ) -> AppResult<RuntimeAlertHistoryPayload> {
         let state = self.state();
-        runtime_alert_history(&state, trader_id, window_hours, limit, offset, breached_only, severity).await
+        runtime_alert_history(
+            &state,
+            trader_id,
+            window_hours,
+            limit,
+            offset,
+            breached_only,
+            severity,
+        )
+        .await
     }
 
     pub async fn runtime_alert_deliveries(
@@ -437,7 +487,16 @@ impl TradingService {
         destination: Option<String>,
     ) -> AppResult<RuntimeAlertDeliveriesPayload> {
         let state = self.state();
-        runtime_alert_deliveries(&state, trader_id, window_hours, limit, offset, success, destination).await
+        runtime_alert_deliveries(
+            &state,
+            trader_id,
+            window_hours,
+            limit,
+            offset,
+            success,
+            destination,
+        )
+        .await
     }
 
     pub async fn runtime_alert_controls(

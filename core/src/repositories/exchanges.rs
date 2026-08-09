@@ -77,9 +77,7 @@ impl ExchangeRepo {
         Self { db }
     }
 
-    pub async fn list_for_user(
-        &self,
-    ) -> Result<Vec<ExchangeConfigRecord>, crate::database::DbErr> {
+    pub async fn list_for_user(&self) -> Result<Vec<ExchangeConfigRecord>, crate::database::DbErr> {
         exchanges::Entity::find()
             .order_by_asc(exchanges::Column::ExchangeType)
             .order_by_asc(exchanges::Column::AccountName)
@@ -213,10 +211,7 @@ impl ExchangeRepo {
             })
     }
 
-    pub async fn delete(
-        &self,
-        exchange_id: &str,
-    ) -> Result<u64, crate::database::DbErr> {
+    pub async fn delete(&self, exchange_id: &str) -> Result<u64, crate::database::DbErr> {
         let result = exchanges::Entity::delete_many()
             .filter(exchanges::Column::Id.eq(exchange_id.trim()))
             .exec(&self.db)

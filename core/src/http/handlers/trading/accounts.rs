@@ -66,7 +66,9 @@ pub async fn positions(
     State(app): State<state::AppState>,
     Query(q): Query<PositionQuery>,
 ) -> Result<Json<ApiResponse<PositionListPayload>>> {
-    let payload = trading_service(&app).positions(q.trader_id, q.status).await?;
+    let payload = trading_service(&app)
+        .positions(q.trader_id, q.status)
+        .await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 

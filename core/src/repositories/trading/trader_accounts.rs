@@ -49,10 +49,7 @@ impl TradingRepo {
         .map(|_| ())
     }
 
-    pub async fn compute_account_totals(
-        &self,
-        trader_id: &str,
-    ) -> Result<(f64, f64, f64), DbErr> {
+    pub async fn compute_account_totals(&self, trader_id: &str) -> Result<(f64, f64, f64), DbErr> {
         let positions = entity::trader_positions::Entity::find()
             .filter(entity::trader_positions::Column::TraderId.eq(trader_id.trim()))
             .filter(entity::trader_positions::Column::Status.eq("open"))

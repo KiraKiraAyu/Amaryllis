@@ -18,11 +18,7 @@ use crate::{
 pub async fn handle_get_strategies(
     State(app): State<AppState>,
 ) -> Result<Json<ApiResponse<StrategyListPayload>>> {
-    let payload = app
-        .services
-        .strategy_service
-        .list_strategies()
-        .await?;
+    let payload = app.services.strategy_service.list_strategies().await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 
@@ -30,11 +26,7 @@ pub async fn handle_get_strategy(
     State(app): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<ApiResponse<StrategyPayload>>> {
-    let payload = app
-        .services
-        .strategy_service
-        .get_strategy(id)
-        .await?;
+    let payload = app.services.strategy_service.get_strategy(id).await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 
@@ -77,11 +69,7 @@ pub async fn handle_delete_strategy(
     State(app): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<ApiResponse<StrategyMessagePayload>>> {
-    let payload = app
-        .services
-        .strategy_service
-        .delete_strategy(id)
-        .await?;
+    let payload = app.services.strategy_service.delete_strategy(id).await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 
@@ -89,11 +77,7 @@ pub async fn handle_activate_strategy(
     State(app): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<ApiResponse<StrategyMessagePayload>>> {
-    let payload = app
-        .services
-        .strategy_service
-        .activate_strategy(id)
-        .await?;
+    let payload = app.services.strategy_service.activate_strategy(id).await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 
@@ -114,11 +98,7 @@ pub async fn handle_duplicate_strategy(
 pub async fn handle_get_active_strategy(
     State(app): State<AppState>,
 ) -> Result<Json<ApiResponse<StrategyPayload>>> {
-    let payload = app
-        .services
-        .strategy_service
-        .active_strategy()
-        .await?;
+    let payload = app.services.strategy_service.active_strategy().await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 
@@ -140,10 +120,11 @@ pub async fn handle_preview_prompt(
     if !req.config.is_object() {
         return Err(AppError::BadRequest("Invalid strategy config".into()));
     }
-    let payload = app
-        .services
-        .strategy_service
-        .preview_prompt(req.config, req.account_equity, req.prompt_variant)?;
+    let payload = app.services.strategy_service.preview_prompt(
+        req.config,
+        req.account_equity,
+        req.prompt_variant,
+    )?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 

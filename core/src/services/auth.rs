@@ -176,7 +176,9 @@ impl AuthService {
 
         match self.check_code(&secret, &code) {
             Ok(()) => {
-                self.settings.set(TOTP_SECRET_KEY, &pending.secret_b32).await?;
+                self.settings
+                    .set(TOTP_SECRET_KEY, &pending.secret_b32)
+                    .await?;
                 *lock(&self.pending_setup)? = None;
                 self.rate_limiter_lock()?.reset();
                 self.issue_token("Authenticator configured")
@@ -211,7 +213,9 @@ impl AuthService {
 
         match self.check_code(&secret, &code) {
             Ok(()) => {
-                self.settings.set(TOTP_SECRET_KEY, &pending.secret_b32).await?;
+                self.settings
+                    .set(TOTP_SECRET_KEY, &pending.secret_b32)
+                    .await?;
                 *lock(&self.pending_setup)? = None;
                 self.rate_limiter_lock()?.reset();
                 Ok(MessagePayload {
@@ -230,10 +234,7 @@ impl AuthService {
         let mut validation = Validation::new(Algorithm::HS256);
         validation.set_issuer(&[self.auth_config.jwt_issuer.as_str()]);
 
-        Ok(
-            decode::<Claims>(token.trim(), &self.decoding_key, &validation)?
-                .claims,
-        )
+        Ok(decode::<Claims>(token.trim(), &self.decoding_key, &validation)?.claims)
     }
 
     async fn ensure_setup_allowed(&self) -> Result<()> {
@@ -310,12 +311,8 @@ impl AuthService {
             jti: Uuid::now_v7().to_string(),
         };
 
-        let token = encode(
-            &Header::new(Algorithm::HS256),
-            &claims,
-            &self.encoding_key,
-        )
-        .map_err(|err| AppError::Internal(format!("Failed to generate token: {err}")))?;
+        let token = encode(&Header::new(Algorithm::HS256), &claims, &self.encoding_key)
+            .map_err(|err| AppError::Internal(format!("Failed to generate token: {err}")))?;
 
         Ok(TokenPayload { token, message })
     }
@@ -382,9 +379,9 @@ async fn resolve_session_secret(
     }
 
     if let Some(stored) = settings.get(SESSION_SECRET_KEY).await? {
-        return BASE64.decode(stored.trim()).map_err(|err| {
-            AppError::Internal(format!("Stored session secret is invalid: {err}"))
-        });
+        return BASE64
+            .decode(stored.trim())
+            .map_err(|err| AppError::Internal(format!("Stored session secret is invalid: {err}")));
     }
 
     let mut secret = [0u8; 32];
@@ -467,7 +464,11 @@ mod tests {
             .expect("raw secret bytes");
         let totp = build_totp(&secret).expect("build totp");
         let correct = totp.generate_current().expect("generate code");
-        let wrong = if correct == "000000" { "000001" } else { "000000" };
+        let wrong = if correct == "000000" {
+            "000001"
+        } else {
+            "000000"
+        };
 
         assert!(service.check_code(&secret, wrong).is_err());
         assert!(service.check_code(&secret, "abcdef").is_err());

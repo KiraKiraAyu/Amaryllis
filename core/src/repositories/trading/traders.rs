@@ -4,7 +4,11 @@ use sea_orm::{
     TransactionTrait, prelude::Expr,
 };
 
-use crate::{database::DbErr, entity, time::{dt_to_ts, ts_to_dt}};
+use crate::{
+    database::DbErr,
+    entity,
+    time::{dt_to_ts, ts_to_dt},
+};
 
 use super::{
     TradingRepo,
@@ -25,10 +29,7 @@ impl TradingRepo {
             .map(|rows| rows.into_iter().map(map_trader).collect())
     }
 
-    pub async fn get_trader(
-        &self,
-        trader_id: &str,
-    ) -> Result<Option<TraderRecord>, DbErr> {
+    pub async fn get_trader(&self, trader_id: &str) -> Result<Option<TraderRecord>, DbErr> {
         entity::traders::Entity::find_by_id(trader_id.trim().to_string())
             .one(&self.db)
             .await

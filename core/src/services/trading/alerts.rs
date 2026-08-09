@@ -357,10 +357,7 @@ pub async fn runtime_alert_deliveries(
         Some(false) => 0_i64,
         None => -1_i64,
     };
-    let destination_filter = destination
-        .unwrap_or_default()
-        .trim()
-        .to_ascii_lowercase();
+    let destination_filter = destination.unwrap_or_default().trim().to_ascii_lowercase();
 
     let success = match success_filter {
         0 => Some(false),
@@ -414,11 +411,7 @@ pub async fn runtime_alert_controls(
         Err(e) => return Err(e),
     };
 
-    match app
-        .trading_repo
-        .runtime_alert_controls(&trader_id)
-        .await
-    {
+    match app.trading_repo.runtime_alert_controls(&trader_id).await {
         Ok(Some(record)) => Ok(controls_payload(record)),
         Ok(None) => Ok(empty_runtime_alert_controls_payload(trader_id)),
         Err(_) => Err(app_error(

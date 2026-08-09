@@ -60,10 +60,7 @@ impl MigrationTrait for Migration {
                             .timestamp_with_time_zone()
                             .not_null(),
                     )
-                    .primary_key(
-                        Index::create()
-                            .col(RuntimeAlertControls::TraderId)
-                    )
+                    .primary_key(Index::create().col(RuntimeAlertControls::TraderId))
                     .to_owned(),
             )
             .await?;

@@ -365,13 +365,7 @@ pub async fn apply_account_stream_update_event(
         if qty <= f64::EPSILON {
             state
                 .trading_repo
-                .close_open_positions_for_symbol_side(
-                    &cfg.trader_id,
-                    &symbol,
-                    side,
-                    event_ts,
-                    ts,
-                )
+                .close_open_positions_for_symbol_side(&cfg.trader_id, &symbol, side, event_ts, ts)
                 .await?;
             continue;
         }

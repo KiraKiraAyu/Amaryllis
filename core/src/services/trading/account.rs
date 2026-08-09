@@ -1,9 +1,6 @@
 use super::service::*;
 
-pub async fn sync_balance(
-    app: &SharedState,
-    id: &str,
-) -> AppResult<TraderBalanceSyncPayload> {
+pub async fn sync_balance(app: &SharedState, id: &str) -> AppResult<TraderBalanceSyncPayload> {
     let trader = match get_trader_by_owner(app, id).await {
         Ok(Some(t)) => t,
         Ok(None) => return Err(app_error(AppErrorKind::NotFound, "Trader does not exist")),
@@ -320,10 +317,7 @@ fn manual_runtime_config(trader: &TraderRecord) -> TraderRuntimeConfig {
     }
 }
 
-pub async fn grid_risk_info(
-    app: &SharedState,
-    id: &str,
-) -> AppResult<GridRiskInfoPayload> {
+pub async fn grid_risk_info(app: &SharedState, id: &str) -> AppResult<GridRiskInfoPayload> {
     if trader_owner_missing(app, id).await {
         return Err(app_error(
             AppErrorKind::NotFound,
@@ -331,10 +325,7 @@ pub async fn grid_risk_info(
         ));
     }
 
-    let rows = app
-        .trading_repo
-        .open_position_records(id, None, None)
-        .await;
+    let rows = app.trading_repo.open_position_records(id, None, None).await;
 
     match rows {
         Ok(open_positions) => {

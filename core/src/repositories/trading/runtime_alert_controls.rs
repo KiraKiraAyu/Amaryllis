@@ -14,8 +14,8 @@ impl TradingRepo {
     ) -> Result<Option<RuntimeAlertControlsRecord>, DbErr> {
         entity::runtime_alert_controls::Entity::find_by_id(trader_id.trim().to_string())
             .one(&self.db)
-        .await
-        .map(|row| row.map(map_runtime_alert_controls))
+            .await
+            .map(|row| row.map(map_runtime_alert_controls))
     }
 
     pub async fn unmute_expired_runtime_alerts(

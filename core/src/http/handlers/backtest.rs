@@ -41,7 +41,9 @@ pub async fn handle_backtest_start(
     }
     if let Some(b) = initial_balance {
         if b <= 0.0 {
-            return Err(AppError::BadRequest("initial_balance must be positive".into()));
+            return Err(AppError::BadRequest(
+                "initial_balance must be positive".into(),
+            ));
         }
     }
 

@@ -18,10 +18,7 @@ impl LlmService {
         Self { model_repo }
     }
 
-    pub async fn resolve_for_user(
-        &self,
-        model_id: Option<&str>,
-    ) -> Result<ResolvedModelRecord> {
+    pub async fn resolve_for_user(&self, model_id: Option<&str>) -> Result<ResolvedModelRecord> {
         self.model_repo
             .resolve_for_user(model_id)
             .await

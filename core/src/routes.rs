@@ -39,7 +39,10 @@ pub fn build_app(state: AppState, timeout_secs: u64) -> Router {
 
     let protected_api = Router::new()
         .route("/config", get(handlers::system::config))
-        .route("/settings", get(handlers::system::get_settings).put(handlers::system::update_settings))
+        .route(
+            "/settings",
+            get(handlers::system::get_settings).put(handlers::system::update_settings),
+        )
         .route("/auth/reset/start", post(handlers::auth::reset_start))
         .route("/auth/reset/confirm", post(handlers::auth::reset_confirm))
         .nest("/catalog", catalog::router())
@@ -51,10 +54,7 @@ pub fn build_app(state: AppState, timeout_secs: u64) -> Router {
         .nest("/trading", trading::router())
         .nest("/backtest", backtest::router())
         .nest("/debates", debates::router())
-        .route_layer(middleware::from_fn_with_state(
-            state.clone(),
-            require_auth,
-        ));
+        .route_layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     let timed_api =
         Router::new()
@@ -67,10 +67,7 @@ pub fn build_app(state: AppState, timeout_secs: u64) -> Router {
 
     let stream_api = Router::new()
         .route("/events", get(realtime::events_handler))
-        .route_layer(middleware::from_fn_with_state(
-            state.clone(),
-            require_auth,
-        ));
+        .route_layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     let api = Router::new().merge(timed_api).merge(stream_api);
 

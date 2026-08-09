@@ -51,11 +51,7 @@ pub async fn latest_decisions(
         Err(e) => return Err(e),
     };
 
-    match app
-        .trading_repo
-        .decisions(&trader_id, None, 20, 0)
-        .await
-    {
+    match app.trading_repo.decisions(&trader_id, None, 20, 0).await {
         Ok(items) => {
             let items: Vec<DecisionPayload> = items.into_iter().map(decision_payload).collect();
             Ok(LatestDecisionsPayload {
@@ -84,11 +80,7 @@ pub async fn trades(
     let limit = limit.unwrap_or(100).clamp(1, 500);
     let offset = offset.unwrap_or(0).max(0);
 
-    match app
-        .trading_repo
-        .trades(&trader_id, limit, offset)
-        .await
-    {
+    match app.trading_repo.trades(&trader_id, limit, offset).await {
         Ok(items) => {
             let items: Vec<TradePayload> = items.into_iter().map(trade_payload).collect();
             Ok(TradeListPayload {
@@ -109,7 +101,17 @@ pub async fn orders(
     limit: Option<i64>,
     offset: Option<i64>,
 ) -> AppResult<OrderListPayload> {
-    order_list(app, trader_id, limit, offset, false, true, true, "Failed to load orders").await
+    order_list(
+        app,
+        trader_id,
+        limit,
+        offset,
+        false,
+        true,
+        true,
+        "Failed to load orders",
+    )
+    .await
 }
 
 pub async fn order_fills(
@@ -122,11 +124,7 @@ pub async fn order_fills(
         Err(e) => return Err(e),
     };
 
-    match app
-        .trading_repo
-        .order_fills(&trader_id, order_id)
-        .await
-    {
+    match app.trading_repo.order_fills(&trader_id, order_id).await {
         Ok(items) => {
             let items: Vec<FillPayload> = items.into_iter().map(fill_payload).collect();
             Ok(FillListPayload {

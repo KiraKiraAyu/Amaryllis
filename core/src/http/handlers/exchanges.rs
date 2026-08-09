@@ -16,11 +16,7 @@ use crate::{
 pub async fn get_exchange_configs(
     State(app): State<state::AppState>,
 ) -> Result<Json<ApiResponse<Vec<SafeExchangeConfig>>>> {
-    let payload = app
-        .services
-        .exchange_config_service
-        .list_configs()
-        .await?;
+    let payload = app.services.exchange_config_service.list_configs().await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 
@@ -38,9 +34,7 @@ pub async fn create_exchange(
     }): Json<CreateExchangeRequest>,
 ) -> Result<Json<ApiResponse<CreateExchangePayload>>> {
     if exchange_type.trim().is_empty() {
-        return Err(AppError::BadRequest(
-            "exchange_type is required".into(),
-        ));
+        return Err(AppError::BadRequest("exchange_type is required".into()));
     }
     let payload = app
         .services
@@ -64,9 +58,7 @@ pub async fn update_exchange_configs(
     Json(UpdateExchangeConfigRequest { exchanges }): Json<UpdateExchangeConfigRequest>,
 ) -> Result<Json<ApiResponse<MessagePayload>>> {
     if exchanges.is_empty() {
-        return Err(AppError::BadRequest(
-            "exchanges map is required".into(),
-        ));
+        return Err(AppError::BadRequest("exchanges map is required".into()));
     }
     let payload = app
         .services

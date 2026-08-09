@@ -93,11 +93,14 @@ fn configured_rule_rate(
         )));
     }
 
-    let rate = rule.get("pnl_rate").and_then(|value| value.as_f64()).ok_or_else(|| {
-        AppError::InvalidExchangeConfig(format!(
-            "tp_sl.{rule_name}.pnl_rate must be provided by the form"
-        ))
-    })?;
+    let rate = rule
+        .get("pnl_rate")
+        .and_then(|value| value.as_f64())
+        .ok_or_else(|| {
+            AppError::InvalidExchangeConfig(format!(
+                "tp_sl.{rule_name}.pnl_rate must be provided by the form"
+            ))
+        })?;
     if !rate.is_finite() || !rule_kind.accepts_rate(rate) {
         return Err(AppError::InvalidExchangeConfig(format!(
             "tp_sl.{rule_name}.pnl_rate must be {} for fixed mode",

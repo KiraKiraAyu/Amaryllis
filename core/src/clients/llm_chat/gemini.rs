@@ -235,11 +235,7 @@ impl LlmProviderClient for GeminiClient {
         let status = response.status();
         if !status.is_success() {
             let body = response.text().await.unwrap_or_default();
-            return Err(provider_api_error(
-                &self.config.provider,
-                status,
-                body,
-            ));
+            return Err(provider_api_error(&self.config.provider, status, body));
         }
 
         let mut full_response = String::new();

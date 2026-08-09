@@ -1,3 +1,4 @@
+pub mod aster;
 pub mod binance;
 pub mod bitget;
 pub mod exchanges;
@@ -5,7 +6,6 @@ pub mod hyperliquid;
 pub mod llm_chat;
 pub mod market_data;
 pub mod okx;
-pub mod aster;
 pub mod outbound_http;
 
 /// Maximum length allowed by Binance-compatible APIs for `newClientOrderId`.

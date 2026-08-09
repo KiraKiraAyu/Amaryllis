@@ -10,9 +10,7 @@ use crate::{
     state::AppState,
 };
 
-pub async fn status(
-    State(app): State<AppState>,
-) -> Result<Json<ApiResponse<AuthStatusPayload>>> {
+pub async fn status(State(app): State<AppState>) -> Result<Json<ApiResponse<AuthStatusPayload>>> {
     let payload = app.services.auth_service.status().await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }

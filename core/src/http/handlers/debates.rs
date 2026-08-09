@@ -47,9 +47,7 @@ pub async fn handle_create_debate(
     }
     if let Some(r) = max_rounds {
         if r < 1 {
-            return Err(AppError::BadRequest(
-                "max_rounds must be positive".into(),
-            ));
+            return Err(AppError::BadRequest("max_rounds must be positive".into()));
         }
     }
     let payload = app
@@ -104,11 +102,7 @@ pub async fn handle_execute_debate(
     State(app): State<state::AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<ApiResponse<DebateExecutionPayload>>> {
-    let payload = app
-        .services
-        .debate_service
-        .execution(&id)
-        .await?;
+    let payload = app.services.debate_service.execution(&id).await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 
