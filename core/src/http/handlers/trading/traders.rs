@@ -38,9 +38,7 @@ pub async fn config(
     State(app): State<state::AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<ApiResponse<TraderPayload>>> {
-    let payload = trading_service(&app)
-        .get_trader_config(&id)
-        .await?;
+    let payload = trading_service(&app).get_trader_config(&id).await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 
@@ -51,9 +49,13 @@ pub async fn create(
     let name = request.name.trim().to_string();
     let ai_model_id = request.ai_model_id.trim().to_string();
     let exchange_id = request.exchange_id.trim().to_string();
-    if name.is_empty() || ai_model_id.is_empty() || exchange_id.is_empty() {
+    if name.is_empty()
+        || ai_model_id.is_empty()
+        || exchange_id.is_empty()
+        || request.strategy_id.trim().is_empty()
+    {
         return Err(crate::error::AppError::BadRequest(
-            "name, ai_model_id, exchange_id are required".into(),
+            "name, ai_model_id, exchange_id, strategy_id are required".into(),
         ));
     }
     let payload = trading_service(&app)

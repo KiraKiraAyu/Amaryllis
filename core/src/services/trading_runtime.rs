@@ -8,6 +8,7 @@ pub mod account_sim;
 pub mod ai_decision;
 pub mod binance_events;
 pub mod config_loaders;
+pub mod data_context;
 pub mod db_utils;
 pub mod engine;
 pub mod events;

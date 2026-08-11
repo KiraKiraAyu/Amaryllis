@@ -31,10 +31,7 @@ fn publish_live_circuit_breaker_event(
     trader_id: &str,
     consecutive_failures: u32,
 ) {
-    realtime_hub.publish(live_circuit_breaker_event(
-        trader_id,
-        consecutive_failures,
-    ));
+    realtime_hub.publish(live_circuit_breaker_event(trader_id, consecutive_failures));
 }
 
 /// Calculate the next aligned scan timestamp (Unix seconds).
@@ -281,7 +278,10 @@ pub async fn run_trader_loop(
                     );
                 }
                 consecutive_live_failures = 0;
-                let _ = engine.inner.state.set_runtime_engine_running(&cfg.trader_id, true, None);
+                let _ = engine
+                    .inner
+                    .state
+                    .set_runtime_engine_running(&cfg.trader_id, true, None);
             }
             Err(err) => {
                 // Budget circuit breaker — stop immediately regardless of mode
@@ -325,8 +325,7 @@ pub async fn run_trader_loop(
                     );
 
                     if consecutive_live_failures >= live_circuit_breaker_limit {
-                        let breaker_msg =
-                            live_circuit_breaker_message(consecutive_live_failures);
+                        let breaker_msg = live_circuit_breaker_message(consecutive_live_failures);
                         let _ = engine.inner.state.set_runtime_engine_running(
                             &cfg.trader_id,
                             false,
@@ -408,8 +407,10 @@ async fn handle_user_stream_keepalive(
             time::sleep(backoff).await;
             match init_exchange_user_stream(adapter).await {
                 Ok(session) => {
-                    *user_stream_rx =
-                        Some(spawn_exchange_user_stream_reader(session.clone(), stop_rx.clone()));
+                    *user_stream_rx = Some(spawn_exchange_user_stream_reader(
+                        session.clone(),
+                        stop_rx.clone(),
+                    ));
                     *user_stream_session = Some(session);
                     info!(
                         "exchange user stream reconnected after keepalive failure trader={}",
@@ -461,8 +462,10 @@ async fn handle_user_stream_event_safe(
                 time::sleep(backoff).await;
                 match init_exchange_user_stream(adapter).await {
                     Ok(session) => {
-                        *user_stream_rx =
-                            Some(spawn_exchange_user_stream_reader(session.clone(), stop_rx.clone()));
+                        *user_stream_rx = Some(spawn_exchange_user_stream_reader(
+                            session.clone(),
+                            stop_rx.clone(),
+                        ));
                         *user_stream_session = Some(session);
                         info!(
                             "exchange user stream reconnected after listen key expiration trader={}",
@@ -494,8 +497,10 @@ async fn handle_user_stream_event_safe(
             time::sleep(backoff).await;
             match init_exchange_user_stream(adapter).await {
                 Ok(session) => {
-                    *user_stream_rx =
-                        Some(spawn_exchange_user_stream_reader(session.clone(), stop_rx.clone()));
+                    *user_stream_rx = Some(spawn_exchange_user_stream_reader(
+                        session.clone(),
+                        stop_rx.clone(),
+                    ));
                     *user_stream_session = Some(session);
                     info!(
                         "exchange user stream reconnected after disconnect trader={}",
@@ -591,7 +596,15 @@ pub async fn process_cycle(
                         .get(&p.symbol)
                         .map(|m| m.price)
                         .unwrap_or(p.mark_price.max(1e-9));
-                    close_position(state, cfg, p, px, cycle_started_at, "budget circuit breaker").await?;
+                    close_position(
+                        state,
+                        cfg,
+                        p,
+                        px,
+                        cycle_started_at,
+                        "budget circuit breaker",
+                    )
+                    .await?;
                 }
             }
         }
@@ -652,10 +665,8 @@ pub async fn process_cycle(
                     * if p.side == "LONG" { 1.0 } else { -1.0 };
                 let margin = (p.entry_price * p.quantity.abs()) / (p.leverage as f64).max(1.0);
                 let pnl_rate = if margin > 0.0 { pnl / margin } else { 0.0 };
-                let hit_tp = take_profit
-                    .is_some_and(|rule| pnl_rate >= rule.pnl_rate);
-                let hit_sl = stop_loss
-                    .is_some_and(|rule| pnl_rate <= rule.pnl_rate);
+                let hit_tp = take_profit.is_some_and(|rule| pnl_rate >= rule.pnl_rate);
+                let hit_sl = stop_loss.is_some_and(|rule| pnl_rate <= rule.pnl_rate);
                 if hit_tp || hit_sl {
                     let reason = if hit_tp {
                         "fixed take-profit"
@@ -755,14 +766,8 @@ pub async fn process_cycle(
         }
         _ => {
             if hard_risk_trigger {
-                close_worst_positions(
-                    state,
-                    cfg,
-                    &open_positions,
-                    market,
-                    execution_started_at,
-                )
-                .await?;
+                close_worst_positions(state, cfg, &open_positions, market, execution_started_at)
+                    .await?;
             } else {
                 execute_decisions(
                     state,

@@ -5,14 +5,14 @@ use uuid::Uuid;
 use crate::{
     clients::market_data::{now_ts, parse_json_value, ts_to_rfc3339},
     contracts::strategies::{
-        PreviewPromptPayload, StrategyCreatedPayload,
-        StrategyDefaultConfigPayload, StrategyListPayload,
-        StrategyMessagePayload, StrategyPayload, StrategyTestRunPayload,
+        PreviewPromptPayload, StrategyCreatedPayload, StrategyDefaultConfigPayload,
+        StrategyListPayload, StrategyMessagePayload, StrategyPayload, StrategyTestRunPayload,
     },
     error::{AppError, AppErrorKind, Result},
     repositories::strategies::{
         CreateStrategyRecord, StrategyRecord, StrategyRepo, UpdateStrategyRecord,
     },
+    services::data_template::{data_template_value, validate_strategy_data_template},
     services::llm::{LlmMessage, LlmService},
     services::trading_runtime::ai_decision::build_system_prompt_from_config,
 };
@@ -58,6 +58,11 @@ impl StrategyService {
         description: String,
         config: Value,
     ) -> Result<StrategyCreatedPayload> {
+        let mut config = config;
+        let template = validate_strategy_data_template(&config)
+            .map_err(|message| strategy_error(AppErrorKind::BadRequest, message))?;
+        config["data_template"] = data_template_value(&template);
+
         let id = Uuid::now_v7().to_string();
         let now = now_ts();
         let config_str = serde_json::to_string(&config).unwrap_or_else(|_| "{}".to_string());
@@ -93,17 +98,17 @@ impl StrategyService {
             .map_err(|_| strategy_error(AppErrorKind::Internal, "Failed to update strategy"))?
             .ok_or_else(|| strategy_error(AppErrorKind::NotFound, "Strategy not found"))?;
 
-        let name = if name.is_empty() {
-            existing.name
-        } else {
-            name
-        };
+        let name = if name.is_empty() { existing.name } else { name };
         let description = if description.is_empty() {
             existing.description
         } else {
             description
         };
         let config = if config.is_object() {
+            let mut config = config;
+            let template = validate_strategy_data_template(&config)
+                .map_err(|message| strategy_error(AppErrorKind::BadRequest, message))?;
+            config["data_template"] = data_template_value(&template);
             serde_json::to_string(&config).unwrap_or_else(|_| "{}".to_string())
         } else {
             existing.config
@@ -242,8 +247,7 @@ impl StrategyService {
 
         // Use the unified prompt builder shared with live trading, backtest, and test run
         let system_prompt = build_system_prompt_from_config(
-            &config,
-            true, // is_cross_margin: default for preview (no trader context)
+            &config, true, // is_cross_margin: default for preview (no trader context)
             "",   // no trader-specific custom prompt
             false,
         );
@@ -276,14 +280,12 @@ impl StrategyService {
         let run_real_ai = run_real_ai.unwrap_or(false);
 
         let system_prompt = build_system_prompt_from_config(
-            &config,
-            true, // is_cross_margin: default for test run (no trader context)
+            &config, true, // is_cross_margin: default for test run (no trader context)
             "",   // no trader-specific custom prompt
             false,
         );
 
-        let config_str =
-            serde_json::to_string_pretty(&config).unwrap_or_else(|_| "{}".to_string());
+        let config_str = serde_json::to_string_pretty(&config).unwrap_or_else(|_| "{}".to_string());
 
         let mut symbols: Vec<String> = Vec::new();
         if let Some(symbols_arr) = config.get("symbols").and_then(|v| v.as_array()) {
@@ -297,10 +299,7 @@ impl StrategyService {
             }
         }
         if symbols.is_empty() {
-            if let Some(s) = config
-                .get("trading_symbols")
-                .and_then(|v| v.as_str())
-            {
+            if let Some(s) = config.get("trading_symbols").and_then(|v| v.as_str()) {
                 symbols = s
                     .split(',')
                     .map(|sym| sym.trim().to_uppercase())
@@ -487,30 +486,7 @@ fn default_strategy_config(lang: &str) -> Value {
             "use_oi_low": false,
             "oi_low_limit": 10
         },
-        "indicators": {
-            "klines": {
-                "primary_timeframe": "3m",
-                "primary_count": 30,
-                "longer_timeframe": "15m",
-                "longer_count": 20,
-                "enable_multi_timeframe": true,
-                "selected_timeframes": ["3m", "15m"]
-            },
-            "enable_raw_klines": true,
-            "enable_ema": true,
-            "enable_macd": true,
-            "enable_rsi": true,
-            "enable_atr": true,
-            "enable_boll": false,
-            "enable_volume": true,
-            "enable_oi": true,
-            "enable_funding_rate": true,
-            "quantauraos_api_key": "",
-            "enable_quant_data": false,
-            "enable_oi_ranking": false,
-            "enable_netflow_ranking": false,
-            "enable_price_ranking": false
-        },
+        "data_template": data_template_value(&crate::services::data_template::default_data_template()),
         "custom_prompt": "",
         "risk_control": {
             "max_positions": 3,
@@ -576,19 +552,135 @@ fn default_strategy_config(lang: &str) -> Value {
 
 #[cfg(test)]
 mod tests {
-    use super::default_strategy_config;
+    use serde_json::json;
+
+    use super::{default_strategy_config, validate_strategy_data_template};
 
     #[test]
     fn default_fixed_tp_sl_values_are_empty() {
         let config = default_strategy_config("en");
-        let tp_sl = config
-            .get("tp_sl")
-            .expect("default TP/SL config");
-        assert!(tp_sl
-            .pointer("/take_profit/pnl_rate")
-            .is_some_and(|value| value.is_null()));
-        assert!(tp_sl
-            .pointer("/stop_loss/pnl_rate")
-            .is_some_and(|value| value.is_null()));
+        let tp_sl = config.get("tp_sl").expect("default TP/SL config");
+        assert!(
+            tp_sl
+                .pointer("/take_profit/pnl_rate")
+                .is_some_and(|value| value.is_null())
+        );
+        assert!(
+            tp_sl
+                .pointer("/stop_loss/pnl_rate")
+                .is_some_and(|value| value.is_null())
+        );
+    }
+
+    #[test]
+    fn default_strategy_includes_a_valid_primary_kline_data_item() {
+        let config = default_strategy_config("en");
+
+        let template = validate_strategy_data_template(&config).expect("default data template");
+        let primary = template.items.first().expect("primary kline item");
+
+        assert_eq!(primary.timeframes, vec!["5m"]);
+        assert_eq!(primary.count, 100);
+    }
+
+    #[test]
+    fn data_template_rejects_an_empty_item_list() {
+        let config = json!({
+            "data_template": {
+                "schema_version": 1,
+                "items": []
+            }
+        });
+
+        let error = validate_strategy_data_template(&config).expect_err("empty template invalid");
+
+        assert_eq!(error, "data_template requires at least one data item");
+    }
+
+    #[test]
+    fn data_template_accepts_multi_timeframe_klines_and_derived_indicators() {
+        let config = json!({
+            "data_template": {
+                "schema_version": 1,
+                "items": [
+                    {
+                        "id": "primary",
+                        "type": "raw_kline",
+                        "timeframes": ["5m", "1h"],
+                        "count": 100,
+                        "closed_only": true
+                    },
+                    {
+                        "id": "rsi",
+                        "type": "indicator",
+                        "timeframes": ["5m", "1h"],
+                        "indicator": "rsi",
+                        "params": { "period": 14 },
+                        "output_mode": "latest"
+                    }
+                ]
+            }
+        });
+
+        let template = validate_strategy_data_template(&config).expect("valid template");
+        assert_eq!(template.items.len(), 2);
+    }
+
+    #[test]
+    fn data_template_drops_legacy_presentation_fields() {
+        let config = json!({
+            "data_template": {
+                "schema_version": 1,
+                "items": [{
+                    "id": "primary",
+                    "type": "raw_kline",
+                    "name": "Primary Kline",
+                    "enabled": false,
+                    "timeframes": ["5m"],
+                    "count": 100
+                }]
+            }
+        });
+
+        let template = validate_strategy_data_template(&config).expect("legacy field is ignored");
+        let normalized = super::data_template_value(&template);
+        assert!(normalized["items"][0].get("enabled").is_none());
+        assert!(normalized["items"][0].get("name").is_none());
+    }
+
+    #[test]
+    fn data_template_rejects_multiple_raw_kline_items() {
+        let config = json!({
+            "data_template": {
+                "schema_version": 1,
+                "items": [
+                    { "id": "primary", "type": "raw_kline", "timeframes": ["5m"], "count": 100 },
+                    { "id": "secondary", "type": "raw_kline", "timeframes": ["1h"], "count": 100 }
+                ]
+            }
+        });
+
+        let error =
+            validate_strategy_data_template(&config).expect_err("multiple raw Klines invalid");
+        assert_eq!(error, "data_template supports at most one raw_kline item");
+    }
+
+    #[test]
+    fn data_template_accepts_indicators_without_raw_kline_output() {
+        let config = json!({
+            "data_template": {
+                "schema_version": 1,
+                "items": [{
+                    "id": "rsi",
+                    "type": "indicator",
+                    "timeframes": ["15m"],
+                    "indicator": "rsi",
+                    "params": { "period": 14 },
+                    "output_mode": "latest"
+                }]
+            }
+        });
+
+        assert!(validate_strategy_data_template(&config).is_ok());
     }
 }

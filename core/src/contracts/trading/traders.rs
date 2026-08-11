@@ -5,7 +5,6 @@ pub struct CreateTraderRequest {
     pub name: String,
     pub ai_model_id: String,
     pub exchange_id: String,
-    #[serde(default)]
     pub strategy_id: String,
     #[serde(default = "default_initial_balance")]
     pub initial_balance: f64,

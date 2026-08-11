@@ -4,15 +4,20 @@ import Button from "primevue/button"
 import InputText from "primevue/inputtext"
 import InputNumber from "primevue/inputnumber"
 import Select from "primevue/select"
+import MultiSelect from "primevue/multiselect"
 import Textarea from "primevue/textarea"
-import { ref, computed, watch } from "vue"
+import { ref, computed, watch, nextTick } from "vue"
 import type { EditableStrategy } from "@/types/strategy-ui"
 import type {
   StrategyTpSlConfigPayload,
   StrategyTpSlMode,
   StrategyTakeProfitConfigPayload,
   StrategyStopLossConfigPayload,
+  StrategyDataTemplatePayload,
+  StrategyDataItemPayload,
+  StrategyIndicatorType,
 } from "@/types/strategies"
+import { STRATEGY_DATA_TIMEFRAMES } from "@/types/strategies"
 
 const selected = defineModel<EditableStrategy>({ required: true })
 
@@ -31,6 +36,121 @@ const emit = defineEmits<{
 const config = computed(() => {
   if (!selected.value.config) selected.value.config = {}
   return selected.value.config
+})
+
+const timeframeOptions = [...STRATEGY_DATA_TIMEFRAMES]
+const indicatorOptions = [
+  { label: "EMA", value: "ema" },
+  { label: "MACD", value: "macd" },
+  { label: "RSI", value: "rsi" },
+  { label: "ATR", value: "atr" },
+  { label: "Bollinger", value: "bollinger" },
+]
+
+const defaultDataTemplate = (): StrategyDataTemplatePayload => ({
+  schema_version: 1,
+  items: [{
+    id: "primary-kline",
+    type: "raw_kline",
+    timeframes: ["5m"],
+    count: 100,
+    closed_only: true,
+    output_mode: "latest",
+  }],
+})
+
+const dataTemplate = computed<StrategyDataTemplatePayload>(() => {
+  if (!config.value.data_template) config.value.data_template = defaultDataTemplate()
+  return config.value.data_template
+})
+const dataItems = computed(() => dataTemplate.value.items)
+const rawKlineItems = computed(() => dataItems.value.filter(item => item.type === "raw_kline"))
+const manuallyEditedIndicatorTimeframes = ref(new Set<string>())
+const indicatorPickerValue = ref<StrategyIndicatorType | null>(null)
+const indicatorPicker = ref<{ show: () => void } | null>(null)
+
+function dataItemLabel(item: StrategyDataItemPayload) {
+  if (item.type === "raw_kline") return "Kline"
+  return indicatorOptions.find(option => option.value === item.indicator)?.label ?? "Indicator"
+}
+
+const dataTemplateError = computed(() => {
+  const items = dataItems.value
+  if (!items.length) {
+    return "Add at least one data item."
+  }
+  for (const item of items) {
+    if (!item.id.trim()) return "Every data item needs an id."
+    if (!item.timeframes.length) return `${dataItemLabel(item)} needs at least one timeframe.`
+    if (!item.timeframes.every(tf => timeframeOptions.includes(tf))) return `${dataItemLabel(item)} has an unsupported timeframe.`
+    if (item.type === "raw_kline" && (!item.count || item.count < 1 || item.count > 1500)) return `${dataItemLabel(item)} count must be between 1 and 1500.`
+    if (item.type === "indicator") {
+      const period = Number(item.params?.period ?? 0)
+      if (period && period > 1500) return `${dataItemLabel(item)} period must be at most 1500.`
+    }
+  }
+  const ids = new Set<string>()
+  if (items.some(item => ids.has(item.id) || !ids.add(item.id))) return "Data item ids must be unique."
+  return ""
+})
+
+function addKlineItem() {
+  if (rawKlineItems.value.length >= 1) return
+  const id = `kline-${Date.now()}`
+  dataItems.value.push({ id, type: "raw_kline", timeframes: ["5m"], count: 100, closed_only: true, output_mode: "latest" })
+}
+
+function addIndicatorItem(indicator: StrategyIndicatorType) {
+  const id = `indicator-${Date.now()}`
+  const kline = rawKlineItems.value[0]
+  const timeframes: StrategyDataItemPayload["timeframes"] = kline ? [...kline.timeframes] : ["5m"]
+  dataItems.value.push({ id, type: "indicator", timeframes, indicator, params: { period: 14 }, output_mode: "latest" })
+}
+
+async function openIndicatorPicker() {
+  indicatorPickerValue.value = null
+  await nextTick()
+  indicatorPicker.value?.show()
+}
+
+function selectIndicator(value: StrategyIndicatorType | null) {
+  if (!value) return
+  addIndicatorItem(value)
+  indicatorPickerValue.value = null
+}
+
+function removeDataItem(index: number) {
+  dataItems.value.splice(index, 1)
+}
+
+function indicatorPeriod(item: StrategyDataItemPayload) {
+  return Number(item.params?.period ?? 14)
+}
+
+function setIndicatorPeriod(item: StrategyDataItemPayload, value: number | null) {
+  item.params = { ...(item.params ?? {}), period: value ?? 14 }
+}
+
+function setIndicatorTimeframes(item: StrategyDataItemPayload, value: StrategyDataItemPayload["timeframes"] | null) {
+  manuallyEditedIndicatorTimeframes.value.add(item.id)
+  item.timeframes = value ?? []
+}
+
+watch(
+  () => rawKlineItems.value[0]?.timeframes,
+  (timeframes) => {
+    if (!timeframes) return
+    for (const item of dataItems.value) {
+      if (item.type === "indicator" && !manuallyEditedIndicatorTimeframes.value.has(item.id)) {
+        item.timeframes = [...timeframes]
+      }
+    }
+  },
+  { deep: true },
+)
+
+watch(() => selected.value.id, () => {
+  manuallyEditedIndicatorTimeframes.value.clear()
 })
 
 const symbols = computed({
@@ -229,6 +349,82 @@ watch([
           />
         </div>
       </div>
+
+      <!-- Strategy data template -->
+      <section class="flex flex-col gap-3 mb-6">
+        <div class="flex items-center">
+          <label class="text-xs font-bold text-surface-500">Strategy Data</label>
+        </div>
+        <div class="border border-surface-200 dark:border-surface-800 rounded-2xl p-4 flex flex-col gap-3">
+          <div v-if="dataItems.length === 0" class="text-sm text-rose-500">{{ dataTemplateError }}</div>
+          <div class="flex flex-wrap gap-2">
+            <Button icon="pi pi-plus" label="Add Kline" size="small" severity="secondary" :disabled="rawKlineItems.length >= 1" @click="addKlineItem" />
+            <div class="relative">
+              <Button icon="pi pi-plus" label="Add Indicator" size="small" severity="secondary" @click="openIndicatorPicker" />
+              <Select
+                ref="indicatorPicker"
+                v-model="indicatorPickerValue"
+                :options="indicatorOptions"
+                optionLabel="label"
+                optionValue="value"
+                filter
+                autoFilterFocus
+                filterPlaceholder="Search indicator"
+                class="indicator-picker-select"
+              >
+                <template #option="{ option }">
+                  <span class="p-select-option-label indicator-picker-option" @mousedown.stop.prevent="selectIndicator(option.value)">
+                    {{ option.label }}
+                  </span>
+                </template>
+              </Select>
+            </div>
+          </div>
+
+          <div
+            v-for="(item, index) in dataItems"
+            :key="item.id || index"
+            :class="[
+              'border border-surface-200 dark:border-surface-800 rounded-xl p-3 grid grid-cols-1 gap-3 items-center',
+              item.type === 'raw_kline'
+                ? 'lg:grid-cols-[7rem_minmax(18rem,1fr)_minmax(13rem,auto)_auto_auto]'
+                : 'lg:grid-cols-[7rem_minmax(18rem,1fr)_minmax(11rem,auto)_auto]',
+            ]"
+          >
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="truncate text-sm font-semibold text-surface-700 dark:text-surface-200">{{ dataItemLabel(item) }}</span>
+            </div>
+
+            <template v-if="item.type === 'raw_kline'">
+              <div class="flex min-w-0 items-center gap-2">
+                <label class="shrink-0 text-xs text-surface-500">Timeframes</label>
+                <MultiSelect v-model="item.timeframes" :options="timeframeOptions" display="chip" :maxSelectedLabels="3" class="min-h-9 min-w-0 flex-1 rounded-lg" />
+              </div>
+              <div class="flex items-center gap-2">
+                <label class="shrink-0 text-xs text-surface-500">Kline count</label>
+                <InputNumber v-model="item.count" :min="1" :max="1500" showButtons class="h-9 min-w-24 flex-1 rounded-lg" />
+              </div>
+              <label class="flex items-center gap-2 whitespace-nowrap text-xs text-surface-500">
+                <input v-model="item.closed_only" type="checkbox" class="accent-primary" /> Closed candles only
+              </label>
+            </template>
+
+            <template v-else>
+              <div class="flex min-w-0 items-center gap-2">
+                <label class="shrink-0 text-xs text-surface-500">Timeframes</label>
+                <MultiSelect :modelValue="item.timeframes" @update:modelValue="setIndicatorTimeframes(item, $event)" :options="timeframeOptions" display="chip" :maxSelectedLabels="2" class="min-h-9 min-w-0 flex-1 rounded-lg" />
+              </div>
+              <div class="flex items-center gap-2">
+                <label class="shrink-0 text-xs text-surface-500">Period</label>
+                <InputNumber :modelValue="indicatorPeriod(item)" @update:modelValue="setIndicatorPeriod(item, $event)" :min="1" :max="1500" showButtons class="h-9 min-w-24 flex-1 rounded-lg" />
+              </div>
+            </template>
+
+            <Button icon="pi pi-trash" severity="danger" text rounded aria-label="Remove data item" @click="removeDataItem(index)" />
+          </div>
+          <p v-if="dataTemplateError" class="text-xs text-rose-500">{{ dataTemplateError }}</p>
+        </div>
+      </section>
 
       <!-- Symbols Settings list -->
       <div class="flex flex-col gap-3 mb-6">
@@ -481,6 +677,7 @@ watch([
       <!-- Action Footer -->
       <div class="flex gap-3 mt-6 border-t border-surface-200 dark:border-surface-800 pt-4">
         <Button
+          v-if="!dataTemplateError"
           icon="pi pi-save"
           label="Save"
           @click="emit('save')"
@@ -488,6 +685,7 @@ watch([
           class="rounded-xl h-11 cursor-pointer flex-1"
         />
         <Button
+          v-if="!dataTemplateError"
           icon="pi pi-sparkles"
           label="Test Run (AI)"
           severity="help"
@@ -506,3 +704,19 @@ watch([
     </template>
   </Card>
 </template>
+
+<style>
+.indicator-picker-select {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.indicator-picker-option {
+  display: block;
+  width: 100%;
+}
+</style>

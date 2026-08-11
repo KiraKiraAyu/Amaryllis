@@ -39,10 +39,15 @@ async function submit() {
     loading.value = false
     return
   }
+  if (!form.value.strategy_id) {
+    error.value = "Select a trading strategy first"
+    loading.value = false
+    return
+  }
   try {
     const payload: CreateTraderRequest = {
       ...form.value,
-      strategy_id: form.value.strategy_id || undefined,
+      strategy_id: form.value.strategy_id,
     }
     await createTraderApi(payload)
     emit("created")
@@ -142,10 +147,11 @@ onMounted(async () => {
             <label class="text-xs font-bold text-surface-500 dark:text-surface-400">Trading Strategy</label>
             <Select
               v-model="form.strategy_id"
-              :options="[{ id: '', name: 'No strategy (Default)' }, ...strategies]"
+              :options="strategies"
               optionLabel="name"
               optionValue="id"
               placeholder="Select strategy..."
+              required
               class="h-10 rounded-xl flex items-center"
             />
           </div>

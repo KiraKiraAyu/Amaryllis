@@ -37,6 +37,36 @@ export interface StrategyIndicatorsConfigPayload {
   enable_price_ranking: boolean
 }
 
+export const STRATEGY_DATA_TIMEFRAMES = [
+  "5m",
+  "15m",
+  "30m",
+  "1h",
+  "4h",
+  "1d",
+  "1w",
+] as const
+
+export type StrategyDataTimeframe = (typeof STRATEGY_DATA_TIMEFRAMES)[number]
+export type StrategyDataItemType = "raw_kline" | "indicator"
+export type StrategyIndicatorType = "ema" | "macd" | "rsi" | "atr" | "bollinger"
+
+export interface StrategyDataItemPayload {
+  id: string
+  type: StrategyDataItemType
+  timeframes: StrategyDataTimeframe[]
+  count?: number
+  closed_only?: boolean
+  indicator?: StrategyIndicatorType
+  params?: Record<string, unknown>
+  output_mode?: "latest"
+}
+
+export interface StrategyDataTemplatePayload {
+  schema_version: 1
+  items: StrategyDataItemPayload[]
+}
+
 export interface StrategyRiskControlConfigPayload {
   max_positions: number
   leverage: number
@@ -107,6 +137,7 @@ export interface StrategyConfigPayload {
   language?: string
   coin_source?: StrategyCoinSourceConfigPayload
   indicators?: StrategyIndicatorsConfigPayload
+  data_template?: StrategyDataTemplatePayload
   custom_prompt?: string
   risk_control?: StrategyRiskControlConfigPayload
   tp_sl?: StrategyTpSlConfigPayload

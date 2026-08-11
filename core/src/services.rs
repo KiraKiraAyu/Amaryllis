@@ -2,6 +2,7 @@ pub mod auth;
 pub mod backtest;
 pub mod catalog;
 pub mod crypto;
+pub mod data_template;
 pub mod debate;
 pub mod exchange_config;
 pub mod llm;

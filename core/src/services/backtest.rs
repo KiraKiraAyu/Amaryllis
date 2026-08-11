@@ -354,14 +354,9 @@ impl BacktestRunner {
         for ts_ms in &sorted_timestamps {
             // Check stop signal (non-blocking)
             if stop_rx.try_recv().is_ok() {
-                let _ = write_run_status(
-                    &self.backtest_repo,
-                    &run_id,
-                    "stopped",
-                    "",
-                    &metrics_cache,
-                )
-                .await;
+                let _ =
+                    write_run_status(&self.backtest_repo, &run_id, "stopped", "", &metrics_cache)
+                        .await;
                 break;
             }
 
@@ -396,12 +391,7 @@ impl BacktestRunner {
             .await;
 
             if let Err(err) = result {
-                tracing::warn!(
-                    "backtest {} cycle {} error: {}",
-                    run_id,
-                    cycle,
-                    err
-                );
+                tracing::warn!("backtest {} cycle {} error: {}", run_id, cycle, err);
                 // Budget circuit breaker — stop the backtest
                 if matches!(err, AppError::BudgetExhausted(_)) {
                     let _ = write_run_status(
@@ -444,24 +434,19 @@ impl BacktestRunner {
             }
 
             // Push backtest progress to realtime clients
-            self.realtime_hub.publish(crate::realtime::RealtimeEvent::BacktestProgress {
-                run_id: run_id.clone(),
-                state: "running".to_string(),
-                bar_index: cycle,
-                total_bars,
-                equity: metrics_cache.final_equity,
-                ts: ts_sec,
-            });
+            self.realtime_hub
+                .publish(crate::realtime::RealtimeEvent::BacktestProgress {
+                    run_id: run_id.clone(),
+                    state: "running".to_string(),
+                    bar_index: cycle,
+                    total_bars,
+                    equity: metrics_cache.final_equity,
+                    ts: ts_sec,
+                });
 
             // Write updated status periodically
-            let _ = write_run_status(
-                &self.backtest_repo,
-                &run_id,
-                "running",
-                "",
-                &metrics_cache,
-            )
-            .await;
+            let _ =
+                write_run_status(&self.backtest_repo, &run_id, "running", "", &metrics_cache).await;
 
             // Small yield so other tasks can run
             tokio::task::yield_now().await;
@@ -502,24 +487,19 @@ impl BacktestRunner {
         final_metrics.total_realized_pnl = total_realized_pnl;
 
         // Write final status
-        let _ = write_run_status(
-            &self.backtest_repo,
-            run_id,
-            "completed",
-            "",
-            &final_metrics,
-        )
-        .await;
+        let _ =
+            write_run_status(&self.backtest_repo, run_id, "completed", "", &final_metrics).await;
 
         // Push final status to realtime clients — use actual total_bars to avoid NaN%
-        self.realtime_hub.publish(crate::realtime::RealtimeEvent::BacktestProgress {
-            run_id: run_id.to_string(),
-            state: "completed".to_string(),
-            bar_index: total_bars,
-            total_bars,
-            equity: final_metrics.final_equity,
-            ts: now_i64(),
-        });
+        self.realtime_hub
+            .publish(crate::realtime::RealtimeEvent::BacktestProgress {
+                run_id: run_id.to_string(),
+                state: "completed".to_string(),
+                bar_index: total_bars,
+                total_bars,
+                equity: final_metrics.final_equity,
+                ts: now_i64(),
+            });
 
         // Clean up virtual trader from live tables
         let _ = self
@@ -534,11 +514,7 @@ impl BacktestRunner {
             mgr.remove(run_id);
         }
 
-        tracing::info!(
-            "backtest {} finalized: trades={}",
-            run_id,
-            trades.len()
-        );
+        tracing::info!("backtest {} finalized: trades={}", run_id, trades.len());
     }
 
     /// Emergency cleanup (used when backtest fails before finalize)
@@ -665,8 +641,7 @@ async fn load_klines_per_symbol(
 
     let mut result = HashMap::new();
     for symbol in &symbols {
-        let klines =
-            fetch_klines_for_symbol(symbol, &cfg.interval, cfg.start_ts, cfg.end_ts).await;
+        let klines = fetch_klines_for_symbol(symbol, &cfg.interval, cfg.start_ts, cfg.end_ts).await;
         if !klines.is_empty() {
             result.insert(symbol.clone(), klines);
         }

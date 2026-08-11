@@ -648,6 +648,9 @@ fn uppercase_large_interval(interval: &str) -> String {
     if let Some(raw) = trimmed.strip_suffix('d') {
         return format!("{raw}D");
     }
+    if let Some(raw) = trimmed.strip_suffix('w') {
+        return format!("{raw}W");
+    }
     trimmed.to_string()
 }
 
@@ -689,6 +692,12 @@ fn interval_to_millis(interval: &str) -> i64 {
     if let Some(raw) = trimmed.strip_suffix('d') {
         return raw.parse::<i64>().unwrap_or(1).max(1) * 24 * 60 * 60_000;
     }
+    if let Some(raw) = trimmed.strip_suffix('W') {
+        return raw.parse::<i64>().unwrap_or(1).max(1) * 7 * 24 * 60 * 60_000;
+    }
+    if let Some(raw) = trimmed.strip_suffix('w') {
+        return raw.parse::<i64>().unwrap_or(1).max(1) * 7 * 24 * 60 * 60_000;
+    }
     60_000
 }
 
@@ -701,7 +710,9 @@ mod tests {
         assert_eq!(okx_interval("1h"), "1H");
         assert_eq!(okx_interval("1d"), "1D");
         assert_eq!(bitget_interval("4h"), "4H");
+        assert_eq!(okx_interval("1w"), "1W");
         assert_eq!(interval_to_millis("1d"), 86_400_000);
+        assert_eq!(interval_to_millis("1w"), 604_800_000);
     }
 
     #[test]

@@ -2,7 +2,7 @@ export interface CreateTraderRequest {
   name: string
   ai_model_id: string
   exchange_id: string
-  strategy_id?: string
+  strategy_id: string
   initial_balance?: number
   scan_interval_minutes?: number
   is_cross_margin?: boolean | null
@@ -17,7 +17,7 @@ export interface UpdateTraderRequest {
   name?: string | null
   ai_model_id?: string | null
   exchange_id?: string | null
-  strategy_id?: string | null
+  strategy_id?: string
   initial_balance?: number | null
   scan_interval_minutes?: number | null
   is_cross_margin?: boolean | null

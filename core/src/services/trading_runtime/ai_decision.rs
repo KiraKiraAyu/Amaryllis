@@ -1,5 +1,7 @@
+use super::data_context::load_trader_data_context;
 use super::service::*;
 use crate::repositories::trading::records::history::InsertTraderDecisionRecord;
+use crate::services::data_template::validate_strategy_data_template;
 
 pub async fn generate_ai_decision(
     state: &SharedState,
@@ -76,7 +78,32 @@ pub async fn generate_ai_decision(
         0.0
     };
 
-    let prompt = build_trading_prompt(symbol, &m, metrics, cfg);
+    let data_context = match load_trader_data_context(state, cfg, symbol).await {
+        Ok(context) => context,
+        Err(err) => {
+            warn!(
+                "[AI_PROMPT] skipped - strategy data unavailable trader={} symbol={} err={}",
+                cfg.trader_id, symbol, err
+            );
+            return DecisionSignal {
+                symbol: symbol.to_string(),
+                action: "NO ACTION".to_string(),
+                confidence: 0.5,
+                reason: "strategy market data unavailable".to_string(),
+                timeframe: "5m",
+                price: m.price,
+                momentum,
+                risk_level: risk_level.to_string(),
+                trigger_source: "strategy_data_unavailable".to_string(),
+                action_taken: "hold-data-unavailable".to_string(),
+                correlation_id: correlation_id.to_string(),
+                prompt: String::new(),
+                system_prompt: None,
+            };
+        }
+    };
+
+    let prompt = build_trading_prompt(symbol, &m, metrics, cfg, &data_context.rendered);
     let system_prompt = build_system_prompt(cfg);
     let system_prompt_owned = if cfg.override_base_prompt && !cfg.custom_prompt.trim().is_empty() {
         Some(cfg.custom_prompt.clone())
@@ -123,8 +150,7 @@ pub async fn generate_ai_decision(
     // Create an mpsc channel for streaming LLM response chunks.
     // Each chunk is forwarded to realtime clients as an AiStreamChunk SSE event
     // so the frontend can display the AI's response character-by-character.
-    let (chunk_tx, mut chunk_rx) =
-        tokio::sync::mpsc::unbounded_channel::<String>();
+    let (chunk_tx, mut chunk_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
 
     let realtime_hub = state.realtime_hub.clone();
     let stream_trader_id = cfg.trader_id.clone();
@@ -278,10 +304,7 @@ fn render_exit_rule(
             Some(format!("{label}: {instruction}")),
         );
     }
-    (
-        format!("{label}: Mode is not configured in the form"),
-        None,
-    )
+    (format!("{label}: Mode is not configured in the form"), None)
 }
 
 /// Core prompt builder that works purely from the strategy config JSON.
@@ -364,7 +387,13 @@ pub fn build_system_prompt_from_config(
     let margin_mode = rc
         .and_then(|r| r.get("margin_mode"))
         .and_then(|v| v.as_str())
-        .map(|m| if m.eq_ignore_ascii_case("cross") { "Cross" } else { "Isolated" })
+        .map(|m| {
+            if m.eq_ignore_ascii_case("cross") {
+                "Cross"
+            } else {
+                "Isolated"
+            }
+        })
         .unwrap_or_else(|| if is_cross_margin { "Cross" } else { "Isolated" });
 
     // --- TP/SL rules ---
@@ -402,39 +431,38 @@ pub fn build_system_prompt_from_config(
         .and_then(|v| v.as_str())
         .unwrap_or("");
 
-    // --- Indicators ---
-    let indicators = sc.get("indicators");
-    let primary_tf = indicators
-        .and_then(|i| i.pointer("/klines/primary_timeframe"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("3m");
-    let enable_ema = indicators
-        .and_then(|i| i.get("enable_ema"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(true);
-    let enable_macd = indicators
-        .and_then(|i| i.get("enable_macd"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(true);
-    let enable_rsi = indicators
-        .and_then(|i| i.get("enable_rsi"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(true);
-    let enable_atr = indicators
-        .and_then(|i| i.get("enable_atr"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(true);
+    // --- Strategy data template ---
+    let (primary_tf, indicators_str) = validate_strategy_data_template(sc)
+        .map(|template| {
+            let primary_tf = template
+                .items
+                .iter()
+                .find(|item| item.item_type == "raw_kline")
+                .and_then(|item| item.timeframes.first())
+                .or_else(|| {
+                    template
+                        .items
+                        .iter()
+                        .find(|item| item.item_type == "indicator")
+                        .and_then(|item| item.timeframes.first())
+                })
+                .cloned()
+                .unwrap_or_else(|| "5m".to_string());
+            let indicators = template
+                .items
+                .iter()
+                .filter(|item| item.item_type == "indicator")
+                .map(|item| item.indicator.to_ascii_uppercase())
+                .collect::<Vec<_>>();
 
-    let mut indicator_list = Vec::new();
-    if enable_ema { indicator_list.push("EMA"); }
-    if enable_macd { indicator_list.push("MACD"); }
-    if enable_rsi { indicator_list.push("RSI"); }
-    if enable_atr { indicator_list.push("ATR"); }
-    let indicators_str = if indicator_list.is_empty() {
-        "None".to_string()
-    } else {
-        indicator_list.join(", ")
-    };
+            let indicators_str = if indicators.is_empty() {
+                "None".to_string()
+            } else {
+                indicators.join(", ")
+            };
+            (primary_tf, indicators_str)
+        })
+        .unwrap_or_else(|_| ("5m".to_string(), "None".to_string()));
 
     let header = if is_zh {
         "你是 QUANTAURA 交易AI，一个专业的加密货币永续合约交易系统。"
@@ -477,7 +505,10 @@ Respond with a plain JSON object, no markdown:
     };
 
     let tp_sl_instruction_section = if !tp_sl_instruction.is_empty() {
-        format!("\n## Take-Profit / Stop-Loss Guidance\n{}", tp_sl_instruction)
+        format!(
+            "\n## Take-Profit / Stop-Loss Guidance\n{}",
+            tp_sl_instruction
+        )
     } else {
         String::new()
     };
@@ -541,6 +572,7 @@ pub fn build_trading_prompt(
     m: &MarketState,
     metrics: &AccountMetrics,
     cfg: &TraderRuntimeConfig,
+    strategy_data_context: &str,
 ) -> String {
     let momentum = if m.prev_price.abs() > f64::EPSILON {
         (m.price - m.prev_price) / m.prev_price
@@ -558,6 +590,8 @@ Market Data:
 - Previous Price: {:.2}
 - Price Change: {:.4}%
 - Volatility: {:.4}%
+
+{strategy_data_context}
 
 Account Status:
 - Total Balance: ${:.2}
@@ -584,7 +618,11 @@ Respond with JSON: {{"action":"LONG|SHORT|NO ACTION","confidence":0.0-1.0,"reaso
         metrics.realized_pnl,
         metrics.margin_used_ratio * 100.0,
         leverage,
-        if cfg.is_cross_margin { "Cross" } else { "Isolated" },
+        if cfg.is_cross_margin {
+            "Cross"
+        } else {
+            "Isolated"
+        },
     )
 }
 

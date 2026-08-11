@@ -7,8 +7,8 @@ use uuid::Uuid;
 
 use crate::{
     contracts::debates::{
-        DebateActionPayload, DebateDetailPayload, DebateExecutionPayload,
-        DebateListPayload, DebateMessagePayload, DebateMessagesPayload, DebatePersonalitiesPayload,
+        DebateActionPayload, DebateDetailPayload, DebateExecutionPayload, DebateListPayload,
+        DebateMessagePayload, DebateMessagesPayload, DebatePersonalitiesPayload,
         DebatePersonalityPayload, DebateVotesPayload,
     },
     error::{AppError, Result as AppResult},
@@ -99,11 +99,7 @@ impl DebateService {
     }
 
     pub async fn list(&self) -> DebateListPayload {
-        let debates = self
-            .debate_repo
-            .list(100)
-            .await
-            .unwrap_or_default();
+        let debates = self.debate_repo.list(100).await.unwrap_or_default();
         let count = debates.len();
         DebateListPayload { debates, count }
     }
@@ -194,10 +190,7 @@ impl DebateService {
         })
     }
 
-    pub async fn execution(
-        &self,
-        debate_id: &str,
-    ) -> AppResult<DebateExecutionPayload> {
+    pub async fn execution(&self, debate_id: &str) -> AppResult<DebateExecutionPayload> {
         let debate = self
             .debate_repo
             .get(debate_id)
@@ -295,10 +288,7 @@ async fn create_debate(
 }
 
 /// Delete a debate (only if pending or completed/failed).
-async fn delete_debate(
-    debate_repo: &DebateRepo,
-    debate_id: &str,
-) -> Result<(), String> {
+async fn delete_debate(debate_repo: &DebateRepo, debate_id: &str) -> Result<(), String> {
     let mgr = get_debate_manager();
     let is_running = mgr
         .lock()
@@ -370,9 +360,7 @@ async fn start_debate(
     let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel::<()>();
     {
         let mgr = get_debate_manager();
-        mgr.lock()
-            .unwrap()
-            .insert(debate_id.clone(), cancel_tx);
+        mgr.lock().unwrap().insert(debate_id.clone(), cancel_tx);
     }
 
     let max_rounds = debate["max_rounds"].as_i64().unwrap_or(3) as usize;

@@ -1,4 +1,6 @@
 use super::service::*;
+use crate::{entity::strategies, services::data_template::validate_strategy_data_template};
+use sea_orm::EntityTrait;
 
 pub async fn list_traders(app: &SharedState) -> AppResult<TraderListPayload> {
     match app.trading_repo.list_traders().await {
@@ -30,10 +32,7 @@ pub async fn get_trader(app: &SharedState, id: &str) -> AppResult<TraderPayload>
     }
 }
 
-pub async fn get_trader_config(
-    app: &SharedState,
-    id: &str,
-) -> AppResult<TraderPayload> {
+pub async fn get_trader_config(app: &SharedState, id: &str) -> AppResult<TraderPayload> {
     match get_trader_by_owner(app, id).await {
         Ok(Some(trader)) => Ok(trader.into_payload()),
         Ok(None) => Err(app_error(
@@ -65,18 +64,17 @@ pub async fn create_trader(
     let name = name.trim();
     let ai_model_id = ai_model_id.trim();
     let exchange_id = exchange_id.trim();
+    let strategy_id = strategy_id.trim();
 
-    if name.is_empty() || ai_model_id.is_empty() || exchange_id.is_empty() {
+    if name.is_empty() || ai_model_id.is_empty() || exchange_id.is_empty() || strategy_id.is_empty()
+    {
         return Err(app_error(
             AppErrorKind::BadRequest,
-            "name, ai_model_id, exchange_id are required",
+            "name, ai_model_id, exchange_id, strategy_id are required",
         ));
     }
-    if let Err(err) = app
-        .llm_service
-        .resolve_for_user(Some(ai_model_id))
-        .await
-    {
+    validate_selected_strategy(app, strategy_id).await?;
+    if let Err(err) = app.llm_service.resolve_for_user(Some(ai_model_id)).await {
         return Err(match err {
             AppError::BadRequest(_) => app_error(
                 AppErrorKind::BadRequest,
@@ -98,7 +96,7 @@ pub async fn create_trader(
             name: name.to_string(),
             ai_model_id: ai_model_id.to_string(),
             exchange_id: exchange_id.to_string(),
-            strategy_id: strategy_id.trim().to_string(),
+            strategy_id: strategy_id.to_string(),
             initial_balance: initial_balance.max(0.0),
             scan_interval_minutes: scan_interval_minutes.max(1),
             is_cross_margin: is_cross_margin.unwrap_or(true),
@@ -158,11 +156,7 @@ pub async fn update_trader(
                 "ai_model_id cannot be empty",
             ));
         }
-        if let Err(err) = app
-            .llm_service
-            .resolve_for_user(Some(ai_model_id))
-            .await
-        {
+        if let Err(err) = app.llm_service.resolve_for_user(Some(ai_model_id)).await {
             return Err(match err {
                 AppError::BadRequest(_) => app_error(
                     AppErrorKind::BadRequest,
@@ -172,6 +166,12 @@ pub async fn update_trader(
             });
         }
     }
+
+    let strategy_id = strategy_id
+        .unwrap_or(existing.strategy_id)
+        .trim()
+        .to_string();
+    validate_selected_strategy(app, &strategy_id).await?;
 
     let now = now_ts();
 
@@ -189,13 +189,8 @@ pub async fn update_trader(
                     .unwrap_or(existing.exchange_id)
                     .trim()
                     .to_string(),
-                strategy_id: strategy_id
-                    .unwrap_or(existing.strategy_id)
-                    .trim()
-                    .to_string(),
-                initial_balance: initial_balance
-                    .unwrap_or(existing.initial_balance)
-                    .max(0.0),
+                strategy_id,
+                initial_balance: initial_balance.unwrap_or(existing.initial_balance).max(0.0),
                 scan_interval_minutes: scan_interval_minutes
                     .unwrap_or(existing.scan_interval_minutes)
                     .max(1),
@@ -225,15 +220,41 @@ pub async fn update_trader(
     }
 }
 
+async fn validate_selected_strategy(app: &SharedState, strategy_id: &str) -> AppResult<()> {
+    let strategy_id = strategy_id.trim();
+    if strategy_id.is_empty() {
+        return Err(app_error(
+            AppErrorKind::BadRequest,
+            "strategy_id is required",
+        ));
+    }
+
+    let strategy = strategies::Entity::find_by_id(strategy_id.to_string())
+        .one(app.trading_repo.db())
+        .await
+        .map_err(|_| app_error(AppErrorKind::Internal, "Failed to validate strategy"))?
+        .ok_or_else(|| app_error(AppErrorKind::BadRequest, "Selected strategy does not exist"))?;
+    let config = serde_json::from_str(&strategy.config).map_err(|_| {
+        app_error(
+            AppErrorKind::BadRequest,
+            "Selected strategy has invalid configuration",
+        )
+    })?;
+    validate_strategy_data_template(&config).map_err(|message| {
+        AppError::from_kind(
+            AppErrorKind::BadRequest,
+            format!("Selected strategy has invalid data template: {message}"),
+        )
+    })?;
+    Ok(())
+}
+
 pub async fn delete_trader(
     app: &SharedState,
     trading_runtime_service: &TradingRuntimeService,
     id: &str,
 ) -> AppResult<TraderMessagePayload> {
-    if let Err(err) = trading_runtime_service
-        .stop_trader_for_user(id)
-        .await
-    {
+    if let Err(err) = trading_runtime_service.stop_trader_for_user(id).await {
         if !matches!(err, AppError::NotRunning(_)) {
             return Err(app_error(
                 AppErrorKind::Internal,
@@ -289,10 +310,7 @@ pub async fn stop_trader(
     trading_runtime_service: &TradingRuntimeService,
     id: &str,
 ) -> AppResult<TraderMessagePayload> {
-    match trading_runtime_service
-        .stop_trader_for_user(id)
-        .await
-    {
+    match trading_runtime_service.stop_trader_for_user(id).await {
         Ok(_) => Ok(TraderMessagePayload {
             message: "Trader stopped successfully",
         }),

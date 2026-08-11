@@ -1,10 +1,10 @@
-use super::service::*;
 use super::models::DecisionTiming;
+use super::service::*;
 use crate::clients::exchanges::{
     ExchangeBalance, ExchangeOpenOrder, ExchangeOrderDetail, ExchangePosition,
     ExchangeSymbolConstraints, PlaceOrderResponse,
 };
-use crate::entity::runtime_events;
+use crate::entity::{runtime_events, strategies};
 use crate::error::AppError;
 use crate::services::trading_runtime::test_support::*;
 use crate::{
@@ -467,14 +467,51 @@ async fn test_persisted_decision_uses_completion_time_and_keeps_cycle_timing() {
     assert_eq!(crate::time::dt_to_ts(row.created_at), timing.completed_at);
 }
 
-async fn insert_test_trader(state: &TestRuntimeState, cfg: &TraderRuntimeConfig, is_running: bool) {
+async fn insert_test_trader(
+    state: &TestRuntimeState,
+    cfg: &TraderRuntimeConfig,
+    is_running: bool,
+    with_strategy: bool,
+) {
     let ts = 1_700_000_000_i64;
+    let strategy_id = "strategy-test".to_string();
+    if with_strategy {
+        let strategy_config = serde_json::json!({
+            "symbols": cfg.symbols_config.iter().map(|symbol| serde_json::json!({
+                "symbol": symbol.symbol,
+                "leverage": symbol.leverage,
+                "min_cost": symbol.min_cost,
+                "max_cost": symbol.max_cost,
+                "fixed_cost": symbol.fixed_cost,
+            })).collect::<Vec<_>>(),
+            "data_template": crate::services::data_template::data_template_value(
+                &crate::services::data_template::default_data_template(),
+            ),
+        });
+        strategies::Entity::insert(strategies::ActiveModel {
+            id: Set(strategy_id.clone()),
+            name: Set("test strategy".to_string()),
+            description: Set(String::new()),
+            is_active: Set(1),
+            config: Set(strategy_config.to_string()),
+            created_at: Set(ts_to_i32(ts)),
+            updated_at: Set(ts_to_i32(ts)),
+        })
+        .exec(&state.db)
+        .await
+        .expect("insert strategy");
+    }
+
     traders::Entity::insert(traders::ActiveModel {
         id: Set(cfg.trader_id.clone()),
         name: Set(cfg.name.clone()),
         ai_model_id: Set(cfg.ai_model_id.clone()),
         exchange_id: Set(cfg.exchange_id.clone()),
-        strategy_id: Set(String::new()),
+        strategy_id: Set(if with_strategy {
+            strategy_id
+        } else {
+            String::new()
+        }),
         initial_balance: Set(decimal_from_f64(cfg.initial_balance)),
         scan_interval_minutes: Set(cfg.scan_interval_minutes as i32),
         is_running: Set(int_flag(is_running)),
@@ -502,7 +539,7 @@ async fn test_startup_recovery_resumes_running_trader() {
     // into the in-memory database by `ensure_defaults`).
     cfg.ai_model_id = "deepseek-v4-pro".to_string();
 
-    insert_test_trader(&state, &cfg, true).await;
+    insert_test_trader(&state, &cfg, true, false).await;
 
     let engine = TradingRuntimeService::new_for_test(
         state.db.clone(),
@@ -516,13 +553,8 @@ async fn test_startup_recovery_resumes_running_trader() {
         .await
         .expect("recover running traders");
 
-    assert!(recovered.iter().any(|id| id == &cfg.trader_id));
-    assert!(engine.is_running(&cfg.trader_id).await);
-
-    engine
-        .stop_trader_for_user(&cfg.trader_id)
-        .await
-        .expect("stop recovered trader");
+    assert!(!recovered.iter().any(|id| id == &cfg.trader_id));
+    assert!(!engine.is_running(&cfg.trader_id).await);
 }
 
 #[tokio::test]

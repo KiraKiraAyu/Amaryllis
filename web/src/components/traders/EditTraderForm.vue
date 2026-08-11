@@ -54,12 +54,17 @@ async function submit() {
     loading.value = false
     return
   }
+  if (!form.value.strategy_id) {
+    error.value = "Select a trading strategy first"
+    loading.value = false
+    return
+  }
   try {
     const payload: UpdateTraderRequest = {
       name: form.value.name,
       ai_model_id: form.value.ai_model_id,
       exchange_id: form.value.exchange_id,
-      strategy_id: form.value.strategy_id || null,
+      strategy_id: form.value.strategy_id,
       scan_interval_minutes: form.value.scan_interval_minutes,
       initial_balance: form.value.initial_balance,
     }
@@ -171,10 +176,11 @@ onMounted(loadOptions)
             <label class="text-xs font-bold text-surface-500 dark:text-surface-400">Trading Strategy</label>
             <Select
               v-model="form.strategy_id"
-              :options="[{ id: '', name: 'No strategy (Default)' }, ...strategies]"
+              :options="strategies"
               optionLabel="name"
               optionValue="id"
               placeholder="Select strategy..."
+              required
               class="h-10 rounded-xl flex items-center"
             />
           </div>

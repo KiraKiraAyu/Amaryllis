@@ -8,6 +8,12 @@ pub async fn load_trader_runtime_config(
         return Ok(None);
     };
 
+    if row.strategy_id.trim().is_empty() {
+        return Err(AppError::InvalidConfig(
+            "Trader requires a strategy before it can run".to_string(),
+        ));
+    }
+
     let resolved_model = match state
         .llm_service
         .resolve_for_user(Some(&row.ai_model_id))
@@ -18,37 +24,34 @@ pub async fn load_trader_runtime_config(
         Err(err) => return Err(err),
     };
 
-    // Load strategy configuration to extract symbols and leverage settings
+    // Load strategy configuration to extract symbols, leverage settings, and market data.
     let mut symbols_config = Vec::new();
-    let mut strategy_config: serde_json::Value = serde_json::json!({});
-    if !row.strategy_id.trim().is_empty() {
-        use crate::entity::strategies;
-        use sea_orm::EntityTrait;
+    use crate::{entity::strategies, services::data_template::validate_strategy_data_template};
+    use sea_orm::EntityTrait;
 
-        if let Ok(Some(strategy)) = strategies::Entity::find_by_id(row.strategy_id.clone())
-            .one(state.trading_repo.db())
-            .await
-        {
-            if let Ok(cfg_val) = serde_json::from_str::<serde_json::Value>(&strategy.config) {
-                strategy_config = cfg_val.clone();
-                // Parse per-symbol configuration
-                if let Some(symbols_arr) = cfg_val.get("symbols").and_then(|v| v.as_array()) {
-                    for item in symbols_arr {
-                        if let Some(symbol) = item.get("symbol").and_then(|v| v.as_str()) {
-                            let leverage = item.get("leverage").and_then(|v| v.as_i64()).unwrap_or(5);
-                            let min_cost = item.get("min_cost").and_then(|v| v.as_f64());
-                            let max_cost = item.get("max_cost").and_then(|v| v.as_f64());
-                            let fixed_cost = item.get("fixed_cost").and_then(|v| v.as_f64());
-                            symbols_config.push(SymbolConfig {
-                                symbol: symbol.to_uppercase(),
-                                leverage,
-                                min_cost,
-                                max_cost,
-                                fixed_cost,
-                            });
-                        }
-                    }
-                }
+    let strategy = strategies::Entity::find_by_id(row.strategy_id.clone())
+        .one(state.trading_repo.db())
+        .await?
+        .ok_or_else(|| AppError::InvalidConfig("Trader strategy no longer exists".to_string()))?;
+    let strategy_config = serde_json::from_str::<serde_json::Value>(&strategy.config)
+        .map_err(|_| AppError::InvalidConfig("Trader strategy has invalid configuration".into()))?;
+    validate_strategy_data_template(&strategy_config).map_err(AppError::InvalidConfig)?;
+
+    // Parse per-symbol configuration.
+    if let Some(symbols_arr) = strategy_config.get("symbols").and_then(|v| v.as_array()) {
+        for item in symbols_arr {
+            if let Some(symbol) = item.get("symbol").and_then(|v| v.as_str()) {
+                let leverage = item.get("leverage").and_then(|v| v.as_i64()).unwrap_or(5);
+                let min_cost = item.get("min_cost").and_then(|v| v.as_f64());
+                let max_cost = item.get("max_cost").and_then(|v| v.as_f64());
+                let fixed_cost = item.get("fixed_cost").and_then(|v| v.as_f64());
+                symbols_config.push(SymbolConfig {
+                    symbol: symbol.to_uppercase(),
+                    leverage,
+                    min_cost,
+                    max_cost,
+                    fixed_cost,
+                });
             }
         }
     }
@@ -377,10 +380,18 @@ mod tests {
             "binance", "", "secret", "", ""
         ));
         assert!(exchange_credentials_missing(
-            "aster", "", "private-key", "", ""
+            "aster",
+            "",
+            "private-key",
+            "",
+            ""
         ));
         assert!(!exchange_credentials_missing(
-            "aster", "", "private-key", "", "0xabc"
+            "aster",
+            "",
+            "private-key",
+            "",
+            "0xabc"
         ));
     }
 }
