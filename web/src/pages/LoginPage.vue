@@ -34,7 +34,9 @@ async function submit() {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-surface-100 dark:bg-surface-950 px-4">
+  <div
+    class="min-h-screen flex items-center justify-center bg-surface-100 dark:bg-surface-950 px-4"
+  >
     <div
       class="w-full max-w-sm rounded-2xl bg-surface-50 dark:bg-surface-900 border border-surface-200 dark:border-surface-800 shadow-xl p-8"
     >
@@ -44,10 +46,15 @@ async function submit() {
         >
           A
         </div>
-        <span class="text-xl font-bold tracking-wide text-surface-900 dark:text-surface-0">QuantAura</span>
+        <span
+          class="text-xl font-bold tracking-wide text-surface-900 dark:text-surface-0"
+          >QuantAura</span
+        >
       </div>
 
-      <h1 class="text-lg font-bold text-surface-900 dark:text-white mb-1">Two-Factor Authentication</h1>
+      <h1 class="text-lg font-bold text-surface-900 dark:text-white mb-1">
+        Two-Factor Authentication
+      </h1>
       <p class="text-sm text-surface-500 font-medium mb-6">
         Enter the 6-digit code from your authenticator app to continue.
       </p>
@@ -62,7 +69,10 @@ async function submit() {
           class="w-full text-center tracking-[0.5em] text-lg font-mono"
           autofocus
         />
-        <p v-if="errorMsg" class="text-xs font-medium text-rose-500 dark:text-rose-400">
+        <p
+          v-if="errorMsg"
+          class="text-xs font-medium text-rose-500 dark:text-rose-400"
+        >
           {{ errorMsg }}
         </p>
         <Button

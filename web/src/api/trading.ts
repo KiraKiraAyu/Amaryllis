@@ -46,7 +46,10 @@ import type {
   UpdatePromptRequest,
   UpdateTraderRequest,
 } from "@/types/trading"
-import type { EquityHistoryPointPayload, EquityHistoryQuery } from "@/types/public"
+import type {
+  EquityHistoryPointPayload,
+  EquityHistoryQuery,
+} from "@/types/public"
 import request from "@/utils/request"
 
 const Api = {

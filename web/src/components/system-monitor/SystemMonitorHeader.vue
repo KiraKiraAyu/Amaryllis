@@ -15,9 +15,13 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+  <div
+    class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+  >
     <div>
-      <h1 class="mt-1 text-3xl font-bold text-surface-900 dark:text-white">System Monitor</h1>
+      <h1 class="mt-1 text-3xl font-bold text-surface-900 dark:text-white">
+        System Monitor
+      </h1>
       <p class="mt-1 text-sm text-surface-500 dark:text-surface-400">
         Runtime metrics, alerts, and system events
       </p>

@@ -20,9 +20,7 @@ const {
 </script>
 
 <template>
-  <div
-    class="flex flex-col gap-6 min-h-[calc(100vh-2rem)]"
-  >
+  <div class="flex flex-col gap-6 min-h-[calc(100vh-2rem)]">
     <SystemMonitorHeader
       v-model="activeTrader"
       :traders="traders"
@@ -31,11 +29,11 @@ const {
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <SystemMetricsPanel :metrics="metrics" :loading="loading" :fmt="fmt">
-      <AlertHistoryTable
-        :alerts="alerts"
-        :loading="loading"
-        :parse-alerts="parseAlerts"
-      />
+        <AlertHistoryTable
+          :alerts="alerts"
+          :loading="loading"
+          :parse-alerts="parseAlerts"
+        />
       </SystemMetricsPanel>
 
       <RuntimeEventsPanel

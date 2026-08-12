@@ -64,12 +64,12 @@ html.dark {
   --color-reisa-lilac-200: oklch(0.82 0.09 301);
   --color-reisa-lilac-300: oklch(0.75 0.13 301);
   --color-reisa-lilac-400: oklch(0.68 0.16 301);
-  --color-reisa-lilac-500: oklch(0.60 0.17 301);
+  --color-reisa-lilac-500: oklch(0.6 0.17 301);
   --color-reisa-lilac-600: oklch(0.52 0.16 301);
   --color-reisa-lilac-700: oklch(0.44 0.14 301);
   --color-reisa-lilac-800: oklch(0.36 0.11 301);
   --color-reisa-lilac-900: oklch(0.28 0.08 301);
-  --color-reisa-lilac-950: oklch(0.20 0.05 301);
+  --color-reisa-lilac-950: oklch(0.2 0.05 301);
 
   /* PrimeVue primary theme variable overrides for dark mode */
   --p-primary-50: var(--color-reisa-lilac-50);

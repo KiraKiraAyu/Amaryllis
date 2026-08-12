@@ -65,7 +65,10 @@ function updateSelectedModel(value: string) {
       </p>
 
       <div class="flex flex-col gap-1">
-        <label class="text-sm font-medium text-surface-700 dark:text-surface-300">Test Model</label>
+        <label
+          class="text-sm font-medium text-surface-700 dark:text-surface-300"
+          >Test Model</label
+        >
         <Select
           :model-value="selectedModelId"
           :options="modelOptions"
@@ -78,22 +81,19 @@ function updateSelectedModel(value: string) {
         />
       </div>
 
-      <p
-        v-if="modelOptions.length === 0"
-        class="text-xs text-surface-500 m-0"
-      >
+      <p v-if="modelOptions.length === 0" class="text-xs text-surface-500 m-0">
         Add at least one model before testing this provider.
       </p>
     </div>
 
     <template #footer>
       <div class="flex justify-end gap-2">
-        <Button 
-          label="Cancel" 
-          icon="pi pi-times" 
-          severity="secondary" 
-          variant="text" 
-          @click="close" 
+        <Button
+          label="Cancel"
+          icon="pi pi-times"
+          severity="secondary"
+          variant="text"
+          @click="close"
         />
         <Button
           :label="checking ? 'Testing...' : 'Test'"

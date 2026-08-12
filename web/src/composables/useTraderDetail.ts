@@ -44,7 +44,10 @@ export interface FeedMessage {
   data?: Record<string, unknown>
 }
 
-function payloadNumber(payload: Record<string, unknown>, key: string): number | null {
+function payloadNumber(
+  payload: Record<string, unknown>,
+  key: string,
+): number | null {
   const value = payload[key]
   return typeof value === "number" && Number.isFinite(value) ? value : null
 }
@@ -66,7 +69,9 @@ function formatConstraintSkipContent(event: RuntimeEventPayload): string {
       : `Configured cost $${fmtUsd(configuredCost)} yields calculated`
   const minimumCost = payloadNumber(payload, "minimum_required_cost")
   const minimumCostText =
-    minimumCost == null ? "" : ` Required minimum cost is $${fmtUsd(minimumCost)}.`
+    minimumCost == null
+      ? ""
+      : ` Required minimum cost is $${fmtUsd(minimumCost)}.`
 
   if (payload.reason === "quantity_below_minimum") {
     return `${action} was not submitted. ${configuredCostText} quantity ${formatQuantity(
@@ -158,7 +163,8 @@ function decisionToFeedMessages(decision: DecisionPayload): FeedMessage[] {
   const systemPrompt = payload.system_prompt as string | undefined
   const decisionStartedAt =
     payloadNumber(payload, "decision_started_at") ?? decision.created_at
-  const decisionCompletedAt = payloadNumber(payload, "completed_at") ?? decision.created_at
+  const decisionCompletedAt =
+    payloadNumber(payload, "completed_at") ?? decision.created_at
 
   if (promptText && promptText.trim()) {
     messages.push({
@@ -229,19 +235,17 @@ export function buildPersistedFeed(
 function sameFeed(left: FeedMessage[], right: FeedMessage[]): boolean {
   return (
     left.length === right.length &&
-    left.every(
-      (message, index) => {
-        const other = right[index]
-        return (
-          other !== undefined &&
-          message.id === other.id &&
-          message.role === other.role &&
-          message.title === other.title &&
-          message.content === other.content &&
-          message.timestamp === other.timestamp
-        )
-      },
-    )
+    left.every((message, index) => {
+      const other = right[index]
+      return (
+        other !== undefined &&
+        message.id === other.id &&
+        message.role === other.role &&
+        message.title === other.title &&
+        message.content === other.content &&
+        message.timestamp === other.timestamp
+      )
+    })
   )
 }
 
@@ -627,7 +631,8 @@ export function useTraderDetail(traderId: Ref<string>) {
         }
         case "scan_schedule": {
           // Real-time update from backend: next_scan_at changed
-          nextScanAt.value = (ev.next_scan_at as number | null | undefined) ?? null
+          nextScanAt.value =
+            (ev.next_scan_at as number | null | undefined) ?? null
           break
         }
       }

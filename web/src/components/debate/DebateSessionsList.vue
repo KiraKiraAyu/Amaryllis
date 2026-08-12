@@ -16,7 +16,11 @@ const emit = defineEmits<{
 
 <template>
   <div class="flex flex-col gap-3">
-    <h2 class="font-bold text-sm text-surface-400 dark:text-surface-500 uppercase tracking-wider mb-1">Sessions</h2>
+    <h2
+      class="font-bold text-sm text-surface-400 dark:text-surface-500 uppercase tracking-wider mb-1"
+    >
+      Sessions
+    </h2>
     <div
       v-for="debate in debates"
       :key="debate.id"
@@ -33,7 +37,9 @@ const emit = defineEmits<{
       >
         <template #content>
           <div class="flex items-center justify-between mb-2 gap-2">
-            <span class="font-bold text-sm text-surface-900 dark:text-white truncate">
+            <span
+              class="font-bold text-sm text-surface-900 dark:text-white truncate"
+            >
               {{ debate.name || debate.symbol }}
             </span>
             <span
@@ -42,15 +48,19 @@ const emit = defineEmits<{
                 debate.status === 'completed'
                   ? 'bg-emerald-500/10 text-emerald-500'
                   : debate.status === 'running'
-                  ? 'bg-amber-500/10 text-amber-500 animate-pulse'
-                  : 'bg-surface-100 text-surface-500 dark:bg-surface-800 dark:text-surface-400'
+                    ? 'bg-amber-500/10 text-amber-500 animate-pulse'
+                    : 'bg-surface-100 text-surface-500 dark:bg-surface-800 dark:text-surface-400'
               "
             >
               {{ debate.status }}
             </span>
           </div>
           <p class="text-xs text-surface-500 dark:text-surface-400 font-medium">
-            Symbol: <span class="font-bold text-primary font-mono">{{ debate.symbol }}</span> · {{ debate.max_rounds }} rounds ·
+            Symbol:
+            <span class="font-bold text-primary font-mono">{{
+              debate.symbol
+            }}</span>
+            · {{ debate.max_rounds }} rounds ·
             {{ debate.current_round }} completed
           </p>
           <p class="text-xs mt-3 text-surface-400 dark:text-surface-500">

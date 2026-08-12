@@ -23,7 +23,10 @@ function isRightSide(role: string): boolean {
     :class="isRightSide(props.msg.role) ? 'items-end' : 'items-start'"
   >
     <FeedMessageTrader v-if="props.msg.role === 'trader'" :msg="props.msg" />
-    <FeedMessagePrompt v-else-if="props.msg.role === 'prompt'" :msg="props.msg" />
+    <FeedMessagePrompt
+      v-else-if="props.msg.role === 'prompt'"
+      :msg="props.msg"
+    />
     <FeedMessageCard v-else :msg="props.msg" />
     <span class="text-xs text-surface-400 font-mono px-1">
       {{ formatTime(props.msg.timestamp) }}

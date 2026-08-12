@@ -32,12 +32,20 @@ const emit = defineEmits<{
     <div class="flex flex-col gap-4 mt-3">
       <div class="flex flex-col gap-1.5">
         <label class="text-xs font-bold text-surface-500">Debate Name</label>
-        <InputText v-model="draft.name" placeholder="BTC Bull/Bear Debate" class="h-10 rounded-xl" />
+        <InputText
+          v-model="draft.name"
+          placeholder="BTC Bull/Bear Debate"
+          class="h-10 rounded-xl"
+        />
       </div>
 
       <div class="flex flex-col gap-1.5">
         <label class="text-xs font-bold text-surface-500">Symbol</label>
-        <InputText v-model="draft.symbol" placeholder="BTCUSDT" class="h-10 rounded-xl font-mono" />
+        <InputText
+          v-model="draft.symbol"
+          placeholder="BTCUSDT"
+          class="h-10 rounded-xl font-mono"
+        />
       </div>
 
       <div class="flex flex-col gap-1.5">
@@ -52,7 +60,9 @@ const emit = defineEmits<{
       </div>
 
       <div class="flex flex-col gap-1.5">
-        <label class="text-xs font-bold text-surface-500 mb-1">Participants</label>
+        <label class="text-xs font-bold text-surface-500 mb-1"
+          >Participants</label
+        >
         <div class="flex flex-wrap gap-2">
           <Button
             v-for="personality in personalities"
@@ -71,7 +81,9 @@ const emit = defineEmits<{
         </div>
       </div>
 
-      <div class="flex gap-3 mt-4 border-t border-surface-200 dark:border-surface-800 pt-4">
+      <div
+        class="flex gap-3 mt-4 border-t border-surface-200 dark:border-surface-800 pt-4"
+      >
         <Button
           label="Create"
           icon="pi pi-check"

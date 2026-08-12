@@ -73,7 +73,9 @@ function useBrowserTz() {
   <div class="max-w-2xl flex flex-col gap-6">
     <!-- Timezone -->
     <div class="flex flex-col gap-2">
-      <label class="text-sm font-semibold text-surface-700 dark:text-surface-300">
+      <label
+        class="text-sm font-semibold text-surface-700 dark:text-surface-300"
+      >
         Timezone
       </label>
       <p class="text-xs text-surface-500 dark:text-surface-400">
@@ -100,11 +102,7 @@ function useBrowserTz() {
         />
       </div>
       <div class="flex items-center gap-3 mt-2">
-        <Button
-          label="Save"
-          :loading="saving"
-          @click="save"
-        />
+        <Button label="Save" :loading="saving" @click="save" />
         <span v-if="settings.timezone" class="text-xs text-surface-400">
           Current: {{ settings.timezone }}
         </span>

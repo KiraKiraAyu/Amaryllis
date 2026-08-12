@@ -81,8 +81,12 @@ function handleUpdated() {
       <template #actions>
         <div class="flex items-center gap-3">
           <div class="flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span class="text-xs text-surface-500 font-medium">{{ lastUpdated }}</span>
+            <span
+              class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"
+            ></span>
+            <span class="text-xs text-surface-500 font-medium">{{
+              lastUpdated
+            }}</span>
           </div>
           <Button
             label="Refresh"
@@ -153,7 +157,11 @@ function handleUpdated() {
     <Dialog
       v-model:visible="showDialog"
       modal
-      :header="selectedTrader ? `${selectedTrader.name || selectedTrader.id} - Equity Curve` : 'Equity Curve'"
+      :header="
+        selectedTrader
+          ? `${selectedTrader.name || selectedTrader.id} - Equity Curve`
+          : 'Equity Curve'
+      "
       :style="{ width: '50rem' }"
     >
       <div class="pt-2">

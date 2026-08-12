@@ -73,9 +73,10 @@ export function useBacktestPage(traderId: string) {
         total_bars: totalBars,
         equity: Number(event.equity ?? 0),
       }
-      progressPct.value = totalBars > 0
-        ? Math.min(100, Math.round((barIndex / totalBars) * 100))
-        : 0
+      progressPct.value =
+        totalBars > 0
+          ? Math.min(100, Math.round((barIndex / totalBars) * 100))
+          : 0
       if (event.state === "completed" || event.state === "stopped") {
         setTimeout(loadRuns, 1000)
       }

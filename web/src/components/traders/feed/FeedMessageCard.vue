@@ -53,9 +53,7 @@ function pnlClass(val: number): string {
 
 function hasPayload(data: unknown): boolean {
   return (
-    !!data &&
-    typeof data === "object" &&
-    Object.keys(data as object).length > 0
+    !!data && typeof data === "object" && Object.keys(data as object).length > 0
   )
 }
 </script>
@@ -89,10 +87,7 @@ function hasPayload(data: unknown): boolean {
     </p>
 
     <!-- Position data -->
-    <div
-      v-if="props.msg.data?.positions"
-      class="flex flex-col gap-1 mt-1"
-    >
+    <div v-if="props.msg.data?.positions" class="flex flex-col gap-1 mt-1">
       <div
         v-for="pos in props.msg.data.positions as PositionPayload[]"
         :key="pos.id"
@@ -100,11 +95,7 @@ function hasPayload(data: unknown): boolean {
       >
         <span
           class="font-bold"
-          :class="
-            pos.side === 'LONG'
-              ? 'text-emerald-500'
-              : 'text-rose-500'
-          "
+          :class="pos.side === 'LONG' ? 'text-emerald-500' : 'text-rose-500'"
           >{{ pos.side }}</span
         >
         <span class="font-bold text-surface-900 dark:text-white">{{
@@ -126,10 +117,7 @@ function hasPayload(data: unknown): boolean {
     </div>
 
     <!-- Event payload -->
-    <details
-      v-if="hasPayload(props.msg.data?.payload)"
-      class="mt-1"
-    >
+    <details v-if="hasPayload(props.msg.data?.payload)" class="mt-1">
       <summary
         class="text-xs text-surface-400 cursor-pointer hover:text-surface-600 dark:hover:text-surface-300 font-medium"
       >

@@ -24,10 +24,14 @@ function returnPct(run: BacktestRun) {
 </script>
 
 <template>
-  <Card class="border border-surface-200 dark:border-surface-800 bg-surface-0 dark:bg-surface-900 shadow-none!">
+  <Card
+    class="border border-surface-200 dark:border-surface-800 bg-surface-0 dark:bg-surface-900 shadow-none!"
+  >
     <template #content>
       <div class="flex items-center justify-between mb-4">
-        <h2 class="font-bold text-lg text-surface-900 dark:text-white">Backtest Runs</h2>
+        <h2 class="font-bold text-lg text-surface-900 dark:text-white">
+          Backtest Runs
+        </h2>
         <Button
           icon="pi pi-refresh"
           label="Refresh"
@@ -38,17 +42,20 @@ function returnPct(run: BacktestRun) {
         />
       </div>
 
-      <div v-if="runs.length === 0 && !loading" class="text-center py-12 border border-dashed border-surface-200 dark:border-surface-800 rounded-2xl bg-surface-50/50 dark:bg-surface-950/20">
-        <p class="text-sm text-surface-400 dark:text-surface-500">No backtest runs found. Start one above.</p>
+      <div
+        v-if="runs.length === 0 && !loading"
+        class="text-center py-12 border border-dashed border-surface-200 dark:border-surface-800 rounded-2xl bg-surface-50/50 dark:bg-surface-950/20"
+      >
+        <p class="text-sm text-surface-400 dark:text-surface-500">
+          No backtest runs found. Start one above.
+        </p>
       </div>
 
-      <div v-else class="overflow-hidden rounded-xl border border-surface-200 dark:border-surface-800">
-        <DataTable
-          :value="runs"
-          scrollable
-          class="text-xs w-full"
-          stripedRows
-        >
+      <div
+        v-else
+        class="overflow-hidden rounded-xl border border-surface-200 dark:border-surface-800"
+      >
+        <DataTable :value="runs" scrollable class="text-xs w-full" stripedRows>
           <Column field="run_id" header="Run ID">
             <template #body="{ data }">
               <span class="font-mono text-surface-600 dark:text-surface-400">
@@ -65,8 +72,8 @@ function returnPct(run: BacktestRun) {
                   data.state === 'running'
                     ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 animate-pulse'
                     : data.state === 'completed' || data.state === 'success'
-                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                    : 'bg-surface-100 text-surface-500 dark:bg-surface-800'
+                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                      : 'bg-surface-100 text-surface-500 dark:bg-surface-800'
                 "
               >
                 {{ data.state }}
@@ -74,10 +81,20 @@ function returnPct(run: BacktestRun) {
             </template>
           </Column>
 
-          <Column field="summary.final_equity" header="Equity" class="text-right" headerClass="justify-end">
+          <Column
+            field="summary.final_equity"
+            header="Equity"
+            class="text-right"
+            headerClass="justify-end"
+          >
             <template #body="{ data }">
               <span class="font-mono">
-                ${{ (data.summary?.final_equity ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}
+                ${{
+                  (data.summary?.final_equity ?? 0).toLocaleString("en-US", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })
+                }}
               </span>
             </template>
           </Column>
@@ -86,16 +103,28 @@ function returnPct(run: BacktestRun) {
             <template #body="{ data }">
               <span
                 class="font-mono font-bold"
-                :class="returnPct(data) >= 0 ? 'text-emerald-500' : 'text-rose-500'"
+                :class="
+                  returnPct(data) >= 0 ? 'text-emerald-500' : 'text-rose-500'
+                "
               >
-                {{ (returnPct(data) >= 0 ? "+" : "") + returnPct(data).toFixed(2) }}%
+                {{
+                  (returnPct(data) >= 0 ? "+" : "") +
+                  returnPct(data).toFixed(2)
+                }}%
               </span>
             </template>
           </Column>
 
-          <Column field="summary.max_drawdown_pct" header="Max DD" class="text-right" headerClass="justify-end">
+          <Column
+            field="summary.max_drawdown_pct"
+            header="Max DD"
+            class="text-right"
+            headerClass="justify-end"
+          >
             <template #body="{ data }">
-              <span class="font-mono text-rose-450 dark:text-rose-400">{{ (data.summary?.max_drawdown_pct ?? 0).toFixed(2) }}%</span>
+              <span class="font-mono text-rose-450 dark:text-rose-400"
+                >{{ (data.summary?.max_drawdown_pct ?? 0).toFixed(2) }}%</span
+              >
             </template>
           </Column>
 

@@ -38,7 +38,12 @@ const { direction } = useCarouselTransition(step)
       description="Multiple AI personalities debate trading decisions"
     >
       <template #actions>
-        <Button @click="showCreate = true" icon="pi pi-plus" label="New Debate" class="rounded-xl h-11 px-4 cursor-pointer" />
+        <Button
+          @click="showCreate = true"
+          icon="pi pi-plus"
+          label="New Debate"
+          class="rounded-xl h-11 px-4 cursor-pointer"
+        />
       </template>
     </PageHeader>
 
@@ -52,7 +57,11 @@ const { direction } = useCarouselTransition(step)
 
       <div class="lg:col-span-2 relative overflow-hidden">
         <SlideTransition :direction="direction">
-          <div v-if="step === 0" key="empty" class="flex items-center justify-center h-64">
+          <div
+            v-if="step === 0"
+            key="empty"
+            class="flex items-center justify-center h-64"
+          >
             <p class="text-sm text-text-muted">
               Select a debate session to view
             </p>

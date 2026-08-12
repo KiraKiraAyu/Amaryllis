@@ -32,7 +32,9 @@ onMounted(loadExchanges)
   <div class="flex flex-col gap-4">
     <div>
       <div class="flex items-center justify-between mb-4">
-        <h2 class="font-bold text-lg text-surface-900 dark:text-white">Exchange Accounts</h2>
+        <h2 class="font-bold text-lg text-surface-900 dark:text-white">
+          Exchange Accounts
+        </h2>
         <Button
           label="Add Exchange"
           icon="pi pi-plus"
@@ -51,17 +53,25 @@ onMounted(loadExchanges)
               <h3 class="font-bold text-surface-900 dark:text-surface-100">
                 {{ ex.account_name || ex.exchange_type }}
               </h3>
-              <p class="text-xs text-surface-500 font-medium tracking-wide uppercase mt-0.5">
+              <p
+                class="text-xs text-surface-500 font-medium tracking-wide uppercase mt-0.5"
+              >
                 {{ ex.exchange_type }}
               </p>
             </div>
             <div class="flex items-center gap-3">
-              <span class="text-xs font-bold uppercase tracking-wide px-2 py-1 rounded bg-surface-100 text-surface-600 dark:bg-surface-800 dark:text-surface-400">
+              <span
+                class="text-xs font-bold uppercase tracking-wide px-2 py-1 rounded bg-surface-100 text-surface-600 dark:bg-surface-800 dark:text-surface-400"
+              >
                 {{ ex.testnet ? "Testnet" : "Live" }}
               </span>
               <span
                 class="text-xs font-bold uppercase tracking-wide px-2 py-1 rounded"
-                :class="ex.enabled ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-surface-100 text-surface-600 dark:bg-surface-800 dark:text-surface-400'"
+                :class="
+                  ex.enabled
+                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                    : 'bg-surface-100 text-surface-600 dark:bg-surface-800 dark:text-surface-400'
+                "
               >
                 {{ ex.enabled ? "Active" : "Disabled" }}
               </span>

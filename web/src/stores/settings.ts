@@ -1,10 +1,7 @@
 import { defineStore } from "pinia"
 import { ref } from "vue"
 import { getSettingsApi, updateSettingsApi } from "@/api/settings"
-import {
-  detectBrowserTimeZone,
-  setDefaultTimeZone,
-} from "@/utils/format"
+import { detectBrowserTimeZone, setDefaultTimeZone } from "@/utils/format"
 
 export const useSettingsStore = defineStore("settings", () => {
   const timezone = ref<string | null>(null)

@@ -23,7 +23,9 @@ export const useRealtimeStore = defineStore("realtime", () => {
   let client: SseClient | null = null
 
   const isConnected = computed(() => connected.value)
-  const positions = computed(() => Object.values(positionsByTrader.value).flat())
+  const positions = computed(() =>
+    Object.values(positionsByTrader.value).flat(),
+  )
 
   function connect() {
     const auth = useAuthStore()

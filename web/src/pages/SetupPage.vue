@@ -56,7 +56,9 @@ async function submit() {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-surface-100 dark:bg-surface-950 px-4 py-10">
+  <div
+    class="min-h-screen flex items-center justify-center bg-surface-100 dark:bg-surface-950 px-4 py-10"
+  >
     <div
       class="w-full max-w-md rounded-2xl bg-surface-50 dark:bg-surface-900 border border-surface-200 dark:border-surface-800 shadow-xl p-8"
     >
@@ -66,13 +68,18 @@ async function submit() {
         >
           A
         </div>
-        <span class="text-xl font-bold tracking-wide text-surface-900 dark:text-surface-0">QuantAura</span>
+        <span
+          class="text-xl font-bold tracking-wide text-surface-900 dark:text-surface-0"
+          >QuantAura</span
+        >
       </div>
 
-      <h1 class="text-lg font-bold text-surface-900 dark:text-white mb-1">Set Up Two-Factor Authentication</h1>
+      <h1 class="text-lg font-bold text-surface-900 dark:text-white mb-1">
+        Set Up Two-Factor Authentication
+      </h1>
       <p class="text-sm text-surface-500 font-medium mb-6">
-        Scan the QR code with an authenticator app (Google Authenticator, 1Password, etc.),
-        then enter the 6-digit code to finish setup.
+        Scan the QR code with an authenticator app (Google Authenticator,
+        1Password, etc.), then enter the 6-digit code to finish setup.
       </p>
 
       <div v-if="initializing" class="flex justify-center py-10">
@@ -81,11 +88,17 @@ async function submit() {
 
       <template v-else>
         <div v-if="qrDataUrl" class="flex justify-center mb-4">
-          <img :src="qrDataUrl" alt="TOTP QR Code" class="rounded-xl bg-white p-3 w-[220px] h-[220px]" />
+          <img
+            :src="qrDataUrl"
+            alt="TOTP QR Code"
+            class="rounded-xl bg-white p-3 w-[220px] h-[220px]"
+          />
         </div>
 
         <div class="mb-6">
-          <label class="block text-xs font-semibold text-surface-500 uppercase tracking-wide mb-1">
+          <label
+            class="block text-xs font-semibold text-surface-500 uppercase tracking-wide mb-1"
+          >
             Manual entry key
           </label>
           <code
@@ -104,7 +117,10 @@ async function submit() {
             placeholder="123456"
             class="w-full text-center tracking-[0.5em] text-lg font-mono"
           />
-          <p v-if="errorMsg" class="text-xs font-medium text-rose-500 dark:text-rose-400">
+          <p
+            v-if="errorMsg"
+            class="text-xs font-medium text-rose-500 dark:text-rose-400"
+          >
             {{ errorMsg }}
           </p>
           <Button

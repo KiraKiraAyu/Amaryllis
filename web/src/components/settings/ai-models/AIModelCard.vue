@@ -13,8 +13,12 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="flex items-center gap-3 rounded-full bg-surface-50 dark:bg-surface-800 px-3 py-2">
-    <div class="flex-1 ml-4 truncate text-sm font-medium text-surface-900 dark:text-surface-0">
+  <div
+    class="flex items-center gap-3 rounded-full bg-surface-50 dark:bg-surface-800 px-3 py-2"
+  >
+    <div
+      class="flex-1 ml-4 truncate text-sm font-medium text-surface-900 dark:text-surface-0"
+    >
       {{ model.name || model.modelId }}
     </div>
 

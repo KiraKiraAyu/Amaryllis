@@ -17,9 +17,13 @@ const intervals = ["1m", "5m", "15m", "1h", "4h", "1d"]
 </script>
 
 <template>
-  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+  <div
+    class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+  >
     <div>
-      <h1 class="mt-1 text-3xl font-bold text-surface-900 dark:text-white">Market Data</h1>
+      <h1 class="mt-1 text-3xl font-bold text-surface-900 dark:text-white">
+        Market Data
+      </h1>
       <p class="mt-1 text-sm text-surface-500 dark:text-surface-400">
         Live candlestick charts and exchange symbol histories
       </p>

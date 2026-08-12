@@ -42,14 +42,10 @@ const remainingSecs = computed(() => {
 })
 
 /** Whether the engine is currently scanning (running but no next_scan_at). */
-const isScanning = computed(
-  () => props.isRunning && props.nextScanAt == null,
-)
+const isScanning = computed(() => props.isRunning && props.nextScanAt == null)
 
 /** Whether the countdown is active (running and has a target). */
-const isActive = computed(
-  () => props.isRunning && props.nextScanAt != null,
-)
+const isActive = computed(() => props.isRunning && props.nextScanAt != null)
 
 /** Format the remaining seconds as MM:SS or HH:MM:SS. */
 const countdownText = computed(() => {
@@ -87,7 +83,9 @@ const countdownText = computed(() => {
       >
         {{ countdownText }}
       </span>
-      <span v-else class="text-sm font-bold font-mono text-surface-400">--:--</span>
+      <span v-else class="text-sm font-bold font-mono text-surface-400"
+        >--:--</span
+      >
     </div>
   </div>
 </template>

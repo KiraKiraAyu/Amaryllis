@@ -45,10 +45,10 @@ const config = computed(() => {
     const isPositive = (props.value ?? 0) >= 0
     return {
       icon: "pi pi-chart-line",
-      tone: isPositive 
+      tone: isPositive
         ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400"
         : "bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400",
-      accent: isPositive 
+      accent: isPositive
         ? "from-emerald-500 to-teal-400"
         : "from-rose-500 to-red-400",
     }
@@ -74,22 +74,36 @@ const config = computed(() => {
           >
             {{ title }}
           </div>
-          <div v-if="loading" class="mt-3 h-8 w-2/3 rounded-lg animate-pulse bg-surface-100 dark:bg-surface-800"></div>
-          <div v-else class="mt-2 text-2xl font-black font-display text-surface-900 dark:text-white truncate">
-            <span v-if="prefix" class="text-sm font-semibold text-surface-400 dark:text-surface-500 mr-0.5">
+          <div
+            v-if="loading"
+            class="mt-3 h-8 w-2/3 rounded-lg animate-pulse bg-surface-100 dark:bg-surface-800"
+          ></div>
+          <div
+            v-else
+            class="mt-2 text-2xl font-black font-display text-surface-900 dark:text-white truncate"
+          >
+            <span
+              v-if="prefix"
+              class="text-sm font-semibold text-surface-400 dark:text-surface-500 mr-0.5"
+            >
               {{ prefix }}
             </span>
             {{ formatted }}
           </div>
         </div>
         <div
-          :class="['grid h-10 w-10 place-items-center rounded-xl shrink-0 transition-transform duration-300 hover:scale-105', config.tone]"
+          :class="[
+            'grid h-10 w-10 place-items-center rounded-xl shrink-0 transition-transform duration-300 hover:scale-105',
+            config.tone,
+          ]"
         >
           <span :class="config.icon" class="text-base"></span>
         </div>
       </div>
       <!-- Decorative Progress bar -->
-      <div class="mt-4 h-1 overflow-hidden rounded-full bg-surface-100 dark:bg-surface-800">
+      <div
+        class="mt-4 h-1 overflow-hidden rounded-full bg-surface-100 dark:bg-surface-800"
+      >
         <div
           class="h-full rounded-full bg-linear-to-r transition-all duration-1000"
           :class="config.accent"

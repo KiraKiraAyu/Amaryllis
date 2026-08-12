@@ -28,7 +28,7 @@ watch(
       toastStore.toastEvent = null // Reset channel
     }
   },
-  { deep: true }
+  { deep: true },
 )
 
 onMounted(() => {
@@ -40,7 +40,8 @@ onMounted(() => {
   // Theme initialization
   const savedTheme = localStorage.getItem("quantaura.theme")
   const prefersDark =
-    window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+    window.matchMedia &&
+    window.matchMedia("(prefers-color-scheme: dark)").matches
   if (savedTheme === "dark" || (!savedTheme && prefersDark)) {
     document.documentElement.classList.add("dark")
   } else {

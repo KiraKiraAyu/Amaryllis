@@ -77,7 +77,7 @@ export interface StrategyRiskControlConfigPayload {
   min_confidence: number
 }
 
-export type StrategyTpSlMode = 'fixed' | 'custom'
+export type StrategyTpSlMode = "fixed" | "custom"
 
 export interface StrategyTakeProfitConfigPayload {
   mode: StrategyTpSlMode

@@ -28,20 +28,34 @@ function signed(value: number) {
 </script>
 
 <template>
-  <Card class="border border-surface-200 dark:border-surface-800 bg-surface-0 dark:bg-surface-900 shadow-none!">
+  <Card
+    class="border border-surface-200 dark:border-surface-800 bg-surface-0 dark:bg-surface-900 shadow-none!"
+  >
     <template #content>
       <div class="flex items-center justify-between mb-4">
-        <h2 class="font-bold text-lg text-surface-900 dark:text-white">Open Positions</h2>
-        <span class="text-xs font-semibold px-2.5 py-1 bg-surface-100 dark:bg-surface-800 rounded-lg text-surface-600 dark:text-surface-400">
+        <h2 class="font-bold text-lg text-surface-900 dark:text-white">
+          Open Positions
+        </h2>
+        <span
+          class="text-xs font-semibold px-2.5 py-1 bg-surface-100 dark:bg-surface-800 rounded-lg text-surface-600 dark:text-surface-400"
+        >
           {{ positions.length }} active
         </span>
       </div>
 
-      <div v-if="positions.length === 0" class="text-center py-12 border border-dashed border-surface-200 dark:border-surface-800 rounded-2xl bg-surface-50/50 dark:bg-surface-950/20">
-        <p class="text-sm text-surface-400 dark:text-surface-500">No active positions</p>
+      <div
+        v-if="positions.length === 0"
+        class="text-center py-12 border border-dashed border-surface-200 dark:border-surface-800 rounded-2xl bg-surface-50/50 dark:bg-surface-950/20"
+      >
+        <p class="text-sm text-surface-400 dark:text-surface-500">
+          No active positions
+        </p>
       </div>
 
-      <div v-else class="overflow-hidden rounded-xl border border-surface-200 dark:border-surface-800">
+      <div
+        v-else
+        class="overflow-hidden rounded-xl border border-surface-200 dark:border-surface-800"
+      >
         <DataTable
           :value="positions"
           scrollable
@@ -51,7 +65,9 @@ function signed(value: number) {
         >
           <Column field="trader_id" header="Trader">
             <template #body="{ data }">
-              <span class="font-semibold text-surface-800 dark:text-surface-200">
+              <span
+                class="font-semibold text-surface-800 dark:text-surface-200"
+              >
                 {{ traderName(data.trader_id) }}
               </span>
             </template>
@@ -70,7 +86,8 @@ function signed(value: number) {
               <span
                 class="font-bold uppercase text-xs px-2 py-0.5 rounded-md"
                 :class="
-                  data.side.toLowerCase() === 'buy' || data.side.toLowerCase() === 'long'
+                  data.side.toLowerCase() === 'buy' ||
+                  data.side.toLowerCase() === 'long'
                     ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
                     : 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
                 "
@@ -80,35 +97,70 @@ function signed(value: number) {
             </template>
           </Column>
 
-          <Column field="quantity" header="Qty" class="text-right" headerClass="justify-end">
+          <Column
+            field="quantity"
+            header="Qty"
+            class="text-right"
+            headerClass="justify-end"
+          >
             <template #body="{ data }">
               <span class="font-mono">{{ fmt(data.quantity, 4) }}</span>
             </template>
           </Column>
 
-          <Column field="entry_price" header="Entry" class="text-right" headerClass="justify-end">
+          <Column
+            field="entry_price"
+            header="Entry"
+            class="text-right"
+            headerClass="justify-end"
+          >
             <template #body="{ data }">
-              <span class="font-mono text-surface-600 dark:text-surface-400">{{ fmt(data.entry_price, 2) }}</span>
+              <span class="font-mono text-surface-600 dark:text-surface-400">{{
+                fmt(data.entry_price, 2)
+              }}</span>
             </template>
           </Column>
 
-          <Column field="mark_price" header="Mark" class="text-right" headerClass="justify-end">
+          <Column
+            field="mark_price"
+            header="Mark"
+            class="text-right"
+            headerClass="justify-end"
+          >
             <template #body="{ data }">
-              <span class="font-mono text-surface-600 dark:text-surface-400">{{ fmt(data.mark_price, 2) }}</span>
+              <span class="font-mono text-surface-600 dark:text-surface-400">{{
+                fmt(data.mark_price, 2)
+              }}</span>
             </template>
           </Column>
 
-          <Column field="leverage" header="Lev." class="text-right" headerClass="justify-end">
+          <Column
+            field="leverage"
+            header="Lev."
+            class="text-right"
+            headerClass="justify-end"
+          >
             <template #body="{ data }">
-              <span class="font-mono text-surface-500">{{ data.leverage }}x</span>
+              <span class="font-mono text-surface-500"
+                >{{ data.leverage }}x</span
+              >
             </template>
           </Column>
 
-          <Column field="unrealized_pnl" header="Unrealized PnL" class="text-right" headerClass="justify-end">
+          <Column
+            field="unrealized_pnl"
+            header="Unrealized PnL"
+            class="text-right"
+            headerClass="justify-end"
+          >
             <template #body="{ data }">
               <span
                 class="font-mono font-bold"
-                :class="data.unrealized_pnl >= 0 ? 'text-emerald-500' : 'text-rose-500'"
+                :class="
+                  data.unrealized_pnl >= 0
+                    ? 'text-emerald-500'
+                    : 'text-rose-500'
+                "
               >
                 {{ signed(data.unrealized_pnl) }}
               </span>

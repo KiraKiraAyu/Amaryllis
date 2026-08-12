@@ -47,18 +47,18 @@ const {
     />
 
     <TradersPanel
-        :traders="traders"
-        :loading="loading"
-        :initial-load-done="initialLoadDone"
-        @start="startTrader"
-        @stop="stopTrader"
-        @sync="syncBalance"
+      :traders="traders"
+      :loading="loading"
+      :initial-load-done="initialLoadDone"
+      @start="startTrader"
+      @stop="stopTrader"
+      @sync="syncBalance"
     />
 
     <OpenPositionsPanel
-        :positions="positions"
-        :trader-name="traderName"
-        @close="closePosition"
+      :positions="positions"
+      :trader-name="traderName"
+      @close="closePosition"
     />
 
     <LiveEventsPanel :events="events" />

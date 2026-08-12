@@ -56,9 +56,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div
-    class="flex flex-col gap-6 h-full min-h-0"
-  >
+  <div class="flex flex-col gap-6 h-full min-h-0">
     <MarketDataHeader
       v-model:symbol="activeSymbol"
       v-model:interval="activeInterval"

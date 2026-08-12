@@ -27,9 +27,7 @@ const emit = defineEmits<{
         type="button"
         class="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-surface-elevated"
         :class="
-          hasModel(remoteModel.id)
-            ? 'text-text-muted'
-            : 'text-text-secondary'
+          hasModel(remoteModel.id) ? 'text-text-muted' : 'text-text-secondary'
         "
         :disabled="hasModel(remoteModel.id)"
         @click="emit('addRemoteModel', remoteModel)"

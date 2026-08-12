@@ -69,9 +69,9 @@ function feed(arr: CandlestickData[]) {
 
 function onResize() {
   if (chart && chartEl.value) {
-    chart.applyOptions({ 
+    chart.applyOptions({
       width: chartEl.value.clientWidth,
-      height: chartEl.value.clientHeight
+      height: chartEl.value.clientHeight,
     })
   }
 }

@@ -18,7 +18,9 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="flex w-64 shrink-0 flex-col gap-3 border-r border-surface-200 dark:border-surface-800 pr-4">
+  <div
+    class="flex w-64 shrink-0 flex-col gap-3 border-r border-surface-200 dark:border-surface-800 pr-4"
+  >
     <Button
       label="Add Provider"
       icon="pi pi-plus"
@@ -33,13 +35,19 @@ const emit = defineEmits<{
         :key="providerKey(provider, providerIndex)"
         type="button"
         class="cursor-pointer rounded-xl px-4 py-3 text-left text-sm transition-colors hover:bg-surface-100 dark:hover:bg-surface-800"
-        :class="selectedProviderIndex === providerIndex ? 'bg-surface-100 dark:bg-surface-800 text-surface-900 dark:text-white font-bold' : 'text-surface-700 dark:text-surface-300 font-medium'"
+        :class="
+          selectedProviderIndex === providerIndex
+            ? 'bg-surface-100 dark:bg-surface-800 text-surface-900 dark:text-white font-bold'
+            : 'text-surface-700 dark:text-surface-300 font-medium'
+        "
         @click="emit('selectProvider', providerIndex)"
       >
         <span class="block truncate">
           {{ providerLabel(provider) }}
         </span>
-        <span class="block truncate text-xs text-surface-500 font-medium tracking-wide mt-1">
+        <span
+          class="block truncate text-xs text-surface-500 font-medium tracking-wide mt-1"
+        >
           {{ apiCategoryLabel(provider.providerType) }} · {{ provider.baseUrl }}
         </span>
       </button>

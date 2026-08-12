@@ -29,8 +29,11 @@ export function useStrategyPage() {
   const duplicating = ref(false)
 
   const isDirty = computed(() => {
-    if (!isEditing.value || !selected.value || !originalStrategy.value) return false
-    return JSON.stringify(selected.value) !== JSON.stringify(originalStrategy.value)
+    if (!isEditing.value || !selected.value || !originalStrategy.value)
+      return false
+    return (
+      JSON.stringify(selected.value) !== JSON.stringify(originalStrategy.value)
+    )
   })
 
   async function load() {
@@ -49,7 +52,7 @@ export function useStrategyPage() {
         return
       }
     }
-    
+
     selected.value = {
       id: "",
       name: "New Strategy",
@@ -76,7 +79,7 @@ export function useStrategyPage() {
         },
       },
     }
-    
+
     originalStrategy.value = JSON.parse(JSON.stringify(selected.value))
     isEditing.value = true
   }
@@ -145,7 +148,9 @@ export function useStrategyPage() {
         selected.value = null
       } else {
         // After editing, show the detail view with refreshed data
-        const matched = strategies.value.find(s => s.id === selected.value?.id)
+        const matched = strategies.value.find(
+          (s) => s.id === selected.value?.id,
+        )
         if (matched) {
           selected.value = matched
         }
@@ -158,8 +163,6 @@ export function useStrategyPage() {
       saving.value = false
     }
   }
-
-
 
   async function deleteStrategy() {
     if (!selected.value?.id) return
@@ -236,7 +239,9 @@ export function useStrategyPage() {
 
   onBeforeRouteLeave((_to, _from, next) => {
     if (isDirty.value) {
-      const answer = window.confirm("You have unsaved changes. Do you really want to leave?")
+      const answer = window.confirm(
+        "You have unsaved changes. Do you really want to leave?",
+      )
       if (answer) {
         next()
       } else {

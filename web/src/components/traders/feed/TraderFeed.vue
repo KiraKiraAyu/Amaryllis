@@ -71,8 +71,8 @@ watch(
           >
             <span class="pi pi-comments text-4xl"></span>
             <p class="text-sm">
-              No activity yet. Start the trader to see live AI decisions
-              and actions.
+              No activity yet. Start the trader to see live AI decisions and
+              actions.
             </p>
           </div>
 

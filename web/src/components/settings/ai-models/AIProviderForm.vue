@@ -23,13 +23,17 @@ const emit = defineEmits<{
 <template>
   <div class="flex flex-col gap-4">
     <div class="flex flex-col gap-1">
-      <label class="text-sm font-medium text-surface-700 dark:text-surface-300">Provider Name</label>
+      <label class="text-sm font-medium text-surface-700 dark:text-surface-300"
+        >Provider Name</label
+      >
       <InputText v-model="provider.name" />
     </div>
 
     <div class="flex flex-col gap-1">
-      <label class="text-sm font-medium text-surface-700 dark:text-surface-300">API Category</label>
-      <Select 
+      <label class="text-sm font-medium text-surface-700 dark:text-surface-300"
+        >API Category</label
+      >
+      <Select
         v-model="provider.providerType"
         :options="apiCategories"
         optionLabel="label"
@@ -39,7 +43,9 @@ const emit = defineEmits<{
     </div>
 
     <div class="flex flex-col gap-1">
-      <label class="text-sm font-medium text-surface-700 dark:text-surface-300">API URL</label>
+      <label class="text-sm font-medium text-surface-700 dark:text-surface-300"
+        >API URL</label
+      >
       <InputText
         v-model="provider.baseUrl"
         placeholder="https://api.example.com/v1"
@@ -48,7 +54,10 @@ const emit = defineEmits<{
 
     <div class="flex items-end gap-2">
       <div class="flex flex-col gap-1 flex-1">
-        <label class="text-sm font-medium text-surface-700 dark:text-surface-300">API Key</label>
+        <label
+          class="text-sm font-medium text-surface-700 dark:text-surface-300"
+          >API Key</label
+        >
         <InputText
           v-model="provider.apiKey"
           type="password"
@@ -72,9 +81,11 @@ const emit = defineEmits<{
     <div class="mt-2 flex items-center justify-between">
       <div class="flex items-center gap-2">
         <ToggleSwitch v-model="provider.enabled" />
-        <span class="text-sm font-medium text-surface-700 dark:text-surface-300">Enabled</span>
+        <span class="text-sm font-medium text-surface-700 dark:text-surface-300"
+          >Enabled</span
+        >
       </div>
-      
+
       <div class="flex gap-2">
         <Button
           label="Delete"

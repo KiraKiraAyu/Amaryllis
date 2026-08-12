@@ -18,9 +18,12 @@ const { direction } = useCarouselTransition(step)
 <template>
   <div class="flex flex-col gap-6">
     <div>
-      <h1 class="mt-1 text-3xl font-bold text-surface-900 dark:text-white">Settings</h1>
+      <h1 class="mt-1 text-3xl font-bold text-surface-900 dark:text-white">
+        Settings
+      </h1>
       <p class="mt-1 text-sm text-surface-500 dark:text-surface-400">
-        Configure general preferences, exchanges, AI models, and account security
+        Configure general preferences, exchanges, AI models, and account
+        security
       </p>
     </div>
 

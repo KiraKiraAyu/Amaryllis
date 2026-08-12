@@ -95,16 +95,25 @@ onMounted(async () => {
 </script>
 
 <template>
-  <Card class="border border-surface-200 dark:border-surface-800 bg-surface-0 dark:bg-surface-900 shadow-none!">
+  <Card
+    class="border border-surface-200 dark:border-surface-800 bg-surface-0 dark:bg-surface-900 shadow-none!"
+  >
     <template #content>
       <div class="flex items-center gap-3 mb-6">
-        <h2 class="font-bold text-xl text-surface-900 dark:text-white flex-1 truncate">Create AI Trader</h2>
+        <h2
+          class="font-bold text-xl text-surface-900 dark:text-white flex-1 truncate"
+        >
+          Create AI Trader
+        </h2>
       </div>
 
       <form @submit.prevent="submit" class="flex flex-col gap-5">
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div class="flex flex-col gap-1.5">
-            <label class="text-xs font-bold text-surface-500 dark:text-surface-400">Trader Name</label>
+            <label
+              class="text-xs font-bold text-surface-500 dark:text-surface-400"
+              >Trader Name</label
+            >
             <InputText
               v-model="form.name"
               placeholder="My AI Trader"
@@ -114,7 +123,10 @@ onMounted(async () => {
           </div>
 
           <div class="flex flex-col gap-1.5">
-            <label class="text-xs font-bold text-surface-500 dark:text-surface-400">Exchange Account</label>
+            <label
+              class="text-xs font-bold text-surface-500 dark:text-surface-400"
+              >Exchange Account</label
+            >
             <Select
               v-model="form.exchange_id"
               :options="exchanges"
@@ -131,7 +143,10 @@ onMounted(async () => {
           </div>
 
           <div class="flex flex-col gap-1.5">
-            <label class="text-xs font-bold text-surface-500 dark:text-surface-400">AI Model</label>
+            <label
+              class="text-xs font-bold text-surface-500 dark:text-surface-400"
+              >AI Model</label
+            >
             <Select
               v-model="form.ai_model_id"
               :options="models"
@@ -144,7 +159,10 @@ onMounted(async () => {
           </div>
 
           <div class="flex flex-col gap-1.5">
-            <label class="text-xs font-bold text-surface-500 dark:text-surface-400">Trading Strategy</label>
+            <label
+              class="text-xs font-bold text-surface-500 dark:text-surface-400"
+              >Trading Strategy</label
+            >
             <Select
               v-model="form.strategy_id"
               :options="strategies"
@@ -157,7 +175,10 @@ onMounted(async () => {
           </div>
 
           <div class="flex flex-col gap-1.5">
-            <label class="text-xs font-bold text-surface-500 dark:text-surface-400">Scan Interval</label>
+            <label
+              class="text-xs font-bold text-surface-500 dark:text-surface-400"
+              >Scan Interval</label
+            >
             <Select
               v-model="form.scan_interval_minutes"
               :options="SCAN_INTERVAL_OPTIONS"
@@ -168,7 +189,10 @@ onMounted(async () => {
           </div>
 
           <div class="flex flex-col gap-1.5">
-            <label class="text-xs font-bold text-surface-500 dark:text-surface-400">Budget (USDT)</label>
+            <label
+              class="text-xs font-bold text-surface-500 dark:text-surface-400"
+              >Budget (USDT)</label
+            >
             <InputNumber
               v-model="form.initial_balance"
               :min="10"
@@ -181,11 +205,16 @@ onMounted(async () => {
           </div>
         </div>
 
-        <p v-if="error" class="text-xs text-rose-500 bg-rose-50 dark:bg-rose-950/20 px-3 py-2 rounded-xl">
+        <p
+          v-if="error"
+          class="text-xs text-rose-500 bg-rose-50 dark:bg-rose-950/20 px-3 py-2 rounded-xl"
+        >
           {{ error }}
         </p>
 
-        <div class="flex gap-3 mt-3 border-t border-surface-200 dark:border-surface-800 pt-4">
+        <div
+          class="flex gap-3 mt-3 border-t border-surface-200 dark:border-surface-800 pt-4"
+        >
           <Button
             type="submit"
             label="Create Trader"

@@ -18,7 +18,11 @@ defineEmits(["start", "stop", "sync"])
       ></span>
       <span
         class="relative inline-flex rounded-full h-3 w-3 transition-colors"
-        :class="trader.is_running ? 'bg-emerald-500' : 'bg-surface-300 dark:bg-surface-600'"
+        :class="
+          trader.is_running
+            ? 'bg-emerald-500'
+            : 'bg-surface-300 dark:bg-surface-600'
+        "
       ></span>
     </div>
 
@@ -27,8 +31,11 @@ defineEmits(["start", "stop", "sync"])
       <div class="text-sm font-bold text-surface-900 dark:text-white truncate">
         {{ trader.name || trader.id }}
       </div>
-      <div class="text-xs text-surface-400 dark:text-surface-500 truncate mt-0.5 font-medium">
-        {{ trader.ai_model_id }} <span class="mx-1">·</span> {{ trader.exchange_id ?? "Paper" }}
+      <div
+        class="text-xs text-surface-400 dark:text-surface-500 truncate mt-0.5 font-medium"
+      >
+        {{ trader.ai_model_id }} <span class="mx-1">·</span>
+        {{ trader.exchange_id ?? "Paper" }}
       </div>
     </div>
 

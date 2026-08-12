@@ -13,7 +13,6 @@ function decisionClass(decision: string): string {
     return "bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400"
   return "bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400"
 }
-
 </script>
 
 <template>
@@ -41,10 +40,7 @@ function decisionClass(decision: string): string {
     </p>
 
     <!-- Decision data -->
-    <div
-      v-if="props.msg.data?.decision"
-      class="flex flex-wrap gap-2 mt-1"
-    >
+    <div v-if="props.msg.data?.decision" class="flex flex-wrap gap-2 mt-1">
       <span
         class="text-xs px-2 py-0.5 rounded-lg font-semibold"
         :class="decisionClass(String(props.msg.data.decision))"

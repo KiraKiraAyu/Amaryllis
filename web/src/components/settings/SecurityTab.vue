@@ -77,9 +77,12 @@ function lock() {
 <template>
   <div class="flex flex-col gap-8 max-w-md mt-4">
     <div>
-      <h2 class="font-bold text-lg text-surface-900 dark:text-white mb-2">Two-Factor Authentication</h2>
+      <h2 class="font-bold text-lg text-surface-900 dark:text-white mb-2">
+        Two-Factor Authentication
+      </h2>
       <p class="text-xs mb-4 text-surface-500 font-medium tracking-wide">
-        Access is protected by a TOTP authenticator app (Google Authenticator, 1Password, etc.).
+        Access is protected by a TOTP authenticator app (Google Authenticator,
+        1Password, etc.).
       </p>
 
       <template v-if="step === 'idle'">
@@ -92,13 +95,20 @@ function lock() {
       </template>
 
       <template v-else>
-        <div class="flex flex-col gap-4 rounded-xl border border-surface-200 dark:border-surface-700 p-4">
+        <div
+          class="flex flex-col gap-4 rounded-xl border border-surface-200 dark:border-surface-700 p-4"
+        >
           <p class="text-sm text-surface-600 dark:text-surface-300 font-medium">
-            Scan the new QR code with your authenticator app, then enter the 6-digit code to confirm.
-            The previous secret stops working once this is confirmed.
+            Scan the new QR code with your authenticator app, then enter the
+            6-digit code to confirm. The previous secret stops working once this
+            is confirmed.
           </p>
           <div v-if="qrDataUrl" class="flex justify-center">
-            <img :src="qrDataUrl" alt="TOTP QR Code" class="rounded-lg bg-white p-2 w-[200px] h-[200px]" />
+            <img
+              :src="qrDataUrl"
+              alt="TOTP QR Code"
+              class="rounded-lg bg-white p-2 w-[200px] h-[200px]"
+            />
           </div>
           <code
             class="block w-full text-center font-mono text-sm bg-surface-100 dark:bg-surface-800 rounded-lg px-3 py-2 select-all text-surface-800 dark:text-surface-100 break-all"
@@ -113,7 +123,10 @@ function lock() {
             placeholder="123456"
             class="w-full text-center tracking-[0.5em] text-lg font-mono"
           />
-          <p v-if="errorMsg" class="text-xs font-medium text-rose-500 dark:text-rose-400">
+          <p
+            v-if="errorMsg"
+            class="text-xs font-medium text-rose-500 dark:text-rose-400"
+          >
             {{ errorMsg }}
           </p>
           <div class="flex gap-3">
@@ -124,16 +137,24 @@ function lock() {
               :disabled="loading || code.trim().length !== 6"
               @click="confirmReset"
             />
-            <Button label="Cancel" severity="secondary" variant="outlined" @click="cancelReset" />
+            <Button
+              label="Cancel"
+              severity="secondary"
+              variant="outlined"
+              @click="cancelReset"
+            />
           </div>
         </div>
       </template>
     </div>
 
     <div>
-      <h2 class="font-bold text-lg text-surface-900 dark:text-white mb-2">Session</h2>
+      <h2 class="font-bold text-lg text-surface-900 dark:text-white mb-2">
+        Session
+      </h2>
       <p class="text-xs mb-4 text-surface-500 font-medium tracking-wide">
-        Lock this instance immediately. A valid authenticator code is required to unlock.
+        Lock this instance immediately. A valid authenticator code is required
+        to unlock.
       </p>
       <Button
         label="Lock"

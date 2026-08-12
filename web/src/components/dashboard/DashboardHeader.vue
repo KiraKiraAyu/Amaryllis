@@ -7,9 +7,13 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+  <div
+    class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+  >
     <div>
-      <h1 class="mt-1 text-3xl font-bold text-surface-900 dark:text-white">Dashboard</h1>
+      <h1 class="mt-1 text-3xl font-bold text-surface-900 dark:text-white">
+        Dashboard
+      </h1>
       <p class="mt-1 text-sm text-surface-500 dark:text-surface-400">
         Real-time trading overview and performance metrics
       </p>

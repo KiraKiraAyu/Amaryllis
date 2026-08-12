@@ -60,11 +60,16 @@ const editingStrategy = computed<EditableStrategy>({
       description="Create and manage trading strategies"
     >
       <template #actions>
-        <Button label="New Strategy" icon="pi pi-plus" class="rounded-xl h-11 px-4 cursor-pointer" @click="createNew" />
+        <Button
+          label="New Strategy"
+          icon="pi pi-plus"
+          class="rounded-xl h-11 px-4 cursor-pointer"
+          @click="createNew"
+        />
       </template>
     </PageHeader>
 
-    <div class="relative w-full overflow-hidden min-h-125">
+    <div class="relative w-full overflow-x-clip min-h-125">
       <SlideTransition :direction="direction">
         <!-- View 1: Strategy List Screen (Full Screen Grid) -->
         <div v-if="step === 0" class="w-full" key="list-view">
@@ -76,7 +81,11 @@ const editingStrategy = computed<EditableStrategy>({
         </div>
 
         <!-- View 2: Strategy Detail Screen (Full Screen Detail Panel with Back Button) -->
-        <div v-else-if="step === 1" class="flex flex-col gap-4 w-full" key="detail-view">
+        <div
+          v-else-if="step === 1"
+          class="flex flex-col gap-4 w-full"
+          key="detail-view"
+        >
           <div class="flex items-center">
             <Button
               icon="pi pi-arrow-left"

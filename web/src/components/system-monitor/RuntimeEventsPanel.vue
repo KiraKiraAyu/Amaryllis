@@ -12,14 +12,13 @@ defineProps<{
 <template>
   <div class="flex flex-col h-175">
     <div class="flex items-center justify-between mb-4">
-      <h2 class="font-bold text-sm text-surface-900 dark:text-white">Runtime Events</h2>
+      <h2 class="font-bold text-sm text-surface-900 dark:text-white">
+        Runtime Events
+      </h2>
       <span class="text-surface-500 text-sm">{{ events.length }} events</span>
     </div>
     <div class="flex-1 overflow-y-auto pr-2 flex flex-col gap-2">
-      <div
-        v-if="loading"
-        class="text-center py-10 text-xs text-surface-500"
-      >
+      <div v-if="loading" class="text-center py-10 text-xs text-surface-500">
         Loading events...
       </div>
       <div
@@ -35,7 +34,9 @@ defineProps<{
         class="p-3 rounded-xl border flex flex-col gap-1 bg-surface-0 dark:bg-surface-900 border-surface-200 dark:border-surface-800"
       >
         <div class="flex justify-between items-center text-xs mb-1">
-          <span class="font-bold text-surface-900 dark:text-white">{{ event.event_type }}</span>
+          <span class="font-bold text-surface-900 dark:text-white">{{
+            event.event_type
+          }}</span>
           <span class="text-surface-500">
             {{ formatTime(event.created_at) }}
           </span>
