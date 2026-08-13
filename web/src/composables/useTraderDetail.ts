@@ -25,22 +25,20 @@ const ACTIVITY_POLL_INTERVAL_MS = 5_000
 const ACTIVITY_LIMIT = 100
 const ACTIVITY_WINDOW_HOURS = 24 * 365
 
-/** A single chat-like message in the trader activity feed. */
+/** A single entry in the trader activity timeline. */
 export interface FeedMessage {
   id: string
-  /** "prompt" = system prompt to AI (right side);
-   *  "trader" = AI reasoning (left side);
-   *  "action" = trade execution (left side);
-   *  "position" = position update (left side);
-   *  "system" = system operation (left side, hidden by default);
-   *  "warning" = action blocked by an exchange constraint (left side, always visible). */
-  role: "prompt" | "system" | "trader" | "action" | "position" | "warning"
+  /** "prompt" = system prompt sent to AI;
+   *  "trader" = AI reasoning + decision (+ optional execution data);
+   *  "system" = system operation (hidden by default, toggled by System Ops);
+   *  "warning" = action blocked by an exchange constraint (always visible). */
+  role: "prompt" | "system" | "trader" | "warning"
   title: string
   content: string
   timestamp: number
   /** Whether the typewriter animation is still streaming. */
   streaming?: boolean
-  /** Additional structured data to render (e.g. positions, decisions). */
+  /** Additional structured data to render (e.g. decision, execution). */
   data?: Record<string, unknown>
 }
 
@@ -105,11 +103,7 @@ function runtimeEventToFeedMessage(event: RuntimeEventPayload): FeedMessage {
 
   return {
     id: `event-${event.id}`,
-    role: isConstraintWarning
-      ? "warning"
-      : event.action_taken
-        ? "action"
-        : "system",
+    role: isConstraintWarning ? "warning" : "system",
     title: isConstraintWarning
       ? `Order not submitted: ${event.symbol} ${event.side}`.trim()
       : formatEventTitle(event),
@@ -204,14 +198,10 @@ function feedRoleOrder(role: FeedMessage["role"]): number {
       return 1
     case "warning":
       return 2
-    case "position":
-      return 3
-    case "action":
-      return 4
     case "system":
-      return 5
+      return 3
     default:
-      return 6
+      return 4
   }
 }
 
@@ -298,12 +288,12 @@ export function useTraderDetail(traderId: Ref<string>) {
     }
   }
 
-  /** Feed filtered by the system-ops toggle. System Ops (action / system)
-   *  messages are hidden by default; the user can toggle them on in the UI. */
+  /** Feed filtered by the system-ops toggle. System Ops messages are
+   *  hidden by default; the user can toggle them on in the UI. */
   const filteredFeed = computed(() =>
     showSystemOps.value
       ? feed.value
-      : feed.value.filter((m) => m.role !== "system" && m.role !== "action"),
+      : feed.value.filter((m) => m.role !== "system"),
   )
 
   // Typewriter state
@@ -560,14 +550,13 @@ export function useTraderDetail(traderId: Ref<string>) {
         }
         case "trade_execution": {
           const trade = ev.trade as Record<string, unknown> | undefined
-          addMessage({
-            id: `trade-${Date.now()}`,
-            role: "action",
-            title: `Trade: ${trade?.side ?? "?"} ${trade?.symbol ?? "?"}`,
-            content: `Order ${trade?.side ?? ""} ${trade?.quantity ?? ""} ${trade?.symbol ?? ""} @ ${trade?.price ?? ""}`,
-            timestamp: nowSeconds(),
-            data: trade,
-          })
+          // Attach execution data to the most recent trader message
+          const lastTrader = [...feed.value]
+            .reverse()
+            .find((m) => m.role === "trader")
+          if (lastTrader) {
+            lastTrader.data = { ...lastTrader.data, execution: trade }
+          }
           scheduleActivityRefresh()
           break
         }
@@ -583,22 +572,7 @@ export function useTraderDetail(traderId: Ref<string>) {
         }
         case "position_update": {
           const positions = ev.positions as PositionPayload[] | undefined
-          if (positions && positions.length > 0) {
-            addMessage({
-              id: `pos-${Date.now()}`,
-              role: "position",
-              title: `Position Update: ${positions.length} position(s)`,
-              content: positions
-                .map(
-                  (p) =>
-                    `${p.symbol} ${p.side} qty=${p.quantity} uPnL=${p.unrealized_pnl.toFixed(2)}`,
-                )
-                .join("; "),
-              timestamp: nowSeconds(),
-              data: { positions },
-            })
-          }
-          // Also update local positions array
+          // Positions are real-time data shown in the stats bar, not in the timeline
           if (Array.isArray(positions)) {
             updatePositions(positions)
           }

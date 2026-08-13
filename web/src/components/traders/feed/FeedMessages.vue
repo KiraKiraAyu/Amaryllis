@@ -1,35 +1,100 @@
 <script setup lang="ts">
 import type { FeedMessage } from "@/composables/useTraderDetail"
 import { formatTime } from "@/utils/format"
-import FeedMessageTrader from "./FeedMessageTrader.vue"
-import FeedMessagePrompt from "./FeedMessagePrompt.vue"
-import FeedMessageCard from "./FeedMessageCard.vue"
 
 const props = defineProps<{
   msg: FeedMessage
+  selected: boolean
 }>()
 
-/** Whether a message should be right-aligned.
- *  Prompt (user → AI) and System Ops (action / system) are on the right;
- *  AI Trader, Position, and warnings are on the left. */
-function isRightSide(role: string): boolean {
-  return role === "prompt" || role === "action" || role === "system"
+const emit = defineEmits<{
+  select: []
+}>()
+
+function roleLabel(role: string): string {
+  switch (role) {
+    case "trader":
+      return "Trader"
+    case "prompt":
+      return "Prompt"
+    case "warning":
+      return "Warning"
+    default:
+      return "System"
+  }
+}
+
+function decisionClass(decision: string): string {
+  const d = decision.toUpperCase()
+  if (d === "BUY" || d === "LONG")
+    return "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400"
+  if (d === "SELL" || d === "SHORT")
+    return "bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400"
+  return "bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400"
 }
 </script>
 
 <template>
   <div
-    class="flex flex-col gap-1"
-    :class="isRightSide(props.msg.role) ? 'items-end' : 'items-start'"
+    class="p-3 h-14 flex flex-col rounded-lg cursor-pointer transition-colors duration-300 mb-0.5"
+    :class="
+      props.selected
+        ? 'bg-surface-100 dark:bg-surface-950'
+        : 'border-transparent hover:bg-surface-50 dark:hover:bg-surface-950'
+    "
+    @click="emit('select')"
   >
-    <FeedMessageTrader v-if="props.msg.role === 'trader'" :msg="props.msg" />
-    <FeedMessagePrompt
-      v-else-if="props.msg.role === 'prompt'"
-      :msg="props.msg"
-    />
-    <FeedMessageCard v-else :msg="props.msg" />
-    <span class="text-xs text-surface-400 font-mono px-1">
-      {{ formatTime(props.msg.timestamp) }}
-    </span>
+    <!-- Row 1: dot + time + label -->
+    <div class="flex items-center gap-2">
+      <span
+        class="w-2 h-2 rounded-full shrink-0"
+        :class="{
+          'bg-primary-500':
+            props.msg.role === 'trader' || props.msg.role === 'prompt',
+          'bg-amber-500': props.msg.role === 'warning',
+          'bg-surface-400': props.msg.role === 'system',
+        }"
+      ></span>
+      <span class="text-xs font-mono text-surface-400">{{
+        formatTime(props.msg.timestamp)
+      }}</span>
+      <span
+        class="text-xs font-bold uppercase tracking-wider text-surface-500 dark:text-surface-400"
+      >
+        {{ roleLabel(props.msg.role) }}
+      </span>
+    </div>
+
+    <!-- Row 2: brief summary -->
+    <div
+      v-if="props.msg.role === 'trader' && props.msg.data?.decision"
+      class="flex items-center gap-1.5 pl-4 mt-0.5"
+    >
+      <span
+        class="text-xs px-1.5 py-0.5 rounded font-semibold"
+        :class="decisionClass(String(props.msg.data.decision))"
+      >
+        {{ props.msg.data.decision }}
+      </span>
+      <span
+        v-if="props.msg.data?.symbol"
+        class="text-xs font-mono text-surface-500 dark:text-surface-400 truncate"
+      >
+        {{ props.msg.data.symbol }}
+      </span>
+    </div>
+    <div
+      v-else-if="
+        (props.msg.role === 'system' || props.msg.role === 'warning') &&
+        props.msg.title
+      "
+      class="pl-4 mt-0.5"
+    >
+      <span
+        class="text-xs text-surface-500 dark:text-surface-400 truncate block"
+      >
+        {{ props.msg.title }}
+      </span>
+    </div>
   </div>
 </template>
