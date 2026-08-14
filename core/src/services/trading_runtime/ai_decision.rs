@@ -88,7 +88,7 @@ pub async fn generate_ai_decision(
                 symbol: symbol.to_string(),
                 action: "NO ACTION".to_string(),
                 confidence: 0.5,
-                reason: "strategy market data unavailable".to_string(),
+                reason: format!("strategy market data unavailable: {err}"),
                 timeframe: "5m",
                 price: m.price,
                 momentum,
