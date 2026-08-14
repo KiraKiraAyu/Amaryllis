@@ -4,7 +4,9 @@ import {
   createStrategyApi,
   deleteStrategyApi,
   duplicateStrategyApi,
+  getDefaultStrategyConfigApi,
   getStrategiesApi,
+  getStrategyApi,
   getStrategyPositionsApi,
   previewStrategyPromptApi,
   strategyTestRunApi,
@@ -15,9 +17,50 @@ import type {
   StrategyPromptPreviewModel,
   StrategyTestResult,
 } from "@/types/strategy-ui"
+import type {
+  StrategyConfigPayload,
+  StrategyTpSlConfigPayload,
+} from "@/types/strategies"
 import type { PositionPayload } from "@/types/trading"
+import { ensureDataTemplate } from "@/components/strategy/editor/data-template"
 
 const POSITIONS_POLL_MS = 5000
+
+/**
+ * Ensures all config sub-objects required by the UI exist.
+ * Called after loading strategies from the server and when creating a new strategy.
+ * This allows components to safely read config fields without side-effecting computeds.
+ */
+function ensureStrategyConfig(config: StrategyConfigPayload): void {
+  if (!config.symbols) config.symbols = []
+  ensureDataTemplate(config)
+  if (!config.tp_sl) {
+    const empty: StrategyTpSlConfigPayload = {
+      take_profit: { mode: "fixed", pnl_rate: null, custom_prompt: null },
+      stop_loss: { mode: "fixed", pnl_rate: null, custom_prompt: null },
+    }
+    config.tp_sl = empty
+  }
+  if (config.max_positions == null) config.max_positions = 5
+  if (!config.prompt_variant) config.prompt_variant = "balanced"
+}
+
+function errorResult(
+  message: string,
+  variant: string,
+): StrategyTestResult {
+  return {
+    system_prompt: "",
+    user_prompt: "",
+    prompt_variant: variant,
+    ai_model_id: "",
+    ai_response: message,
+    decisions: [],
+    reasoning: "",
+    duration_ms: 0,
+    used_real_ai: false,
+  }
+}
 
 export function useStrategyPage() {
   const strategies = ref<EditableStrategy[]>([])
@@ -34,6 +77,10 @@ export function useStrategyPage() {
   const positions = ref<PositionPayload[]>([])
   const positionsLoading = ref(false)
   let positionsTimer: ReturnType<typeof setInterval> | null = null
+  let positionsRequestId = 0
+
+  // Cached backend default config — fetched once on mount, used by createNew.
+  const defaultConfig = ref<StrategyConfigPayload | null>(null)
 
   const isDirty = computed(() => {
     if (!isEditing.value || !selected.value || !originalStrategy.value)
@@ -47,6 +94,10 @@ export function useStrategyPage() {
     loading.value = true
     try {
       const data = await getStrategiesApi()
+      // Normalize configs so UI components can safely read all fields
+      for (const s of data.strategies) {
+        if (s.config) ensureStrategyConfig(s.config)
+      }
       strategies.value = data.strategies
     } finally {
       loading.value = false
@@ -58,14 +109,19 @@ export function useStrategyPage() {
       positions.value = []
       return
     }
+    // Track the latest request to discard stale responses on rapid strategy switches
+    const requestId = ++positionsRequestId
     positionsLoading.value = true
     try {
       const data = await getStrategyPositionsApi(selected.value.id)
+      if (requestId !== positionsRequestId) return // stale
       positions.value = data.items
     } catch {
       // silently ignore — positions are best-effort
     } finally {
-      positionsLoading.value = false
+      if (requestId === positionsRequestId) {
+        positionsLoading.value = false
+      }
     }
   }
 
@@ -102,6 +158,17 @@ export function useStrategyPage() {
       }
     }
 
+    // Use the backend default config (richer than any frontend fallback).
+    // Fall back to a minimal config if the fetch hasn't completed yet.
+    const config: StrategyConfigPayload = defaultConfig.value
+      ? JSON.parse(JSON.stringify(defaultConfig.value))
+      : {
+          symbols: [],
+          max_positions: 5,
+          prompt_variant: "balanced",
+        }
+    ensureStrategyConfig(config)
+
     selected.value = {
       id: "",
       name: "New Strategy",
@@ -110,23 +177,7 @@ export function useStrategyPage() {
       is_active: false,
       created_at: "",
       updated_at: "",
-      config: {
-        symbols: [],
-        max_positions: 5,
-        prompt_variant: "balanced",
-        tp_sl: {
-          take_profit: {
-            mode: "fixed",
-            pnl_rate: null,
-            custom_prompt: null,
-          },
-          stop_loss: {
-            mode: "fixed",
-            pnl_rate: null,
-            custom_prompt: null,
-          },
-        },
-      },
+      config,
     }
 
     originalStrategy.value = JSON.parse(JSON.stringify(selected.value))
@@ -188,8 +239,7 @@ export function useStrategyPage() {
       if (selected.value.id) {
         await updateStrategyApi(selected.value.id, selected.value)
       } else {
-        const data = await createStrategyApi(selected.value)
-        selected.value.id = data.id
+        await createStrategyApi(selected.value)
       }
       await load()
       if (isNew) {
@@ -225,27 +275,34 @@ export function useStrategyPage() {
 
   async function runTest() {
     if (!selected.value) return
+    const variant = selected.value.config.prompt_variant ?? "balanced"
     testRunLoading.value = true
     testResult.value = null
     try {
       const data = await strategyTestRunApi({
         config: selected.value.config,
-        prompt_variant: selected.value.config.prompt_variant ?? "balanced",
+        prompt_variant: variant,
         run_real_ai: true,
       })
       testResult.value = data
     } catch (error: unknown) {
-      testResult.value = {
-        system_prompt: "",
-        user_prompt: "",
-        prompt_variant: selected.value.config.prompt_variant ?? "balanced",
-        ai_model_id: "",
-        ai_response:
-          error instanceof Error ? error.message : "Strategy test failed",
-        decisions: [],
-        reasoning: "",
-        duration_ms: 0,
-        used_real_ai: false,
+      const errorMsg =
+        error instanceof Error ? error.message : "Strategy test failed"
+      // If real AI fails (e.g. no API key configured), fall back to simulated mode
+      const isApiKeyError = errorMsg.toLowerCase().includes("api key")
+      if (isApiKeyError) {
+        try {
+          const data = await strategyTestRunApi({
+            config: selected.value.config,
+            prompt_variant: variant,
+            run_real_ai: false,
+          })
+          testResult.value = data
+        } catch {
+          testResult.value = errorResult(errorMsg, variant)
+        }
+      } else {
+        testResult.value = errorResult(errorMsg, variant)
       }
     } finally {
       testRunLoading.value = false
@@ -260,8 +317,21 @@ export function useStrategyPage() {
         name: `${selected.value.name} Copy`,
       })
       await load()
-      selected.value =
-        strategies.value.find((strategy) => strategy.id === data.id) ?? null
+      // Find the duplicated strategy in the refreshed list.
+      // Fall back to a direct fetch if the list doesn't contain it yet.
+      const found =
+        strategies.value.find((s) => s.id === data.id) ?? null
+      if (found) {
+        selected.value = found
+      } else {
+        try {
+          const fetched = await getStrategyApi(data.id)
+          if (fetched.config) ensureStrategyConfig(fetched.config)
+          selected.value = fetched
+        } catch {
+          selected.value = null
+        }
+      }
       isEditing.value = false
       originalStrategy.value = null
     } finally {
@@ -301,7 +371,17 @@ export function useStrategyPage() {
     }
   })
 
-  onMounted(load)
+  onMounted(() => {
+    load()
+    // Pre-fetch backend default config for createNew (best-effort, non-blocking)
+    getDefaultStrategyConfigApi()
+      .then((data) => {
+        defaultConfig.value = data.config
+      })
+      .catch(() => {
+        // Non-critical — createNew will fall back to a minimal config
+      })
+  })
 
   onUnmounted(() => {
     stopPositionsPolling()

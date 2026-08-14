@@ -2,13 +2,10 @@
 import InputNumber from "primevue/inputnumber"
 import Select from "primevue/select"
 import Textarea from "primevue/textarea"
-import { ref, computed, watch } from "vue"
+import { computed } from "vue"
 import type {
   StrategyConfigPayload,
-  StrategyTpSlConfigPayload,
   StrategyTpSlMode,
-  StrategyTakeProfitConfigPayload,
-  StrategyStopLossConfigPayload,
 } from "@/types/strategies"
 import EditorSection from "./EditorSection.vue"
 
@@ -23,101 +20,64 @@ const modeOptions = [
   { label: "Custom AI Prompt", value: "custom" },
 ]
 
-const takeProfitMode = ref<StrategyTpSlMode>("fixed")
-const stopLossMode = ref<StrategyTpSlMode>("fixed")
-// Both values are positive percentages in the UI; stop-loss is stored as a negative ratio.
-const takeProfitPnlRate = ref<number | null>(null)
-const stopLossPnlRate = ref<number | null>(null)
-const takeProfitPrompt = ref("")
-const stopLossPrompt = ref("")
-let tpSlInitialized = false
+// tp_sl is guaranteed to exist — ensureStrategyConfig runs in the composable.
+// Computed get/set pairs read from and write to config directly.
+// No local refs, no initialization flag, no sync watches.
 
-function emptyTakeProfitRule(): StrategyTakeProfitConfigPayload {
-  return {
-    mode: "fixed",
-    pnl_rate: null,
-    custom_prompt: null,
-  }
-}
-
-function emptyStopLossRule(): StrategyStopLossConfigPayload {
-  return {
-    mode: "fixed",
-    pnl_rate: null,
-    custom_prompt: null,
-  }
-}
-
-function emptyTpSlConfig(): StrategyTpSlConfigPayload {
-  return {
-    take_profit: emptyTakeProfitRule(),
-    stop_loss: emptyStopLossRule(),
-  }
-}
-
-// Initialize once from existing config (waits for async data if needed)
-watch(
-  () => config.value.tp_sl,
-  (tpSl) => {
-    if (tpSlInitialized) return
-    if (!tpSl?.take_profit || !tpSl.stop_loss) {
-      config.value.tp_sl = emptyTpSlConfig()
-      tpSl = config.value.tp_sl
-    }
-    takeProfitMode.value = tpSl.take_profit.mode
-    stopLossMode.value = tpSl.stop_loss.mode
-    takeProfitPnlRate.value =
-      tpSl.take_profit.pnl_rate != null
-        ? Math.abs(tpSl.take_profit.pnl_rate * 100)
-        : null
-    stopLossPnlRate.value =
-      tpSl.stop_loss.pnl_rate != null
-        ? Math.abs(tpSl.stop_loss.pnl_rate * 100)
-        : null
-    takeProfitPrompt.value = tpSl.take_profit.custom_prompt ?? ""
-    stopLossPrompt.value = tpSl.stop_loss.custom_prompt ?? ""
-    tpSlInitialized = true
+const takeProfitMode = computed<StrategyTpSlMode>({
+  get: () => config.value.tp_sl?.take_profit.mode ?? "fixed",
+  set: (val) => {
+    if (config.value.tp_sl) config.value.tp_sl.take_profit.mode = val
   },
-  { immediate: true },
-)
+})
 
-// Sync each rule back to config — only after initialization.
-watch(
-  [
-    takeProfitMode,
-    stopLossMode,
-    takeProfitPnlRate,
-    stopLossPnlRate,
-    takeProfitPrompt,
-    stopLossPrompt,
-  ],
-  () => {
-    if (!tpSlInitialized) return
-    let tpSlConfig = config.value.tp_sl
-    if (!tpSlConfig?.take_profit || !tpSlConfig.stop_loss) {
-      tpSlConfig = emptyTpSlConfig()
-      config.value.tp_sl = tpSlConfig
-    }
-    tpSlConfig.take_profit = {
-      mode: takeProfitMode.value,
-      pnl_rate:
-        takeProfitMode.value === "fixed" && takeProfitPnlRate.value != null
-          ? takeProfitPnlRate.value / 100
-          : null,
-      custom_prompt:
-        takeProfitMode.value === "custom" ? takeProfitPrompt.value : null,
-    }
-    tpSlConfig.stop_loss = {
-      mode: stopLossMode.value,
-      pnl_rate:
-        stopLossMode.value === "fixed" && stopLossPnlRate.value != null
-          ? -(stopLossPnlRate.value / 100)
-          : null,
-      custom_prompt:
-        stopLossMode.value === "custom" ? stopLossPrompt.value : null,
+const stopLossMode = computed<StrategyTpSlMode>({
+  get: () => config.value.tp_sl?.stop_loss.mode ?? "fixed",
+  set: (val) => {
+    if (config.value.tp_sl) config.value.tp_sl.stop_loss.mode = val
+  },
+})
+
+// TP rate: stored as ratio (0.10 = +10%), displayed as positive percentage
+const takeProfitPnlRate = computed<number | null>({
+  get: () => {
+    const rate = config.value.tp_sl?.take_profit.pnl_rate
+    return rate != null ? Math.abs(rate * 100) : null
+  },
+  set: (val) => {
+    if (config.value.tp_sl) {
+      config.value.tp_sl.take_profit.pnl_rate = val != null ? val / 100 : null
     }
   },
-)
+})
+
+// SL rate: stored as negative ratio (-0.05 = -5%), displayed as positive percentage
+const stopLossPnlRate = computed<number | null>({
+  get: () => {
+    const rate = config.value.tp_sl?.stop_loss.pnl_rate
+    return rate != null ? Math.abs(rate * 100) : null
+  },
+  set: (val) => {
+    if (config.value.tp_sl) {
+      config.value.tp_sl.stop_loss.pnl_rate =
+        val != null ? -(val / 100) : null
+    }
+  },
+})
+
+const takeProfitPrompt = computed<string>({
+  get: () => config.value.tp_sl?.take_profit.custom_prompt ?? "",
+  set: (val) => {
+    if (config.value.tp_sl) config.value.tp_sl.take_profit.custom_prompt = val
+  },
+})
+
+const stopLossPrompt = computed<string>({
+  get: () => config.value.tp_sl?.stop_loss.custom_prompt ?? "",
+  set: (val) => {
+    if (config.value.tp_sl) config.value.tp_sl.stop_loss.custom_prompt = val
+  },
+})
 </script>
 
 <template>

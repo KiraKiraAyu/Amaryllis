@@ -13,7 +13,7 @@ import EditorSection from "./EditorSection.vue"
 import {
   timeframeOptions,
   indicatorOptions,
-  getOrCreateDataTemplate,
+  getDataTemplate,
   dataItemLabel,
   computeDataTemplateError,
   computeItemError,
@@ -26,7 +26,9 @@ const props = defineProps<{
 
 const config = computed(() => props.config)
 
-const dataTemplate = computed(() => getOrCreateDataTemplate(config.value))
+// Pure read — data_template is guaranteed by ensureStrategyConfig in the composable.
+// getDataTemplate returns a fallback default if missing, but does NOT mutate config.
+const dataTemplate = computed(() => getDataTemplate(config.value))
 const dataItems = computed(() => dataTemplate.value.items)
 const rawKlineItems = computed(() =>
   dataItems.value.filter((item) => item.type === "raw_kline"),

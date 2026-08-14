@@ -4,7 +4,6 @@ import { formatDate } from "@/utils/format"
 
 defineProps<{
   strategies: EditableStrategy[]
-  selectedId?: string
   loading: boolean
 }>()
 
@@ -23,12 +22,7 @@ const emit = defineEmits<{
     >
       <!-- Custom Card with Fixed Height (h-32) and Full Width -->
       <div
-        class="w-full h-32 p-4 border rounded-2xl transition-all duration-200 select-none cursor-pointer flex items-center hover:shadow-sm"
-        :class="
-          selectedId === strategy.id
-            ? 'border-primary bg-primary-50/5 dark:bg-primary-950/10'
-            : 'border-surface-200 dark:border-surface-800 bg-surface-0 dark:bg-surface-900 hover:border-surface-300 dark:hover:border-surface-700 hover:bg-surface-50/30 dark:hover:bg-surface-950/20'
-        "
+        class="w-full h-32 p-4 border rounded-2xl transition-all duration-200 select-none cursor-pointer flex items-center hover:shadow-sm border-surface-200 dark:border-surface-800 bg-surface-0 dark:bg-surface-900 hover:border-surface-300 dark:hover:border-surface-700 hover:bg-surface-50/30 dark:hover:bg-surface-950/20"
       >
         <div class="flex items-center justify-between h-full w-full gap-6">
           <!-- Column 1: Name, Description, and Active Status -->

@@ -208,6 +208,10 @@ export interface StrategyMessagePayload {
   message: string
 }
 
+export interface StrategyDefaultConfigPayload {
+  config: StrategyConfigPayload
+}
+
 export interface PreviewPromptPayload {
   system_prompt: string
   prompt_variant: string

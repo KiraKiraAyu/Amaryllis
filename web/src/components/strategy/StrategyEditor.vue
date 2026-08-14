@@ -6,10 +6,7 @@ import StrategyBasicsSection from "./editor/StrategyBasicsSection.vue"
 import StrategyDataSection from "./editor/StrategyDataSection.vue"
 import StrategySymbolsSection from "./editor/StrategySymbolsSection.vue"
 import StrategyTpSlSection from "./editor/StrategyTpSlSection.vue"
-import {
-  getOrCreateDataTemplate,
-  computeDataTemplateError,
-} from "./editor/data-template"
+import { getDataTemplate, computeDataTemplateError } from "./editor/data-template"
 
 const selected = defineModel<EditableStrategy>({ required: true })
 
@@ -25,13 +22,12 @@ const emit = defineEmits<{
   test: []
 }>()
 
-const config = computed(() => {
-  if (!selected.value.config) selected.value.config = {}
-  return selected.value.config
-})
+// Config is guaranteed to exist — ensureStrategyConfig runs in the composable
+// before the editor renders. Pure read, no side effects.
+const config = computed(() => selected.value.config)
 
 const dataTemplateError = computed(() =>
-  computeDataTemplateError(getOrCreateDataTemplate(config.value).items),
+  computeDataTemplateError(getDataTemplate(config.value).items),
 )
 </script>
 

@@ -35,12 +35,31 @@ export function defaultDataTemplate(): StrategyDataTemplatePayload {
   }
 }
 
-export function getOrCreateDataTemplate(
+/**
+ * Mutates config in-place to add a default data_template if missing.
+ * Call this during initialization (before component render), never in a computed.
+ */
+export function ensureDataTemplate(
   config: StrategyConfigPayload,
 ): StrategyDataTemplatePayload {
   if (!config.data_template) config.data_template = defaultDataTemplate()
   return config.data_template
 }
+
+/**
+ * Pure read — returns the existing data_template or a default.
+ * Safe to use in computed properties. Does NOT mutate config.
+ * Mutations on the returned fallback object will NOT persist to config;
+ * always call ensureDataTemplate first if you need to write.
+ */
+export function getDataTemplate(
+  config: StrategyConfigPayload,
+): StrategyDataTemplatePayload {
+  return config.data_template ?? defaultDataTemplate()
+}
+
+// Backward-compatible alias; prefer ensureDataTemplate / getDataTemplate.
+export const getOrCreateDataTemplate = ensureDataTemplate
 
 export function dataItemLabel(item: StrategyDataItemPayload): string {
   if (item.type === "raw_kline") return "Kline"

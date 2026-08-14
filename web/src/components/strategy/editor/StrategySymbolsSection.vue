@@ -13,14 +13,11 @@ const props = defineProps<{
 
 const config = computed(() => props.config)
 
+// symbols is guaranteed to exist — ensureStrategyConfig runs in the composable.
+// Pure read with fallback, no mutation in getter.
 const symbols = computed({
-  get() {
-    if (!config.value.symbols) {
-      config.value.symbols = []
-    }
-    return config.value.symbols
-  },
-  set(val) {
+  get: () => config.value.symbols ?? [],
+  set: (val) => {
     config.value.symbols = val
   },
 })
