@@ -35,12 +35,6 @@ const emit = defineEmits<{
         class="whitespace-pre-wrap text-xs p-3 rounded-xl overflow-y-auto max-h-60 font-mono bg-surface-100 dark:bg-surface-900 text-surface-700 dark:text-surface-300 border border-surface-200 dark:border-surface-800"
         >{{ preview.system }}</pre
       >
-      <div
-        class="mt-3 text-xs text-surface-500 dark:text-surface-400 font-medium"
-      >
-        Variant:
-        <span class="font-bold text-primary">{{ preview.variant }}</span>
-      </div>
     </template>
   </Card>
 </template>

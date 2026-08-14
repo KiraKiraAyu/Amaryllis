@@ -109,14 +109,12 @@ impl DebateService {
         name: Option<String>,
         symbol: Option<String>,
         max_rounds: Option<i64>,
-        prompt_variant: Option<String>,
         participants: Option<Vec<String>>,
     ) -> AppResult<DebateActionPayload> {
         let create_request = DebateCreateRequest {
             name: name.unwrap_or_else(|| "Debate".to_string()),
             symbol: symbol.unwrap_or_else(|| "BTCUSDT".to_string()),
             max_rounds,
-            prompt_variant,
             participants,
         };
 
@@ -246,7 +244,6 @@ struct DebateCreateRequest {
     pub name: String,
     pub symbol: String,
     pub max_rounds: Option<i64>,
-    pub prompt_variant: Option<String>,
     pub participants: Option<Vec<String>>, // personality names
 }
 
@@ -258,10 +255,6 @@ async fn create_debate(
     let id = Uuid::now_v7().to_string();
     let now = now_ts();
     let max_rounds = req.max_rounds.unwrap_or(3).clamp(1, 10);
-    let variant = req
-        .prompt_variant
-        .clone()
-        .unwrap_or_else(|| "balanced".to_string());
     let participants = req.participants.clone().unwrap_or_else(|| {
         vec![
             "bull".to_string(),
@@ -278,7 +271,6 @@ async fn create_debate(
             symbol: req.symbol.trim().to_uppercase(),
             status: DebateStatus::Pending.to_string(),
             max_rounds,
-            prompt_variant: variant,
             participants_json,
             created_at: now,
             updated_at: now,
@@ -365,10 +357,6 @@ async fn start_debate(
 
     let max_rounds = debate["max_rounds"].as_i64().unwrap_or(3) as usize;
     let symbol = debate["symbol"].as_str().unwrap_or("BTCUSDT").to_string();
-    let variant = debate["prompt_variant"]
-        .as_str()
-        .unwrap_or("balanced")
-        .to_string();
     let participants: Vec<String> =
         serde_json::from_value(debate["participants"].clone()).unwrap_or_default();
 
@@ -380,7 +368,6 @@ async fn start_debate(
         llm_service,
         max_rounds,
         symbol,
-        variant,
         cancel_rx,
         realtime_hub,
     ));
@@ -396,7 +383,6 @@ async fn run_debate_task(
     llm_service: Arc<LlmService>,
     max_rounds: usize,
     symbol: String,
-    _variant: String,
     mut cancel_rx: tokio::sync::oneshot::Receiver<()>,
     realtime_hub: RealtimeHub,
 ) {

@@ -94,7 +94,6 @@ export function useDebatePage() {
         symbol: newDebate.value.symbol.toUpperCase(),
         max_rounds: newDebate.value.max_rounds,
         participants: newDebate.value.participants,
-        prompt_variant: "balanced",
       })
       showCreate.value = false
       await loadDebates()

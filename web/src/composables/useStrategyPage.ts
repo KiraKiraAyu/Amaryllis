@@ -42,17 +42,14 @@ function ensureStrategyConfig(config: StrategyConfigPayload): void {
     config.tp_sl = empty
   }
   if (config.max_positions == null) config.max_positions = 5
-  if (!config.prompt_variant) config.prompt_variant = "balanced"
 }
 
 function errorResult(
   message: string,
-  variant: string,
 ): StrategyTestResult {
   return {
     system_prompt: "",
     user_prompt: "",
-    prompt_variant: variant,
     ai_model_id: "",
     ai_response: message,
     decisions: [],
@@ -165,7 +162,6 @@ export function useStrategyPage() {
       : {
           symbols: [],
           max_positions: 5,
-          prompt_variant: "balanced",
         }
     ensureStrategyConfig(config)
 
@@ -275,13 +271,11 @@ export function useStrategyPage() {
 
   async function runTest() {
     if (!selected.value) return
-    const variant = selected.value.config.prompt_variant ?? "balanced"
     testRunLoading.value = true
     testResult.value = null
     try {
       const data = await strategyTestRunApi({
         config: selected.value.config,
-        prompt_variant: variant,
         run_real_ai: true,
       })
       testResult.value = data
@@ -294,15 +288,14 @@ export function useStrategyPage() {
         try {
           const data = await strategyTestRunApi({
             config: selected.value.config,
-            prompt_variant: variant,
             run_real_ai: false,
           })
           testResult.value = data
         } catch {
-          testResult.value = errorResult(errorMsg, variant)
+          testResult.value = errorResult(errorMsg)
         }
       } else {
-        testResult.value = errorResult(errorMsg, variant)
+        testResult.value = errorResult(errorMsg)
       }
     } finally {
       testRunLoading.value = false
@@ -345,11 +338,9 @@ export function useStrategyPage() {
     try {
       const data = await previewStrategyPromptApi({
         config: selected.value.config,
-        prompt_variant: selected.value.config.prompt_variant ?? "balanced",
       })
       previewPromptText.value = {
         system: data.system_prompt,
-        variant: data.prompt_variant,
       }
     } finally {
       previewLoading.value = false

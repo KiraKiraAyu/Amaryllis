@@ -2,7 +2,6 @@ export interface CreateDebateRequest {
   name?: string | null
   symbol?: string | null
   max_rounds?: number | null
-  prompt_variant?: string | null
   participants?: string[] | null
 }
 
@@ -22,7 +21,6 @@ export interface DebateSummaryPayload {
 }
 
 export interface DebatePayload extends DebateSummaryPayload {
-  prompt_variant: string
   participants: string[]
   final_reasoning: string
   error_message: string

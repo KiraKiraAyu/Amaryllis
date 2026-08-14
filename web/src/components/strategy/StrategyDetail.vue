@@ -26,7 +26,6 @@ const emit = defineEmits<{
 const config = computed(() => props.strategy.config || {})
 const symbols = computed(() => config.value.symbols || [])
 const maxPositions = computed(() => config.value.max_positions ?? 5)
-const promptVariant = computed(() => config.value.prompt_variant ?? "balanced")
 
 // TP/SL display
 const tpSl = computed(() => config.value.tp_sl)
@@ -84,26 +83,6 @@ const stopLoss = computed(() => tpSl.value?.stop_loss)
       <div
         class="flex items-center gap-8 mb-6 p-4 rounded-2xl bg-surface-50 dark:bg-surface-950 border border-surface-200 dark:border-surface-800"
       >
-        <div class="flex items-center gap-3">
-          <div
-            class="h-9 w-9 rounded-xl bg-primary-500/10 dark:bg-primary-500/20 flex items-center justify-center text-primary"
-          >
-            <span class="pi pi-compass text-base"></span>
-          </div>
-          <div class="flex flex-col">
-            <span
-              class="text-xs text-surface-400 dark:text-surface-500 font-bold uppercase tracking-wider"
-              >Prompt Variant</span
-            >
-            <span
-              class="text-sm font-bold text-surface-900 dark:text-white capitalize"
-              >{{ promptVariant }}</span
-            >
-          </div>
-        </div>
-
-        <div class="w-px h-8 bg-surface-200 dark:bg-surface-800"></div>
-
         <div class="flex items-center gap-3">
           <div
             class="h-9 w-9 rounded-xl bg-blue-500/10 dark:bg-blue-500/20 flex items-center justify-center text-blue-500"

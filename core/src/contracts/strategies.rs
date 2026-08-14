@@ -28,13 +28,11 @@ pub struct DuplicateStrategyRequest {
 pub struct PreviewPromptRequest {
     pub config: Value,
     pub account_equity: Option<f64>,
-    pub prompt_variant: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct StrategyTestRunRequest {
     pub config: Value,
-    pub prompt_variant: Option<String>,
     pub ai_model_id: Option<String>,
     pub run_real_ai: Option<bool>,
 }
@@ -76,14 +74,12 @@ pub struct StrategyDefaultConfigPayload {
 #[derive(Debug, Clone, Serialize)]
 pub struct PreviewPromptPayload {
     pub system_prompt: String,
-    pub prompt_variant: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct StrategyTestRunPayload {
     pub system_prompt: String,
     pub user_prompt: String,
-    pub prompt_variant: String,
     pub ai_model_id: String,
     pub ai_response: String,
     pub decisions: Value,

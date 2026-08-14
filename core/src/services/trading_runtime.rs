@@ -19,6 +19,8 @@ pub mod fixed_tpsl;
 pub mod market;
 pub mod market_seed;
 pub mod models;
+pub mod prompt_assemble;
+pub mod prompt_data;
 pub mod service;
 
 #[cfg(test)]

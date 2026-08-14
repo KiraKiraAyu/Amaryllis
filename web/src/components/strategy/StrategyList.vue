@@ -62,16 +62,6 @@ const emit = defineEmits<{
                 {{ strategy.config?.max_positions ?? 5 }}
               </span>
             </div>
-            <div class="flex items-center justify-between text-xs">
-              <span class="text-surface-400 dark:text-surface-500"
-                >Prompt Variant:</span
-              >
-              <span
-                class="font-bold capitalize text-surface-900 dark:text-white text-xs"
-              >
-                {{ strategy.config?.prompt_variant ?? "balanced" }}
-              </span>
-            </div>
           </div>
 
           <!-- Column 3: Trading Targets (Symbols, Leverage, Cost settings) -->

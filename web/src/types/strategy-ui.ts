@@ -13,10 +13,8 @@ export type StrategyTestResult = StrategyTestRunPayload
 export interface StrategyConfigFormFields {
   trading_symbols?: string
   max_positions?: number
-  prompt_variant?: string
 }
 
 export interface StrategyPromptPreviewModel {
   system: string
-  variant: string
 }

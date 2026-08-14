@@ -143,7 +143,6 @@ pub async fn handle_preview_prompt(
     let payload = app.services.strategy_service.preview_prompt(
         req.config,
         req.account_equity,
-        req.prompt_variant,
     )?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
@@ -160,7 +159,6 @@ pub async fn handle_strategy_test_run(
         .strategy_service
         .test_run(
             req.config,
-            req.prompt_variant,
             req.ai_model_id,
             req.run_real_ai,
         )

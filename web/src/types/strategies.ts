@@ -144,7 +144,6 @@ export interface StrategyConfigPayload {
   grid_config?: StrategyGridConfigPayload
   trading_symbols?: string
   max_positions?: number
-  prompt_variant?: string
 }
 
 export interface StrategyDecisionPayload {
@@ -173,12 +172,10 @@ export interface DuplicateStrategyRequest {
 export interface PreviewPromptRequest {
   config: StrategyConfigPayload
   account_equity?: number | null
-  prompt_variant?: string | null
 }
 
 export interface StrategyTestRunRequest {
   config: StrategyConfigPayload
-  prompt_variant?: string | null
   ai_model_id?: string | null
   run_real_ai?: boolean | null
 }
@@ -214,13 +211,11 @@ export interface StrategyDefaultConfigPayload {
 
 export interface PreviewPromptPayload {
   system_prompt: string
-  prompt_variant: string
 }
 
 export interface StrategyTestRunPayload {
   system_prompt: string
   user_prompt: string
-  prompt_variant: string
   ai_model_id: string
   ai_response: string
   decisions: StrategyDecisionPayload[]

@@ -27,7 +27,6 @@ pub async fn handle_create_debate(
         name,
         symbol,
         max_rounds,
-        prompt_variant,
         participants,
     }): Json<CreateDebateRequest>,
 ) -> Result<Json<ApiResponse<DebateActionPayload>>> {
@@ -53,7 +52,7 @@ pub async fn handle_create_debate(
     let payload = app
         .services
         .debate_service
-        .create(name, symbol, max_rounds, prompt_variant, participants)
+        .create(name, symbol, max_rounds, participants)
         .await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }

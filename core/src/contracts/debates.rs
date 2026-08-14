@@ -6,7 +6,6 @@ pub struct CreateDebateRequest {
     pub name: Option<String>,
     pub symbol: Option<String>,
     pub max_rounds: Option<i64>,
-    pub prompt_variant: Option<String>,
     pub participants: Option<Vec<String>>,
 }
 

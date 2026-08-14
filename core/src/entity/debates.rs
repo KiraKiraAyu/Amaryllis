@@ -17,8 +17,6 @@ pub struct Model {
     pub max_rounds: i32,
     pub current_round: i32,
     #[sea_orm(column_type = "Text")]
-    pub prompt_variant: String,
-    #[sea_orm(column_type = "Text")]
     pub participants_json: String,
     #[sea_orm(column_type = "Text")]
     pub final_decision: String,

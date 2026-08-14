@@ -14,7 +14,7 @@ use crate::{
     },
     services::data_template::{data_template_value, validate_strategy_data_template},
     services::llm::{LlmMessage, LlmService},
-    services::trading_runtime::ai_decision::build_system_prompt_from_config,
+    services::trading_runtime::prompt_assemble::{build_system_prompt_from_config, build_test_run_prompt},
 };
 
 #[derive(Debug, Clone)]
@@ -233,13 +233,7 @@ impl StrategyService {
         &self,
         config: Value,
         _account_equity: Option<f64>,
-        prompt_variant: Option<String>,
     ) -> Result<PreviewPromptPayload> {
-        let prompt_variant = prompt_variant
-            .unwrap_or_else(|| "balanced".to_string())
-            .trim()
-            .to_string();
-
         // Use the unified prompt builder shared with live trading, backtest, and test run
         let system_prompt = build_system_prompt_from_config(
             &config, true, // is_cross_margin: default for preview (no trader context)
@@ -249,7 +243,6 @@ impl StrategyService {
 
         let payload = PreviewPromptPayload {
             system_prompt,
-            prompt_variant,
         };
 
         Ok(payload)
@@ -258,15 +251,10 @@ impl StrategyService {
     pub async fn test_run(
         &self,
         config: Value,
-        prompt_variant: Option<String>,
         ai_model_id: Option<String>,
         run_real_ai: Option<bool>,
     ) -> Result<StrategyTestRunPayload> {
         let started = std::time::Instant::now();
-        let prompt_variant = prompt_variant
-            .unwrap_or_else(|| "balanced".to_string())
-            .trim()
-            .to_string();
         let resolved_model = self
             .llm_service
             .resolve_for_user(ai_model_id.as_deref())
@@ -279,8 +267,6 @@ impl StrategyService {
             "",   // no trader-specific custom prompt
             false,
         );
-
-        let config_str = serde_json::to_string_pretty(&config).unwrap_or_else(|_| "{}".to_string());
 
         let mut symbols: Vec<String> = Vec::new();
         if let Some(symbols_arr) = config.get("symbols").and_then(|v| v.as_array()) {
@@ -311,18 +297,9 @@ impl StrategyService {
         }
 
         let symbols_str = symbols.join(", ");
-        let user_prompt = format!(
-            "Strategy variant: {prompt_variant}\n\
-        Model: {ai_model_id}\n\
-        Symbols to analyze: {symbols_str}\n\n\
-        Strategy config:\n{config_str}\n\n\
-        Based on this strategy configuration and current market conditions, \
-        provide trading decisions for each symbol: {symbols_str}.\n\
-        Return a JSON array only.",
-            prompt_variant = prompt_variant,
-            ai_model_id = ai_model_id,
-            symbols_str = symbols_str,
-            config_str = config_str,
+        let user_prompt = build_test_run_prompt(
+            &ai_model_id,
+            &symbols_str,
         );
 
         if run_real_ai {
@@ -361,7 +338,6 @@ impl StrategyService {
             let payload = StrategyTestRunPayload {
                 system_prompt,
                 user_prompt,
-                prompt_variant,
                 ai_model_id,
                 ai_response: raw_response,
                 decisions,
@@ -385,7 +361,6 @@ impl StrategyService {
         let payload = StrategyTestRunPayload {
             system_prompt,
             user_prompt,
-            prompt_variant,
             ai_model_id,
             ai_response: "Simulated test-run complete.".to_string(),
             reasoning: "Strategy dry-run analyzed risk constraints and market context.".to_string(),
@@ -467,7 +442,6 @@ fn default_strategy_config() -> Value {
         "strategy_type": "ai_trading",
         "symbols": [],
         "max_positions": 5,
-        "prompt_variant": "balanced",
         "coin_source": {
             "source_type": "mixed",
             "static_coins": ["BTCUSDT", "ETHUSDT"],

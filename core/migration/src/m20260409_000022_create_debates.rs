@@ -48,12 +48,6 @@ impl MigrationTrait for Migration {
                             .default(0),
                     )
                     .col(
-                        ColumnDef::new(Debates::PromptVariant)
-                            .string()
-                            .not_null()
-                            .default("balanced"),
-                    )
-                    .col(
                         ColumnDef::new(Debates::ParticipantsJson)
                             .string()
                             .not_null()
@@ -108,7 +102,6 @@ enum Debates {
     Status,
     MaxRounds,
     CurrentRound,
-    PromptVariant,
     ParticipantsJson,
     FinalDecision,
     FinalReasoning,

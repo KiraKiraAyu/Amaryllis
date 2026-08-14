@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import InputText from "primevue/inputtext"
 import InputNumber from "primevue/inputnumber"
-import Select from "primevue/select"
 import { computed } from "vue"
 import type { EditableStrategy } from "@/types/strategy-ui"
 import type { StrategyConfigPayload } from "@/types/strategies"
@@ -14,24 +13,6 @@ const props = defineProps<{
 
 const strategy = computed(() => props.strategy)
 const config = computed(() => props.config)
-
-const promptVariantOptions = [
-  {
-    label: "Balanced",
-    value: "balanced",
-    description: "Even mix of caution and opportunity",
-  },
-  {
-    label: "Aggressive",
-    value: "aggressive",
-    description: "Favors bold entries and wider risk",
-  },
-  {
-    label: "Conservative",
-    value: "conservative",
-    description: "Favors capital preservation",
-  },
-]
 </script>
 
 <template>
@@ -75,29 +56,6 @@ const promptVariantOptions = [
           showButtons
           class="h-10 rounded-xl"
         />
-      </div>
-      <div class="flex flex-col gap-1.5">
-        <label
-          class="text-xs font-bold uppercase tracking-wider text-surface-400 dark:text-surface-500"
-          >Prompt Variant</label
-        >
-        <Select
-          v-model="config.prompt_variant"
-          :options="promptVariantOptions"
-          optionLabel="label"
-          optionValue="value"
-          placeholder="Select variant"
-          class="h-10 rounded-xl flex items-center"
-        >
-          <template #option="{ option }">
-            <div class="flex flex-col gap-0.5 py-0.5">
-              <span class="text-sm font-semibold">{{ option.label }}</span>
-              <span class="text-xs text-surface-400">{{
-                option.description
-              }}</span>
-            </div>
-          </template>
-        </Select>
       </div>
     </div>
   </EditorSection>
