@@ -427,7 +427,6 @@ async fn test_persisted_decision_uses_completion_time_and_keeps_cycle_timing() {
     let decision = generate_fallback_decision(
         "BTCUSDT",
         market.get("BTCUSDT").expect("market state"),
-        false,
         "soft",
         "market_signal",
         "corr_decision_1",

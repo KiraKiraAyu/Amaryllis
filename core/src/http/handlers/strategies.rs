@@ -1,11 +1,11 @@
 use axum::{
     Json,
-    extract::{Path, Query, State},
+    extract::{Path, State},
 };
 
 use crate::{
     contracts::strategies::{
-        CreateStrategyRequest, DefaultStrategyConfigQuery, DuplicateStrategyRequest,
+        CreateStrategyRequest, DuplicateStrategyRequest,
         PreviewPromptPayload, PreviewPromptRequest, StrategyCreatedPayload,
         StrategyDefaultConfigPayload, StrategyListPayload, StrategyMessagePayload, StrategyPayload,
         StrategyTestRunPayload, StrategyTestRunRequest, UpdateStrategyRequest,
@@ -125,12 +125,11 @@ pub async fn handle_get_active_strategy(
 
 pub async fn handle_get_default_strategy_config(
     State(app): State<AppState>,
-    Query(query): Query<DefaultStrategyConfigQuery>,
 ) -> Result<Json<ApiResponse<StrategyDefaultConfigPayload>>> {
     let payload = app
         .services
         .strategy_service
-        .default_strategy_config(query.lang)?;
+        .default_strategy_config()?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 

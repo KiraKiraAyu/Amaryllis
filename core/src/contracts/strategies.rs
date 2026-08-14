@@ -25,11 +25,6 @@ pub struct DuplicateStrategyRequest {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct DefaultStrategyConfigQuery {
-    pub lang: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
 pub struct PreviewPromptRequest {
     pub config: Value,
     pub account_equity: Option<f64>,
@@ -75,7 +70,6 @@ pub struct StrategyMessagePayload {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct StrategyDefaultConfigPayload {
-    pub language: String,
     pub config: Value,
 }
 

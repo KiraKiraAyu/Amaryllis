@@ -221,14 +221,9 @@ impl StrategyService {
         Ok(strategy_payload(row))
     }
 
-    pub fn default_strategy_config(
-        &self,
-        lang: Option<String>,
-    ) -> Result<StrategyDefaultConfigPayload> {
-        let language = lang.unwrap_or_else(|| "en".to_string());
+    pub fn default_strategy_config(&self) -> Result<StrategyDefaultConfigPayload> {
         let payload = StrategyDefaultConfigPayload {
-            config: default_strategy_config(&language),
-            language,
+            config: default_strategy_config(),
         };
 
         Ok(payload)
@@ -467,11 +462,9 @@ fn strategy_payload(row: StrategyRecord) -> StrategyPayload {
     }
 }
 
-fn default_strategy_config(lang: &str) -> Value {
-    let is_zh = lang.eq_ignore_ascii_case("zh");
+fn default_strategy_config() -> Value {
     json!({
         "strategy_type": "ai_trading",
-        "language": if is_zh { "zh" } else { "en" },
         "symbols": [],
         "max_positions": 5,
         "prompt_variant": "balanced",
@@ -509,26 +502,10 @@ fn default_strategy_config(lang: &str) -> Value {
             }
         },
         "prompt_sections": {
-            "role_definition": if is_zh {
-                "# 你是专业的加密货币交易AI\n\n你专注于技术分析和风险管理。"
-            } else {
-                "# You are a professional crypto trading AI\n\nFocus on technical analysis and strict risk management."
-            },
-            "trading_frequency": if is_zh {
-                "# 交易频率\n\n避免过度交易，优先高质量信号。"
-            } else {
-                "# Trading Frequency\n\nAvoid overtrading, prioritize high-quality setups."
-            },
-            "entry_standards": if is_zh {
-                "# 开仓标准\n\n仅在多信号共振时开仓。"
-            } else {
-                "# Entry Standards\n\nEnter only with multi-signal confluence."
-            },
-            "decision_process": if is_zh {
-                "# 决策流程\n\n先评估风险，再给出结构化决策。"
-            } else {
-                "# Decision Process\n\nAssess risk first, then output structured decisions."
-            }
+            "role_definition": "# You are a professional crypto trading AI\n\nFocus on technical analysis and strict risk management.",
+            "trading_frequency": "# Trading Frequency\n\nAvoid overtrading, prioritize high-quality setups.",
+            "entry_standards": "# Entry Standards\n\nEnter only with multi-signal confluence.",
+            "decision_process": "# Decision Process\n\nAssess risk first, then output structured decisions."
         },
         "grid_config": {
             "symbol": "BTCUSDT",
@@ -558,7 +535,7 @@ mod tests {
 
     #[test]
     fn default_fixed_tp_sl_values_are_empty() {
-        let config = default_strategy_config("en");
+        let config = default_strategy_config();
         let tp_sl = config.get("tp_sl").expect("default TP/SL config");
         assert!(
             tp_sl
@@ -574,7 +551,7 @@ mod tests {
 
     #[test]
     fn default_strategy_includes_a_valid_primary_kline_data_item() {
-        let config = default_strategy_config("en");
+        let config = default_strategy_config();
 
         let template = validate_strategy_data_template(&config).expect("default data template");
         let primary = template.items.first().expect("primary kline item");

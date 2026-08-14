@@ -1,11 +1,9 @@
 import type {
   CreateStrategyRequest,
-  DefaultStrategyConfigQuery,
   DuplicateStrategyRequest,
   PreviewPromptPayload,
   PreviewPromptRequest,
   StrategyCreatedPayload,
-  StrategyDefaultConfigPayload,
   StrategyListPayload,
   StrategyMessagePayload,
   StrategyPayload,
@@ -19,7 +17,6 @@ import request from "@/utils/request"
 const Api = {
   Root: "/api/strategies",
   Active: "/api/strategies/active",
-  DefaultConfig: "/api/strategies/default-config",
   PreviewPrompt: "/api/strategies/preview-prompt",
   TestRun: "/api/strategies/test-run",
   Detail: "/api/strategies/{id}",
@@ -38,14 +35,6 @@ export function createStrategyApi(data: CreateStrategyRequest) {
 
 export function getActiveStrategyApi() {
   return request.get<StrategyPayload>(Api.Active)
-}
-
-export function getDefaultStrategyConfigApi(
-  params?: DefaultStrategyConfigQuery,
-) {
-  return request.get<StrategyDefaultConfigPayload>(Api.DefaultConfig, {
-    params,
-  })
 }
 
 export function previewStrategyPromptApi(data: PreviewPromptRequest) {

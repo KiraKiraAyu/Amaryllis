@@ -3,6 +3,15 @@ use super::service::*;
 use crate::repositories::trading::records::history::InsertTraderDecisionRecord;
 use crate::services::data_template::validate_strategy_data_template;
 
+/// Calculate price momentum from current and previous prices.
+fn momentum(m: &MarketState) -> f64 {
+    if m.prev_price.abs() > f64::EPSILON {
+        (m.price - m.prev_price) / m.prev_price
+    } else {
+        0.0
+    }
+}
+
 pub async fn generate_ai_decision(
     state: &SharedState,
     cfg: &TraderRuntimeConfig,
@@ -13,7 +22,6 @@ pub async fn generate_ai_decision(
     trigger_source: &str,
     correlation_id: &str,
     metrics: &AccountMetrics,
-    _now: i64,
 ) -> DecisionSignal {
     if hard_risk_trigger {
         warn!(
@@ -25,11 +33,6 @@ pub async fn generate_ai_decision(
             prev_price: 100.0,
             volatility: 0.01,
         });
-        let momentum = if m.prev_price.abs() > f64::EPSILON {
-            (m.price - m.prev_price) / m.prev_price
-        } else {
-            0.0
-        };
         return DecisionSignal {
             symbol: symbol.to_string(),
             action: "NO ACTION".to_string(),
@@ -37,7 +40,7 @@ pub async fn generate_ai_decision(
             reason: "risk control active: drawdown/margin threshold reached".to_string(),
             timeframe: "3m",
             price: m.price,
-            momentum,
+            momentum: momentum(&m),
             risk_level: risk_level.to_string(),
             trigger_source: trigger_source.to_string(),
             action_taken: "hold-risk-guard".to_string(),
@@ -72,11 +75,7 @@ pub async fn generate_ai_decision(
         }
     };
 
-    let momentum = if m.prev_price.abs() > f64::EPSILON {
-        (m.price - m.prev_price) / m.prev_price
-    } else {
-        0.0
-    };
+    let momentum = momentum(&m);
 
     let data_context = match load_trader_data_context(state, cfg, symbol).await {
         Ok(context) => context,
@@ -104,11 +103,10 @@ pub async fn generate_ai_decision(
     };
 
     let prompt = build_trading_prompt(symbol, &m, metrics, cfg, &data_context.rendered);
-    let system_prompt = build_system_prompt(cfg);
     let system_prompt_owned = if cfg.override_base_prompt && !cfg.custom_prompt.trim().is_empty() {
         Some(cfg.custom_prompt.clone())
     } else {
-        Some(system_prompt)
+        Some(build_system_prompt(cfg))
     };
 
     // Always publish the prompt to realtime clients so users can see what's sent to the AI
@@ -131,7 +129,6 @@ pub async fn generate_ai_decision(
         return generate_fallback_decision(
             symbol,
             &m,
-            hard_risk_trigger,
             risk_level,
             trigger_source,
             correlation_id,
@@ -203,7 +200,6 @@ pub async fn generate_ai_decision(
             generate_fallback_decision(
                 symbol,
                 &m,
-                hard_risk_trigger,
                 risk_level,
                 trigger_source,
                 correlation_id,
@@ -317,11 +313,6 @@ pub fn build_system_prompt_from_config(
     override_base_prompt: bool,
 ) -> String {
     let sc = config;
-    let is_zh = sc
-        .get("language")
-        .and_then(|v| v.as_str())
-        .map(|s| s.eq_ignore_ascii_case("zh"))
-        .unwrap_or(false);
 
     let prompt_variant = sc
         .get("prompt_variant")
@@ -464,39 +455,20 @@ pub fn build_system_prompt_from_config(
         })
         .unwrap_or_else(|_| ("5m".to_string(), "None".to_string()));
 
-    let header = if is_zh {
-        "你是 QUANTAURA 交易AI，一个专业的加密货币永续合约交易系统。"
-    } else {
-        "You are QUANTAURA trading AI, a professional crypto perpetual futures trading system."
-    };
+    let header =
+        "You are QUANTAURA trading AI, a professional crypto perpetual futures trading system.";
 
-    let action_desc = if is_zh {
-        r#"## 动作定义
-你必须从以下三个动作中选择一个：
-- **LONG**: 开多仓（如果当前持有空仓，先平空再开多；如果已有多仓，则保持）
-- **SHORT**: 开空仓（如果当前持有多仓，先平多再开空；如果已有空仓，则保持）
-- **NO ACTION**: 不执行任何操作（观望或保持现有仓位）
-
-所有交易标的均为永续合约（USDT本位），不支持现货和交割合约。"#
-    } else {
-        r#"## Action Definitions
+    let action_desc = r#"## Action Definitions
 You must choose exactly one of three actions:
 - **LONG**: Open a long position (if currently short, close short first then open long; if already long, hold)
 - **SHORT**: Open a short position (if currently long, close long first then open short; if already short, hold)
 - **NO ACTION**: Do nothing (observe or maintain current positions)
 
-All trading symbols are perpetual futures contracts (USDT-margined). Spot and delivery contracts are not supported."#
-    };
+All trading symbols are perpetual futures contracts (USDT-margined). Spot and delivery contracts are not supported."#;
 
-    let response_format = if is_zh {
-        r#"## 响应格式
-返回纯JSON对象，不要包含markdown：
-{"action": "LONG" | "SHORT" | "NO ACTION", "confidence": 0.0-1.0, "reason": "1-2句分析说明"}"#
-    } else {
-        r#"## Response Format
+    let response_format = r#"## Response Format
 Respond with a plain JSON object, no markdown:
-{"action": "LONG" | "SHORT" | "NO ACTION", "confidence": 0.0-1.0, "reason": "1-2 sentence analysis"}"#
-    };
+{"action": "LONG" | "SHORT" | "NO ACTION", "confidence": 0.0-1.0, "reason": "1-2 sentence analysis"}"#;
 
     let custom_prompt_section = if override_base_prompt && !custom_prompt.trim().is_empty() {
         format!("\n## Additional Instructions\n{}", custom_prompt.trim())
@@ -574,11 +546,7 @@ pub fn build_trading_prompt(
     cfg: &TraderRuntimeConfig,
     strategy_data_context: &str,
 ) -> String {
-    let momentum = if m.prev_price.abs() > f64::EPSILON {
-        (m.price - m.prev_price) / m.prev_price
-    } else {
-        0.0
-    };
+    let momentum = momentum(m);
 
     let leverage = leverage_for_symbol(cfg, symbol);
 
@@ -629,36 +597,13 @@ Respond with JSON: {{"action":"LONG|SHORT|NO ACTION","confidence":0.0-1.0,"reaso
 pub fn generate_fallback_decision(
     symbol: &str,
     m: &MarketState,
-    hard_risk_trigger: bool,
     risk_level: &str,
     trigger_source: &str,
     correlation_id: &str,
     prompt: String,
     system_prompt: Option<String>,
 ) -> DecisionSignal {
-    let momentum = if m.prev_price.abs() > f64::EPSILON {
-        (m.price - m.prev_price) / m.prev_price
-    } else {
-        0.0
-    };
-
-    if hard_risk_trigger {
-        return DecisionSignal {
-            symbol: symbol.to_string(),
-            action: "NO ACTION".to_string(),
-            confidence: 0.95,
-            reason: "risk control active: drawdown/margin threshold reached".to_string(),
-            timeframe: "3m",
-            price: m.price,
-            momentum,
-            risk_level: risk_level.to_string(),
-            trigger_source: trigger_source.to_string(),
-            action_taken: "hold-risk-guard".to_string(),
-            correlation_id: correlation_id.to_string(),
-            prompt,
-            system_prompt,
-        };
-    }
+    let momentum = momentum(m);
 
     let threshold = (0.0015 + m.volatility * 0.2).clamp(0.001, 0.01);
 
@@ -767,33 +712,23 @@ pub struct TradingDecision {
 pub fn parse_ai_response(response: &str) -> TradingDecision {
     let lower = response.to_lowercase();
 
-    // Try JSON parsing first
-    if let Some(action) = extract_json_action(response) {
-        let reason = extract_json_reason(response).unwrap_or_else(|| response.to_string());
-        let confidence = extract_confidence(&lower).unwrap_or(0.7);
-        return TradingDecision {
-            action,
-            confidence,
-            reason,
-        };
-    }
-
-    // Fallback: keyword matching
-    let action = if lower.contains("long") && !lower.contains("no action") {
-        "LONG".to_string()
-    } else if lower.contains("short") && !lower.contains("no action") {
-        "SHORT".to_string()
-    } else if lower.contains("no action") || lower.contains("hold") || lower.contains("nothing") {
-        "NO ACTION".to_string()
-    } else {
-        "NO ACTION".to_string()
-    };
+    // Try JSON extraction first, fall back to keyword matching
+    let action = extract_json_action(response).unwrap_or_else(|| {
+        if lower.contains("long") && !lower.contains("no action") {
+            "LONG".to_string()
+        } else if lower.contains("short") && !lower.contains("no action") {
+            "SHORT".to_string()
+        } else {
+            "NO ACTION".to_string()
+        }
+    });
 
     let reason = extract_json_reason(response).unwrap_or_else(|| response.to_string());
+    let confidence = extract_confidence(&lower).unwrap_or(0.7);
 
     TradingDecision {
         action,
-        confidence: extract_confidence(&lower).unwrap_or(0.7),
+        confidence,
         reason,
     }
 }

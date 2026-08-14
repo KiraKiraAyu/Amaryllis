@@ -134,7 +134,6 @@ export interface StrategySymbolConfig {
 export interface StrategyConfigPayload {
   symbols?: StrategySymbolConfig[]
   strategy_type?: string
-  language?: string
   coin_source?: StrategyCoinSourceConfigPayload
   indicators?: StrategyIndicatorsConfigPayload
   data_template?: StrategyDataTemplatePayload
@@ -169,10 +168,6 @@ export interface UpdateStrategyRequest {
 
 export interface DuplicateStrategyRequest {
   name?: string
-}
-
-export interface DefaultStrategyConfigQuery {
-  lang?: string | null
 }
 
 export interface PreviewPromptRequest {
@@ -211,11 +206,6 @@ export interface StrategyCreatedPayload {
 
 export interface StrategyMessagePayload {
   message: string
-}
-
-export interface StrategyDefaultConfigPayload {
-  language: string
-  config: StrategyConfigPayload
 }
 
 export interface PreviewPromptPayload {

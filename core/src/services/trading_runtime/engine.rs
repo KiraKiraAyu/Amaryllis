@@ -728,7 +728,6 @@ pub async fn process_cycle(
             trigger_source,
             &cycle_correlation_id,
             &metrics,
-            cycle_started_at,
         )
         .await;
 
