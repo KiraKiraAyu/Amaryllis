@@ -40,6 +40,20 @@ export function fmtUsd(value: number | null | undefined): string {
   })
 }
 
+/** Normalize a position side string to "Long" or "Short". */
+export function normalizeSide(side: string): string {
+  const s = side.toLowerCase()
+  if (s === "buy" || s === "long") return "Long"
+  if (s === "sell" || s === "short") return "Short"
+  return side
+}
+
+/** Check whether a position side represents a long position. */
+export function isLongSide(side: string): boolean {
+  const s = side.toLowerCase()
+  return s === "buy" || s === "long"
+}
+
 export function formatDate(value: DateInput, options?: FormatDateOptions) {
   return formatDateInput(
     value,

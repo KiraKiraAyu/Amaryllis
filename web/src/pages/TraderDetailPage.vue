@@ -7,7 +7,7 @@ import PageHeader from "@/components/layout/PageHeader.vue"
 import TraderFeed from "@/components/traders/feed/TraderFeed.vue"
 import ScanCountdown from "@/components/traders/ScanCountdown.vue"
 import { useTraderDetail } from "@/composables/useTraderDetail"
-import { fmtUsd } from "@/utils/format"
+import { fmtUsd, isLongSide, normalizeSide } from "@/utils/format"
 
 const route = useRoute()
 const router = useRouter()
@@ -219,7 +219,7 @@ function pnlClass(val: number): string {
           :key="pos.id"
           class="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-mono border"
           :class="
-            pos.side === 'LONG'
+            isLongSide(pos.side)
               ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20'
               : 'border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/20'
           "
@@ -227,24 +227,34 @@ function pnlClass(val: number): string {
           <span
             class="font-bold"
             :class="
-              pos.side === 'LONG'
+              isLongSide(pos.side)
                 ? 'text-emerald-600 dark:text-emerald-400'
                 : 'text-rose-600 dark:text-rose-400'
             "
           >
-            {{ pos.side }}
+            {{ normalizeSide(pos.side) }}
           </span>
           <span class="font-bold text-surface-900 dark:text-white">{{
             pos.symbol
           }}</span>
+          <span class="text-surface-500">{{ pos.leverage }}x</span>
           <span class="text-surface-500">{{ pos.quantity }}</span>
           <span class="text-surface-400"
             >@ ${{ pos.entry_price.toFixed(2) }}</span
           >
+          <span class="text-surface-400">→ ${{ pos.mark_price.toFixed(2) }}</span>
           <span :class="pnlClass(pos.unrealized_pnl)">
             {{ pos.unrealized_pnl >= 0 ? "+" : "" }}${{
               pos.unrealized_pnl.toFixed(2)
             }}
+          </span>
+          <span
+            v-if="pos.tp_price != null || pos.sl_price != null"
+            class="text-[10px] text-surface-400"
+          >
+            <span v-if="pos.tp_price != null" class="text-emerald-500/70">TP {{ pos.tp_price.toFixed(2) }}</span>
+            <span v-if="pos.tp_price != null && pos.sl_price != null"> / </span>
+            <span v-if="pos.sl_price != null" class="text-rose-500/70">SL {{ pos.sl_price.toFixed(2) }}</span>
           </span>
         </div>
       </div>

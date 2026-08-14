@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import Card from "primevue/card"
 import Button from "primevue/button"
+import StrategyPositions from "@/components/strategy/StrategyPositions.vue"
 import type { EditableStrategy } from "@/types/strategy-ui"
+import type { PositionPayload } from "@/types/trading"
 import { computed } from "vue"
 
 const props = defineProps<{
@@ -9,6 +11,8 @@ const props = defineProps<{
   duplicating?: boolean
   testRunLoading?: boolean
   previewLoading?: boolean
+  positions?: PositionPayload[]
+  positionsLoading?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -296,6 +300,14 @@ const stopLoss = computed(() => tpSl.value?.stop_loss)
             </div>
           </div>
         </div>
+      </div>
+
+      <!-- Real-time Open Positions -->
+      <div class="mb-6">
+        <StrategyPositions
+          :positions="positions ?? []"
+          :loading="positionsLoading"
+        />
       </div>
 
       <!-- Action Buttons -->

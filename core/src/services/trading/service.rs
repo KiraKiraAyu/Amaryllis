@@ -323,6 +323,14 @@ impl TradingService {
         positions_history(&state, trader_id, limit, offset).await
     }
 
+    pub async fn positions_by_strategy(
+        &self,
+        strategy_id: &str,
+    ) -> AppResult<Vec<PositionPayload>> {
+        let state = self.state();
+        positions_by_strategy(&state, strategy_id).await
+    }
+
     pub async fn decisions(
         &self,
         trader_id: Option<String>,

@@ -13,6 +13,7 @@ import type {
   StrategyTestRunRequest,
   UpdateStrategyRequest,
 } from "@/types/strategies"
+import type { StrategyPositionListPayload } from "@/types/trading"
 import request from "@/utils/request"
 
 const Api = {
@@ -24,6 +25,7 @@ const Api = {
   Detail: "/api/strategies/{id}",
   Activate: "/api/strategies/{id}/activate",
   Duplicate: "/api/strategies/{id}/duplicate",
+  Positions: "/api/strategies/{id}/positions",
 } as const
 
 export function getStrategiesApi() {
@@ -80,5 +82,11 @@ export function duplicateStrategyApi(
   return request.post<StrategyCreatedPayload>(
     Api.Duplicate.replace("{id}", id),
     data,
+  )
+}
+
+export function getStrategyPositionsApi(id: string) {
+  return request.get<StrategyPositionListPayload>(
+    Api.Positions.replace("{id}", id),
   )
 }

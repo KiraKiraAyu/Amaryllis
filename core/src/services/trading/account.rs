@@ -439,13 +439,18 @@ pub async fn positions(
         .trim()
         .to_lowercase();
 
+    let tp_sl_rates = load_tp_sl_rates(app, &trader_id).await;
+
     match app
         .trading_repo
         .positions_by_status(&trader_id, &status)
         .await
     {
         Ok(items) => {
-            let items: Vec<PositionPayload> = items.into_iter().map(position_payload).collect();
+            let items: Vec<PositionPayload> = items
+                .into_iter()
+                .map(|p| position_payload(p, tp_sl_rates))
+                .collect();
             Ok(PositionListPayload {
                 count: items.len(),
                 items,
@@ -473,13 +478,18 @@ pub async fn positions_history(
     let limit = limit.unwrap_or(100).clamp(1, 500);
     let offset = offset.unwrap_or(0).max(0);
 
+    let tp_sl_rates = load_tp_sl_rates(app, &trader_id).await;
+
     match app
         .trading_repo
         .closed_positions(&trader_id, limit, offset)
         .await
     {
         Ok(items) => {
-            let items: Vec<PositionPayload> = items.into_iter().map(position_payload).collect();
+            let items: Vec<PositionPayload> = items
+                .into_iter()
+                .map(|p| position_payload(p, tp_sl_rates))
+                .collect();
             Ok(PositionListPayload {
                 count: items.len(),
                 items,
@@ -491,6 +501,51 @@ pub async fn positions_history(
             "Failed to load position history",
         )),
     }
+}
+
+/// Fetch all open positions for every trader using the given strategy.
+pub async fn positions_by_strategy(
+    app: &SharedState,
+    strategy_id: &str,
+) -> AppResult<Vec<PositionPayload>> {
+    let strategy_id = strategy_id.trim();
+
+    // Validate strategy exists first → 404 if not found.
+    use crate::entity::strategies;
+    use sea_orm::EntityTrait;
+
+    let strategy = strategies::Entity::find_by_id(strategy_id.to_string())
+        .one(app.trading_repo.db())
+        .await
+        .map_err(|_| app_error(AppErrorKind::Internal, "Failed to load strategy"))?
+        .ok_or_else(|| app_error(AppErrorKind::NotFound, "Strategy not found"))?;
+
+    let config = serde_json::from_str::<serde_json::Value>(&strategy.config)
+        .map_err(|_| app_error(AppErrorKind::Internal, "Invalid strategy config JSON"))?;
+
+    let tp_sl_rates = TpSlRates::from_config(&config);
+
+    let trader_ids = app
+        .trading_repo
+        .trader_ids_by_strategy(strategy_id)
+        .await
+        .map_err(|_| app_error(AppErrorKind::Internal, "Failed to load traders by strategy"))?;
+
+    if trader_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // Single batch query instead of N+1.
+    let positions = app
+        .trading_repo
+        .positions_by_trader_ids(&trader_ids, "open")
+        .await
+        .map_err(|_| app_error(AppErrorKind::Internal, "Failed to load positions"))?;
+
+    Ok(positions
+        .into_iter()
+        .map(|p| position_payload(p, tp_sl_rates))
+        .collect())
 }
 
 trait AccountSnapshotExt {
@@ -517,7 +572,34 @@ fn account_payload(trader_id: String, account: TraderAccountRecord) -> TraderAcc
     }
 }
 
-pub(crate) fn position_payload(position: TraderPositionRecord) -> PositionPayload {
+/// Load TP/SL PnL rates from the trader's strategy config.
+/// Returns `None` if the trader or strategy cannot be found, or if the
+/// strategy uses custom-mode TP/SL (no fixed rates to calculate).
+async fn load_tp_sl_rates(app: &SharedState, trader_id: &str) -> Option<TpSlRates> {
+    let trader = app.trading_repo.get_trader(trader_id).await.ok()??;
+    if trader.strategy_id.trim().is_empty() {
+        return None;
+    }
+
+    use crate::entity::strategies;
+    use sea_orm::EntityTrait;
+
+    let strategy = strategies::Entity::find_by_id(trader.strategy_id.clone())
+        .one(app.trading_repo.db())
+        .await
+        .ok()??;
+
+    let config = serde_json::from_str::<serde_json::Value>(&strategy.config).ok()?;
+    TpSlRates::from_config(&config)
+}
+
+pub(crate) fn position_payload(
+    position: TraderPositionRecord,
+    tp_sl_rates: Option<TpSlRates>,
+) -> PositionPayload {
+    let (tp_price, sl_price) = tp_sl_rates
+        .map(|r| r.calculate_prices(position.entry_price, position.leverage, &position.side))
+        .unwrap_or((None, None));
     PositionPayload {
         id: position.id,
         trader_id: position.trader_id,
@@ -535,6 +617,72 @@ pub(crate) fn position_payload(position: TraderPositionRecord) -> PositionPayloa
         opened_at: position.opened_at,
         closed_at: position.closed_at,
         updated_at: position.updated_at,
+        tp_price,
+        sl_price,
+    }
+}
+
+/// Take-profit / stop-loss PnL rates extracted from a strategy config.
+/// `take_profit` is positive (e.g. 0.2 = +20% ROE), `stop_loss` is negative (e.g. -0.1 = -10% ROE).
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct TpSlRates {
+    pub take_profit: Option<f64>,
+    pub stop_loss: Option<f64>,
+}
+
+impl TpSlRates {
+    /// Extract fixed TP/SL PnL rates from a strategy config JSON.
+    /// Returns `None` when the strategy uses custom-mode TP/SL or has no `tp_sl` section.
+    pub(crate) fn from_config(config: &serde_json::Value) -> Option<TpSlRates> {
+        let take_profit =
+            crate::services::trading_runtime::fixed_tpsl::configured_fixed_take_profit(config)
+                .ok()
+                .flatten()
+                .map(|tp| tp.pnl_rate);
+        let stop_loss =
+            crate::services::trading_runtime::fixed_tpsl::configured_fixed_stop_loss(config)
+                .ok()
+                .flatten()
+                .map(|sl| sl.pnl_rate);
+
+        if take_profit.is_none() && stop_loss.is_none() {
+            return None;
+        }
+
+        Some(TpSlRates {
+            take_profit,
+            stop_loss,
+        })
+    }
+
+    /// Calculate TP/SL trigger prices from entry price, leverage and side.
+    /// Formula mirrors `fixed_tpsl.rs` lines 155-180.
+    fn calculate_prices(
+        &self,
+        entry_price: f64,
+        leverage: i32,
+        side: &str,
+    ) -> (Option<f64>, Option<f64>) {
+        if entry_price <= 0.0 || leverage < 1 {
+            return (None, None);
+        }
+        let lev = leverage as f64;
+        let is_long = side.eq_ignore_ascii_case("LONG");
+        let tp_price = self.take_profit.map(|rate| {
+            if is_long {
+                entry_price * (1.0 + rate / lev)
+            } else {
+                entry_price * (1.0 - rate / lev)
+            }
+        });
+        let sl_price = self.stop_loss.map(|rate| {
+            if is_long {
+                entry_price * (1.0 + rate / lev)
+            } else {
+                entry_price * (1.0 - rate / lev)
+            }
+        });
+        (tp_price, sl_price)
     }
 }
 
@@ -563,7 +711,7 @@ mod tests {
             opened_at: 1_700_000_000,
             closed_at: Some(1_700_000_600),
             updated_at: 1_700_000_900,
-        });
+        }, None);
 
         assert_eq!(payload.id, "position_1");
         assert_eq!(payload.trader_id, "trader_1");
@@ -581,6 +729,8 @@ mod tests {
         assert_eq!(payload.opened_at, 1_700_000_000);
         assert_eq!(payload.closed_at, Some(1_700_000_600));
         assert_eq!(payload.updated_at, 1_700_000_900);
+        assert_eq!(payload.tp_price, None);
+        assert_eq!(payload.sl_price, None);
     }
 
     #[test]

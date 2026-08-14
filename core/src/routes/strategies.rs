@@ -20,4 +20,5 @@ pub fn router() -> Router<AppState> {
         )
         .route("/{id}/activate", post(handle_activate_strategy))
         .route("/{id}/duplicate", post(handle_duplicate_strategy))
+        .route("/{id}/positions", get(handle_get_strategy_positions))
 }

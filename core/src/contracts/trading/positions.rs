@@ -24,11 +24,20 @@ pub struct PositionPayload {
     pub opened_at: i64,
     pub closed_at: Option<i64>,
     pub updated_at: i64,
+    pub tp_price: Option<f64>,
+    pub sl_price: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct PositionListPayload {
     pub trader_id: String,
+    pub items: Vec<PositionPayload>,
+    pub count: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct StrategyPositionListPayload {
+    pub strategy_id: String,
     pub items: Vec<PositionPayload>,
     pub count: usize,
 }

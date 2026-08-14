@@ -294,6 +294,8 @@ mod tests {
             opened_at: 1_700_000_000,
             closed_at: None,
             updated_at: 1_700_000_900,
+            tp_price: None,
+            sl_price: None,
         }
     }
 }

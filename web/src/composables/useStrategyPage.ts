@@ -1,10 +1,11 @@
-import { onMounted, ref, computed } from "vue"
+import { onMounted, onUnmounted, ref, computed, watch } from "vue"
 import { onBeforeRouteLeave } from "vue-router"
 import {
   createStrategyApi,
   deleteStrategyApi,
   duplicateStrategyApi,
   getStrategiesApi,
+  getStrategyPositionsApi,
   previewStrategyPromptApi,
   strategyTestRunApi,
   updateStrategyApi,
@@ -14,6 +15,9 @@ import type {
   StrategyPromptPreviewModel,
   StrategyTestResult,
 } from "@/types/strategy-ui"
+import type { PositionPayload } from "@/types/trading"
+
+const POSITIONS_POLL_MS = 5000
 
 export function useStrategyPage() {
   const strategies = ref<EditableStrategy[]>([])
@@ -27,6 +31,9 @@ export function useStrategyPage() {
   const previewPromptText = ref<StrategyPromptPreviewModel | null>(null)
   const previewLoading = ref(false)
   const duplicating = ref(false)
+  const positions = ref<PositionPayload[]>([])
+  const positionsLoading = ref(false)
+  let positionsTimer: ReturnType<typeof setInterval> | null = null
 
   const isDirty = computed(() => {
     if (!isEditing.value || !selected.value || !originalStrategy.value)
@@ -45,6 +52,48 @@ export function useStrategyPage() {
       loading.value = false
     }
   }
+
+  async function loadPositions() {
+    if (!selected.value?.id) {
+      positions.value = []
+      return
+    }
+    positionsLoading.value = true
+    try {
+      const data = await getStrategyPositionsApi(selected.value.id)
+      positions.value = data.items
+    } catch {
+      // silently ignore — positions are best-effort
+    } finally {
+      positionsLoading.value = false
+    }
+  }
+
+  function startPositionsPolling() {
+    stopPositionsPolling()
+    loadPositions()
+    positionsTimer = setInterval(loadPositions, POSITIONS_POLL_MS)
+  }
+
+  function stopPositionsPolling() {
+    if (positionsTimer) {
+      clearInterval(positionsTimer)
+      positionsTimer = null
+    }
+    positions.value = []
+  }
+
+  // Auto-manage polling based on selection and editing state
+  watch(
+    () => [selected.value?.id, isEditing.value] as const,
+    ([id, editing]) => {
+      if (id && !editing) {
+        startPositionsPolling()
+      } else {
+        stopPositionsPolling()
+      }
+    },
+  )
 
   function createNew() {
     if (isDirty.value) {
@@ -254,12 +303,18 @@ export function useStrategyPage() {
 
   onMounted(load)
 
+  onUnmounted(() => {
+    stopPositionsPolling()
+  })
+
   return {
     createNew,
     deleteStrategy,
     duplicateStrategy,
     duplicating,
     loading,
+    positions,
+    positionsLoading,
     previewLoading,
     previewPrompt,
     previewPromptText,

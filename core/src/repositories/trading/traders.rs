@@ -62,6 +62,17 @@ impl TradingRepo {
             .map(|rows| rows.into_iter().map(|row| row.id).collect())
     }
 
+    /// Return all non-backtest trader IDs that use the given strategy.
+    pub async fn trader_ids_by_strategy(&self, strategy_id: &str) -> Result<Vec<String>, DbErr> {
+        entity::traders::Entity::find()
+            .filter(entity::traders::Column::StrategyId.eq(strategy_id.trim()))
+            .filter(entity::traders::Column::Id.not_like("bt-%"))
+            .order_by_desc(entity::traders::Column::CreatedAt)
+            .all(&self.db)
+            .await
+            .map(|rows| rows.into_iter().map(|row| row.id).collect())
+    }
+
     pub async fn set_trader_running(
         &self,
         trader_id: &str,

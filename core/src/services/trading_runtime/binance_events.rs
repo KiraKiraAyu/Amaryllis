@@ -4,7 +4,7 @@ use crate::repositories::trading::records::{
     orders::{InsertOrderFillRecord, InsertTraderOrderRecord, UpdateTraderOrderRecord},
     positions::UpsertPositionFromExchangeRecord,
 };
-use crate::services::trading::account::position_payload;
+use crate::services::trading::account::{TpSlRates, position_payload};
 
 pub async fn recv_user_stream_event(
     rx: &mut Option<mpsc::Receiver<ExchangeUserStreamEvent>>,
@@ -395,9 +395,11 @@ pub async fn apply_account_stream_update_event(
         .await
         .unwrap_or_default();
 
+    let tp_sl_rates = TpSlRates::from_config(&cfg.strategy_config);
+
     let positions_snapshot = open_positions_ws
         .into_iter()
-        .map(position_payload)
+        .map(|p| position_payload(p, tp_sl_rates))
         .collect();
 
     state

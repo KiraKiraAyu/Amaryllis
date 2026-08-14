@@ -18,6 +18,8 @@ const {
   duplicateStrategy,
   duplicating,
   loading,
+  positions,
+  positionsLoading,
   previewLoading,
   previewPrompt,
   previewPromptText,
@@ -101,6 +103,8 @@ const editingStrategy = computed<EditableStrategy>({
             :duplicating="duplicating"
             :test-run-loading="testRunLoading"
             :preview-loading="previewLoading"
+            :positions="positions"
+            :positions-loading="positionsLoading"
             @duplicate="duplicateStrategy"
             @delete="deleteStrategy"
             @edit="startEdit"

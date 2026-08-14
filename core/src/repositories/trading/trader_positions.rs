@@ -470,6 +470,25 @@ impl TradingRepo {
             .map(|rows| rows.into_iter().map(map_position).collect())
     }
 
+    /// Batch-load positions for multiple traders in a single query.
+    /// Returns empty vec when `trader_ids` is empty.
+    pub async fn positions_by_trader_ids(
+        &self,
+        trader_ids: &[String],
+        status: &str,
+    ) -> Result<Vec<TraderPositionRecord>, DbErr> {
+        if trader_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        entity::trader_positions::Entity::find()
+            .filter(entity::trader_positions::Column::TraderId.is_in(trader_ids.to_vec()))
+            .filter(entity::trader_positions::Column::Status.eq(status.trim()))
+            .order_by_desc(entity::trader_positions::Column::OpenedAt)
+            .all(&self.db)
+            .await
+            .map(|rows| rows.into_iter().map(map_position).collect())
+    }
+
     pub async fn closed_positions(
         &self,
         trader_id: &str,

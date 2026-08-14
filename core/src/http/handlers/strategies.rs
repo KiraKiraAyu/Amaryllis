@@ -10,6 +10,7 @@ use crate::{
         StrategyDefaultConfigPayload, StrategyListPayload, StrategyMessagePayload, StrategyPayload,
         StrategyTestRunPayload, StrategyTestRunRequest, UpdateStrategyRequest,
     },
+    contracts::trading::positions::StrategyPositionListPayload,
     error::{AppError, Result},
     http::response::ApiResponse,
     state::AppState,
@@ -48,6 +49,26 @@ pub async fn handle_create_strategy(
         .create_strategy(name, description, req.config)
         .await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))
+}
+
+pub async fn handle_get_strategy_positions(
+    State(app): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<ApiResponse<StrategyPositionListPayload>>> {
+    let items = app
+        .services
+        .trading_service
+        .positions_by_strategy(&id)
+        .await?;
+    let count = items.len();
+    Ok(Json(ApiResponse::success(
+        Some(StrategyPositionListPayload {
+            strategy_id: id,
+            items,
+            count,
+        }),
+        None,
+    )))
 }
 
 pub async fn handle_update_strategy(

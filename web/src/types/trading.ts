@@ -262,10 +262,18 @@ export interface PositionPayload {
   opened_at: number
   closed_at: number | null
   updated_at: number
+  tp_price: number | null
+  sl_price: number | null
 }
 
 export interface PositionListPayload {
   trader_id: string
+  items: PositionPayload[]
+  count: number
+}
+
+export interface StrategyPositionListPayload {
+  strategy_id: string
   items: PositionPayload[]
   count: number
 }
