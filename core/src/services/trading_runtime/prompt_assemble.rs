@@ -8,9 +8,8 @@
 //! embedded in the user prompt.
 
 use super::account_sim::AccountMetrics;
-use super::config_loaders::leverage_for_symbol;
-use super::models::{MarketState, TraderRuntimeConfig};
-use super::prompt_data::{StrategyPromptData, TradingPromptData};
+use super::models::{MarketState, PositionView, TraderRuntimeConfig};
+use super::prompt_data::{PositionEntryView, StrategyPromptData, TradingPromptData};
 
 // ---------------------------------------------------------------------------
 // Static text blocks
@@ -84,11 +83,14 @@ pub fn build_system_prompt(cfg: &TraderRuntimeConfig) -> String {
 // ---------------------------------------------------------------------------
 
 /// Build the user-side trading prompt from live market state and account metrics.
+/// `now_ts` is the cycle timestamp (epoch seconds) so backtests report the
+/// simulated clock instead of wall-clock time.
 pub fn build_trading_prompt(
     symbol: &str,
     m: &MarketState,
     metrics: &AccountMetrics,
-    cfg: &TraderRuntimeConfig,
+    open_positions: &[PositionView],
+    now_ts: i64,
     strategy_data_context: &str,
 ) -> String {
     let price_change_pct = if m.prev_price.abs() > f64::EPSILON {
@@ -97,7 +99,26 @@ pub fn build_trading_prompt(
         0.0
     };
 
+    let current_time = chrono::DateTime::from_timestamp(now_ts, 0)
+        .map(|dt| dt.format("%Y-%m-%d %H:%M:%S UTC").to_string())
+        .unwrap_or_default();
+
+    let positions: Vec<PositionEntryView> = open_positions
+        .iter()
+        .map(|p| PositionEntryView {
+            symbol: p.symbol.clone(),
+            side: p.side.clone(),
+            quantity: p.quantity,
+            entry_price: p.entry_price,
+            mark_price: p.mark_price,
+            unrealized_pnl: (p.mark_price - p.entry_price)
+                * p.quantity
+                * if p.side == "LONG" { 1.0 } else { -1.0 },
+        })
+        .collect();
+
     let data = TradingPromptData {
+        current_time,
         symbol: symbol.to_string(),
         price: m.price,
         prev_price: m.prev_price,
@@ -110,12 +131,7 @@ pub fn build_trading_prompt(
         unrealized_pnl: metrics.unrealized_pnl,
         realized_pnl: metrics.realized_pnl,
         margin_usage_pct: metrics.margin_used_ratio * 100.0,
-        leverage: leverage_for_symbol(cfg, symbol),
-        margin_mode: if cfg.is_cross_margin {
-            "Cross"
-        } else {
-            "Isolated"
-        },
+        positions,
     };
 
     let toml_str = toml::to_string_pretty(&data).unwrap_or_default();
@@ -127,11 +143,6 @@ pub fn build_trading_prompt(
     if !strategy_data_context.trim().is_empty() {
         parts.push(format!("## Strategy Data Context\n{strategy_data_context}"));
     }
-
-    parts.push(
-        "Respond with JSON: {\"action\":\"LONG|SHORT|NO ACTION\",\"confidence\":0.0-1.0,\"reason\":\"...\"}"
-            .to_string(),
-    );
 
     parts.join("\n\n")
 }
@@ -156,6 +167,9 @@ pub fn build_test_run_prompt(ai_model_id: &str, symbols_str: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::build_system_prompt_from_config;
+    use super::build_trading_prompt;
+    use crate::services::trading_runtime::account_sim::AccountMetrics;
+    use crate::services::trading_runtime::models::{MarketState, PositionView};
     use serde_json::json;
 
     #[test]
@@ -166,7 +180,7 @@ mod tests {
                 "risk_control": {"max_positions": 3, "margin_mode": "cross"},
                 "tp_sl": {
                     "take_profit": {"mode": "fixed", "pnl_rate": 0.2},
-                    "stop_loss": {"mode": "custom", "custom_prompt": "Close at support"}
+                    "stop_loss": {"mode": "custom", "custom_prompt": "Close on support"}
                 }
             }),
             true,
@@ -182,10 +196,10 @@ mod tests {
         assert!(prompt.contains("[risk_control]"));
         assert!(prompt.contains("[tp_sl.take_profit]"));
         assert!(prompt.contains("mode = \"fixed\""));
-        assert!(prompt.contains("rate = 0.2"));
+        assert!(prompt.contains("unrealized_pnl_rate = 0.2"));
         assert!(prompt.contains("[tp_sl.stop_loss]"));
         assert!(prompt.contains("mode = \"custom\""));
-        assert!(prompt.contains("Close at support"));
+        assert!(prompt.contains("Close on support"));
     }
 
     #[test]
@@ -237,5 +251,50 @@ mod tests {
     fn system_prompt_excludes_empty_prompt_sections() {
         let prompt = build_system_prompt_from_config(&json!({}), true, "", false);
         assert!(!prompt.contains("prompt_sections"));
+    }
+
+    #[test]
+    fn trading_prompt_contains_time_positions_and_no_duplicated_fixed_params() {
+        let m = MarketState {
+            price: 45000.0,
+            prev_price: 44800.0,
+            volatility: 0.02,
+        };
+        let metrics = AccountMetrics {
+            total_balance: 10000.0,
+            available_balance: 8000.0,
+            used_margin: 2000.0,
+            unrealized_pnl: 50.0,
+            realized_pnl: -20.0,
+            margin_used_ratio: 0.2,
+        };
+        let positions = vec![PositionView {
+            id: "pos-1".to_string(),
+            symbol: "BTCUSDT".to_string(),
+            side: "LONG".to_string(),
+            quantity: 0.5,
+            entry_price: 44000.0,
+            mark_price: 45000.0,
+            leverage: 10,
+            opened_at: 0,
+        }];
+
+        let prompt = build_trading_prompt(
+            "BTCUSDT",
+            &m,
+            &metrics,
+            &positions,
+            1_755_436_200,
+            "## Strategy Data Context\nklines here",
+        );
+
+        assert!(prompt.contains("current_time = \"2025-08-17"));
+        assert!(prompt.contains("UTC"));
+        assert!(prompt.contains("[[positions]]"));
+        assert!(prompt.contains("unrealized_pnl = 50"));
+        assert!(prompt.contains("## Strategy Data Context"));
+        assert!(!prompt.contains("leverage"));
+        assert!(!prompt.contains("margin_mode"));
+        assert!(!prompt.contains("Respond with JSON"));
     }
 }

@@ -67,11 +67,13 @@ impl ExitRule {
 }
 
 /// Serializable view of an exit rule for TOML output.
+/// `unrealized_pnl_rate` is the trigger threshold expressed as PnL relative
+/// to position margin (e.g. 2.0 = +200% on margin, -2.0 = -200% on margin).
 #[derive(Serialize)]
 pub struct ExitRuleView {
     pub mode: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub rate: Option<f64>,
+    pub unrealized_pnl_rate: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prompt: Option<String>,
 }
@@ -81,22 +83,22 @@ impl ExitRule {
         match self {
             Self::NotConfigured => ExitRuleView {
                 mode: "not_configured",
-                rate: None,
+                unrealized_pnl_rate: None,
                 prompt: None,
             },
             Self::FixedUnconfigured => ExitRuleView {
                 mode: "fixed",
-                rate: None,
+                unrealized_pnl_rate: None,
                 prompt: None,
             },
             Self::Fixed { rate } => ExitRuleView {
                 mode: "fixed",
-                rate: Some(*rate),
+                unrealized_pnl_rate: Some(*rate),
                 prompt: None,
             },
             Self::Custom { prompt } => ExitRuleView {
                 mode: "custom",
-                rate: None,
+                unrealized_pnl_rate: None,
                 prompt: Some(prompt.clone()),
             },
         }
@@ -114,13 +116,37 @@ pub struct SymbolEntry {
     pub cost_desc: String,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub struct RiskControlData {
     pub max_positions: i64,
     pub max_margin_usage: f64,
     pub min_position_size: f64,
     pub min_risk_reward: f64,
     pub min_confidence: f64,
+}
+
+/// Serializable view of risk control for TOML output.
+/// Ratio fields are converted to percentages; unit-suffixed names make
+/// semantics explicit for the AI.
+#[derive(Serialize)]
+pub struct RiskControlView {
+    pub max_positions: i64,
+    pub max_margin_usage_pct: f64,
+    pub min_position_size_usdt: f64,
+    pub min_risk_reward: f64,
+    pub min_confidence: f64,
+}
+
+impl RiskControlData {
+    pub fn to_view(&self) -> RiskControlView {
+        RiskControlView {
+            max_positions: self.max_positions,
+            max_margin_usage_pct: self.max_margin_usage * 100.0,
+            min_position_size_usdt: self.min_position_size,
+            min_risk_reward: self.min_risk_reward,
+            min_confidence: self.min_confidence,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -173,7 +199,6 @@ pub struct StrategyPromptData {
     pub tp_sl: TpSlData,
     pub prompt_sections: PromptSections,
     pub primary_timeframe: String,
-    pub indicators: Vec<String>,
 }
 
 /// Serializable view of the full strategy config for TOML output.
@@ -182,10 +207,8 @@ pub struct StrategyPromptData {
 pub struct StrategyConfigView {
     pub margin_mode: String,
     pub primary_timeframe: String,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub indicators: Vec<String>,
     pub symbols: Vec<SymbolEntry>,
-    pub risk_control: RiskControlData,
+    pub risk_control: RiskControlView,
     pub tp_sl: TpSlView,
     #[serde(skip_serializing_if = "is_prompt_sections_empty")]
     pub prompt_sections: PromptSections,
@@ -203,9 +226,8 @@ impl StrategyPromptData {
         StrategyConfigView {
             margin_mode: self.margin_mode.to_string(),
             primary_timeframe: self.primary_timeframe.clone(),
-            indicators: self.indicators.clone(),
             symbols: self.symbols.clone(),
-            risk_control: self.risk_control.clone(),
+            risk_control: self.risk_control.to_view(),
             tp_sl: self.tp_sl.to_view(),
             prompt_sections: self.prompt_sections.clone(),
         }
@@ -280,8 +302,8 @@ impl StrategyPromptData {
                 .to_string(),
         };
 
-        // --- Data template: primary timeframe + indicators ---
-        let (primary_timeframe, indicators) = parse_data_template(sc);
+        // --- Data template: primary timeframe ---
+        let primary_timeframe = parse_data_template(sc);
 
         Self {
             margin_mode,
@@ -290,7 +312,6 @@ impl StrategyPromptData {
             tp_sl,
             prompt_sections,
             primary_timeframe,
-            indicators,
         }
     }
 }
@@ -345,10 +366,10 @@ fn parse_tp_sl(sc: &serde_json::Value) -> TpSlData {
     }
 }
 
-fn parse_data_template(sc: &serde_json::Value) -> (String, Vec<String>) {
+fn parse_data_template(sc: &serde_json::Value) -> String {
     validate_strategy_data_template(sc)
         .map(|template| {
-            let primary_tf = template
+            template
                 .items
                 .iter()
                 .find(|item| item.item_type == "raw_kline")
@@ -361,29 +382,35 @@ fn parse_data_template(sc: &serde_json::Value) -> (String, Vec<String>) {
                         .and_then(|item| item.timeframes.first())
                 })
                 .cloned()
-                .unwrap_or_else(|| "5m".to_string());
-            let indicators = template
-                .items
-                .iter()
-                .filter(|item| item.item_type == "indicator")
-                .map(|item| item.indicator.to_ascii_uppercase())
-                .collect::<Vec<_>>();
-            (primary_tf, indicators)
+                .unwrap_or_else(|| "5m".to_string())
         })
-        .unwrap_or_else(|_| ("5m".to_string(), Vec::new()))
+        .unwrap_or_else(|_| "5m".to_string())
 }
 
 // ---------------------------------------------------------------------------
 // Trading prompt data (user-side prompt)
 // ---------------------------------------------------------------------------
 
+/// Serializable view of an open position for the user prompt TOML.
+#[derive(Clone, Debug, Serialize)]
+pub struct PositionEntryView {
+    pub symbol: String,
+    pub side: String,
+    pub quantity: f64,
+    pub entry_price: f64,
+    pub mark_price: f64,
+    pub unrealized_pnl: f64,
+}
+
 /// Typed snapshot used to build the user-side trading prompt.
-/// Constructed from live `MarketState` + `AccountMetrics` during trading,
-/// or from mock values during test runs.
+/// Constructed from live `MarketState` + `AccountMetrics` + open positions
+/// during trading. Fixed strategy parameters (leverage, margin mode) live
+/// only in the system prompt.
 /// `strategy_data_context` is excluded from TOML serialization and appended
 /// as a separate text section in the final prompt.
 #[derive(Clone, Debug, Serialize)]
 pub struct TradingPromptData {
+    pub current_time: String,
     pub symbol: String,
     pub price: f64,
     pub prev_price: f64,
@@ -397,8 +424,7 @@ pub struct TradingPromptData {
     pub unrealized_pnl: f64,
     pub realized_pnl: f64,
     pub margin_usage_pct: f64,
-    pub leverage: i64,
-    pub margin_mode: &'static str,
+    pub positions: Vec<PositionEntryView>,
 }
 
 #[cfg(test)]
@@ -512,9 +538,11 @@ mod tests {
         assert!(toml_str.contains("[[symbols]]"));
         assert!(toml_str.contains("BTCUSDT"));
         assert!(toml_str.contains("[risk_control]"));
+        assert!(toml_str.contains("max_margin_usage_pct = 80"));
+        assert!(toml_str.contains("min_position_size_usdt = 50"));
         assert!(toml_str.contains("[tp_sl.take_profit]"));
         assert!(toml_str.contains("mode = \"fixed\""));
-        assert!(toml_str.contains("rate = 0.3"));
+        assert!(toml_str.contains("unrealized_pnl_rate = 0.3"));
         assert!(toml_str.contains("[tp_sl.stop_loss]"));
         assert!(toml_str.contains("mode = \"custom\""));
         assert!(toml_str.contains("Cut at support"));
@@ -524,6 +552,7 @@ mod tests {
     #[test]
     fn trading_prompt_data_skips_strategy_data_context_in_toml() {
         let data = TradingPromptData {
+            current_time: "2026-08-17 14:30 UTC".to_string(),
             symbol: "BTCUSDT".to_string(),
             price: 45000.0,
             prev_price: 44800.0,
@@ -536,14 +565,26 @@ mod tests {
             unrealized_pnl: 150.0,
             realized_pnl: -50.0,
             margin_usage_pct: 20.0,
-            leverage: 10,
-            margin_mode: "Cross",
+            positions: vec![PositionEntryView {
+                symbol: "BTCUSDT".to_string(),
+                side: "LONG".to_string(),
+                quantity: 0.5,
+                entry_price: 44000.0,
+                mark_price: 45000.0,
+                unrealized_pnl: 50.0,
+            }],
         };
         let toml_str = toml::to_string_pretty(&data).unwrap();
+        assert!(toml_str.contains("current_time = \"2026-08-17 14:30 UTC\""));
         assert!(toml_str.contains("symbol = \"BTCUSDT\""));
         assert!(toml_str.contains("price = 45000"));
+        assert!(toml_str.contains("[[positions]]"));
+        assert!(toml_str.contains("side = \"LONG\""));
+        assert!(toml_str.contains("unrealized_pnl = 50"));
         assert!(!toml_str.contains("strategy_data_context"));
         assert!(!toml_str.contains("technical data"));
+        assert!(!toml_str.contains("leverage"));
+        assert!(!toml_str.contains("margin_mode"));
     }
 
     #[test]

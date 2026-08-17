@@ -723,11 +723,13 @@ pub async fn process_cycle(
             cfg,
             sym,
             market,
+            &metrics,
+            &open_positions,
+            now_ts,
             hard_risk_trigger,
             live_risk_level,
             trigger_source,
             &cycle_correlation_id,
-            &metrics,
         )
         .await;
 

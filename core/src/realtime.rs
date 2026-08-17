@@ -211,7 +211,9 @@ mod tests {
                         "status": "open",
                         "opened_at": 1_700_000_000,
                         "closed_at": null,
-                        "updated_at": 1_700_000_900
+                        "updated_at": 1_700_000_900,
+                        "tp_price": null,
+                        "sl_price": null
                     }
                 ]
             })

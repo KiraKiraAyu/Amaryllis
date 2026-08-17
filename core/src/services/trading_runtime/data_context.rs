@@ -38,6 +38,7 @@ pub async fn load_trader_data_context(
         "## Strategy Market Data\n- Exchange: {}\n- Symbol: {}\n",
         exchange.exchange_type, symbol
     );
+    let mut indicator_lines: Vec<String> = Vec::new();
 
     for item in template
         .items
@@ -95,14 +96,15 @@ pub async fn load_trader_data_context(
                 )));
             }
 
-            let value = calculate_indicator(item, &candles)?;
-            let _ = writeln!(
-                rendered,
-                "### {} ({})\n{}",
-                indicator_name(&item.indicator),
-                timeframe,
-                value
-            );
+            let (label, value) = calculate_indicator(item, &candles)?;
+            indicator_lines.push(format!("- {} @ {} = {}", label, timeframe, value));
+        }
+    }
+
+    if !indicator_lines.is_empty() {
+        let _ = writeln!(rendered, "### Indicators");
+        for line in indicator_lines {
+            let _ = writeln!(rendered, "{line}");
         }
     }
 
@@ -141,6 +143,14 @@ async fn fetch_klines(
     }
 }
 
+/// Format a kline open time (epoch millis) as HH:MM UTC — the current date
+/// is stated once in the trading prompt header, so candle rows stay compact.
+fn format_kline_time(open_time_ms: i64) -> String {
+    chrono::DateTime::from_timestamp_millis(open_time_ms)
+        .map(|dt| dt.format("%H:%M").to_string())
+        .unwrap_or_default()
+}
+
 fn render_raw_klines(
     rendered: &mut String,
     timeframe: &str,
@@ -157,7 +167,12 @@ fn render_raw_klines(
         let _ = writeln!(
             rendered,
             "{},{:.8},{:.8},{:.8},{:.8},{:.8}",
-            candle.open_time, candle.open, candle.high, candle.low, candle.close, candle.volume
+            format_kline_time(candle.open_time),
+            candle.open,
+            candle.high,
+            candle.low,
+            candle.close,
+            candle.volume
         );
     }
 }
@@ -165,28 +180,40 @@ fn render_raw_klines(
 fn calculate_indicator(
     item: &StrategyDataItem,
     candles: &[MarketKline],
-) -> Result<String, AppError> {
+) -> Result<(String, String), AppError> {
     let closes: Vec<f64> = candles.iter().map(|candle| candle.close).collect();
     let period = item
         .params
         .get("period")
         .and_then(serde_json::Value::as_u64)
         .unwrap_or_else(|| default_period(&item.indicator)) as usize;
+    let name = indicator_name(&item.indicator);
 
     match item.indicator.as_str() {
-        "ema" => Ok(format!("EMA({period}): {:.8}", ema(&closes, period)?)),
-        "rsi" => Ok(format!("RSI({period}): {:.4}", rsi(&closes, period)?)),
-        "atr" => Ok(format!("ATR({period}): {:.8}", atr(candles, period)?)),
+        "ema" => Ok((
+            format!("{name}({period})"),
+            format!("{:.8}", ema(&closes, period)?),
+        )),
+        "rsi" => Ok((
+            format!("{name}({period})"),
+            format!("{:.4}", rsi(&closes, period)?),
+        )),
+        "atr" => Ok((
+            format!("{name}({period})"),
+            format!("{:.8}", atr(candles, period)?),
+        )),
         "bollinger" => {
             let (middle, upper, lower) = bollinger(&closes, period)?;
-            Ok(format!(
-                "Bollinger({period}): middle={middle:.8}, upper={upper:.8}, lower={lower:.8}"
+            Ok((
+                format!("{name}({period})"),
+                format!("middle={middle:.8}, upper={upper:.8}, lower={lower:.8}"),
             ))
         }
         "macd" => {
             let (macd, signal, histogram) = macd(&closes)?;
-            Ok(format!(
-                "MACD: line={macd:.8}, signal={signal:.8}, histogram={histogram:.8}"
+            Ok((
+                format!("{name}(12,26,9)"),
+                format!("line={macd:.8}, signal={signal:.8}, histogram={histogram:.8}"),
             ))
         }
         _ => Err(AppError::InvalidConfig(format!(
@@ -363,11 +390,62 @@ mod tests {
     }
 
     #[test]
-    fn raw_kline_render_contains_headers_and_values() {
+    fn raw_kline_render_contains_headers_and_readable_time() {
         let mut rendered = String::new();
-        render_raw_klines(&mut rendered, "5m", &[candle(10.0), candle(11.0)]);
+        let candles = vec![
+            MarketKline {
+                open_time: 1,
+                open: 9.5,
+                high: 11.0,
+                low: 9.0,
+                close: 10.0,
+                volume: 10.0,
+                quote_volume: 100.0,
+                close_time: 2,
+            },
+            MarketKline {
+                open_time: 1_000 * 60 * 30,
+                open: 10.5,
+                high: 12.0,
+                low: 10.0,
+                close: 11.0,
+                volume: 20.0,
+                quote_volume: 200.0,
+                close_time: 2_000 * 60 * 30,
+            },
+        ];
+        render_raw_klines(&mut rendered, "5m", &candles);
         assert!(rendered.contains("Kline (5m, 2 closed candles)"));
-        assert!(rendered.contains("1,9.50000000,11.00000000,9.00000000,10.00000000"));
+        assert!(rendered.contains("00:00,9.50000000,11.00000000,9.00000000,10.00000000"));
+        assert!(rendered.contains("00:30,10.50000000,12.00000000,10.00000000,11.00000000"));
+    }
+
+    #[test]
+    fn kline_time_excludes_date() {
+        // 2026-08-17 14:35:00 UTC in epoch millis
+        let ts = 1_786_977_300_000;
+        let formatted = format_kline_time(ts);
+        assert_eq!(formatted, "14:35");
+    }
+
+    #[test]
+    fn indicator_result_pairs_label_with_value() {
+        let values: Vec<f64> = (1..=30).map(f64::from).collect();
+        let candles: Vec<MarketKline> = values.iter().map(|v| candle(*v)).collect();
+        let item = StrategyDataItem {
+            id: "rsi".to_string(),
+            item_type: "indicator".to_string(),
+            timeframes: vec!["5m".to_string()],
+            count: 0,
+            closed_only: true,
+            indicator: "rsi".to_string(),
+            params: json!({ "period": 14 }),
+            output_mode: "latest".to_string(),
+        };
+
+        let (label, value) = calculate_indicator(&item, &candles).expect("rsi");
+        assert_eq!(label, "RSI(14)");
+        assert_eq!(value, "100.0000");
     }
 
     #[test]

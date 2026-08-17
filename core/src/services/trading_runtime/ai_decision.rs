@@ -17,11 +17,13 @@ pub async fn generate_ai_decision(
     cfg: &TraderRuntimeConfig,
     symbol: &str,
     market: &HashMap<String, MarketState>,
+    metrics: &AccountMetrics,
+    open_positions: &[PositionView],
+    now_ts: i64,
     hard_risk_trigger: bool,
     risk_level: &str,
     trigger_source: &str,
     correlation_id: &str,
-    metrics: &AccountMetrics,
 ) -> DecisionSignal {
     if hard_risk_trigger {
         warn!(
@@ -102,7 +104,14 @@ pub async fn generate_ai_decision(
         }
     };
 
-    let prompt = build_trading_prompt(symbol, &m, metrics, cfg, &data_context.rendered);
+    let prompt = build_trading_prompt(
+        symbol,
+        &m,
+        metrics,
+        open_positions,
+        now_ts,
+        &data_context.rendered,
+    );
     let system_prompt_owned = if cfg.override_base_prompt && !cfg.custom_prompt.trim().is_empty() {
         Some(cfg.custom_prompt.clone())
     } else {
