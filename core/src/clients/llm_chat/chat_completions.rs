@@ -10,17 +10,17 @@ use crate::{
 
 use super::{
     AvailableLlmModel, LlmClientConfig, LlmMessage, LlmProviderClient,
-    urls::{openai_chat_url, openai_models_url},
+    urls::{chat_completions_url, chat_completions_models_url},
     util::{dedupe_models, provider_api_error, with_system_prompt},
 };
 
 #[derive(Clone, Debug)]
-pub(super) struct OpenAiCompatibleClient {
+pub(super) struct ChatCompletionsClient {
     http: Client,
     config: LlmClientConfig,
 }
 
-impl OpenAiCompatibleClient {
+impl ChatCompletionsClient {
     pub(super) fn new(http: Client, config: LlmClientConfig) -> Self {
         Self { http, config }
     }
@@ -63,12 +63,16 @@ struct OpenAiModelInfo {
 }
 
 #[async_trait::async_trait]
-impl LlmProviderClient for OpenAiCompatibleClient {
+impl LlmProviderClient for ChatCompletionsClient {
     async fn list_models(&self) -> Result<Vec<AvailableLlmModel>> {
-        let url = openai_models_url(&self.config.base_url);
+        let url = chat_completions_models_url(&self.config.base_url);
         let response = send_text(
             self.http.get(&url).bearer_auth(&self.config.api_key),
-            OutboundRequestLog::new("llm.openai.list_models", Method::GET, &url),
+            OutboundRequestLog::new(
+                "llm.chat_completions.list_models",
+                Method::GET,
+                &url,
+            ),
         )
         .await?;
 
@@ -100,14 +104,14 @@ impl LlmProviderClient for OpenAiCompatibleClient {
             max_tokens: 1024,
         };
         let body = serde_json::to_string(&payload)?;
-        let url = openai_chat_url(&self.config.base_url);
+        let url = chat_completions_url(&self.config.base_url);
 
         let response = send_text(
             self.http
                 .post(&url)
                 .bearer_auth(&self.config.api_key)
                 .json(&payload),
-            OutboundRequestLog::new("llm.openai.chat", Method::POST, &url).body(body),
+            OutboundRequestLog::new("llm.chat_completions.chat", Method::POST, &url).body(body),
         )
         .await?;
 
@@ -142,7 +146,7 @@ impl LlmProviderClient for OpenAiCompatibleClient {
             temperature: 0.7,
             max_tokens: 1024,
         };
-        let url = openai_chat_url(&self.config.base_url);
+        let url = chat_completions_url(&self.config.base_url);
 
         let response = self
             .http
@@ -211,7 +215,7 @@ impl LlmProviderClient for OpenAiCompatibleClient {
     }
 }
 
-impl OpenAiCompatibleClient {
+impl ChatCompletionsClient {
     async fn check_model_with_chat_completion(&self) -> Result<()> {
         let payload = ChatRequestPayload {
             model: self.config.model.clone(),
@@ -224,14 +228,19 @@ impl OpenAiCompatibleClient {
             max_tokens: 1,
         };
         let body = serde_json::to_string(&payload)?;
-        let url = openai_chat_url(&self.config.base_url);
+        let url = chat_completions_url(&self.config.base_url);
 
         let response = send_text(
             self.http
                 .post(&url)
                 .bearer_auth(&self.config.api_key)
                 .json(&payload),
-            OutboundRequestLog::new("llm.openai.check_provider", Method::POST, &url).body(body),
+            OutboundRequestLog::new(
+                "llm.chat_completions.check_provider",
+                Method::POST,
+                &url,
+            )
+            .body(body),
         )
         .await?;
 

@@ -172,49 +172,49 @@ const PROVIDER_PRESETS: &[ProviderPreset] = &[
     ProviderPreset {
         id: "deepseek",
         name: "DeepSeek",
-        provider_type: "openai",
+        provider_type: "chat_completions",
         base_url: "https://api.deepseek.com/v1",
         models: DEEPSEEK_MODELS,
     },
     ProviderPreset {
         id: "openai",
         name: "OpenAI",
-        provider_type: "openai",
+        provider_type: "responses",
         base_url: "https://api.openai.com/v1",
         models: OPENAI_MODELS,
     },
     ProviderPreset {
         id: "claude",
         name: "Claude",
-        provider_type: "anthropic",
+        provider_type: "anthropic_messages",
         base_url: "https://api.anthropic.com",
         models: CLAUDE_MODELS,
     },
     ProviderPreset {
         id: "qwen",
         name: "Qwen",
-        provider_type: "openai",
+        provider_type: "chat_completions",
         base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1",
         models: QWEN_MODELS,
     },
     ProviderPreset {
         id: "gemini",
         name: "Google Gemini",
-        provider_type: "gemini",
+        provider_type: "gemini_generate_content",
         base_url: "https://generativelanguage.googleapis.com/v1beta",
         models: GEMINI_MODELS,
     },
     ProviderPreset {
         id: "grok",
         name: "Grok (xAI)",
-        provider_type: "openai",
+        provider_type: "chat_completions",
         base_url: "https://api.x.ai/v1",
         models: GROK_MODELS,
     },
     ProviderPreset {
         id: "kimi",
         name: "Kimi (Moonshot)",
-        provider_type: "openai",
+        provider_type: "chat_completions",
         base_url: "https://api.moonshot.cn/v1",
         models: KIMI_MODELS,
     },
@@ -641,13 +641,13 @@ mod tests {
     #[test]
     fn provider_presets_store_api_category_as_provider_type() {
         let expected = [
-            ("deepseek", "openai"),
-            ("openai", "openai"),
-            ("claude", "anthropic"),
-            ("qwen", "openai"),
-            ("gemini", "gemini"),
-            ("grok", "openai"),
-            ("kimi", "openai"),
+            ("deepseek", "chat_completions"),
+            ("openai", "responses"),
+            ("claude", "anthropic_messages"),
+            ("qwen", "chat_completions"),
+            ("gemini", "gemini_generate_content"),
+            ("grok", "chat_completions"),
+            ("kimi", "chat_completions"),
         ];
 
         for (id, provider_type) in expected {
@@ -674,61 +674,48 @@ mod tests {
             .map(|provider| (provider.id.as_str(), provider.provider_type.as_str()))
             .collect();
 
-        assert_eq!(provider_types.get("deepseek"), Some(&"openai"));
-        assert_eq!(provider_types.get("qwen"), Some(&"openai"));
-        assert_eq!(provider_types.get("grok"), Some(&"openai"));
-        assert_eq!(provider_types.get("kimi"), Some(&"openai"));
-        assert_eq!(provider_types.get("claude"), Some(&"anthropic"));
-        assert_eq!(provider_types.get("gemini"), Some(&"gemini"));
+        assert_eq!(provider_types.get("deepseek"), Some(&"chat_completions"));
+        assert_eq!(provider_types.get("qwen"), Some(&"chat_completions"));
+        assert_eq!(provider_types.get("grok"), Some(&"chat_completions"));
+        assert_eq!(provider_types.get("kimi"), Some(&"chat_completions"));
+        assert_eq!(provider_types.get("openai"), Some(&"responses"));
+        assert_eq!(provider_types.get("claude"), Some(&"anthropic_messages"));
+        assert_eq!(
+            provider_types.get("gemini"),
+            Some(&"gemini_generate_content")
+        );
     }
 
     #[tokio::test]
-    async fn replace_for_user_normalizes_legacy_vendor_provider_types() {
+    async fn replace_for_user_preserves_unknown_provider_types_for_diagnostics() {
         let db = init_database("sqlite::memory:")
             .await
             .expect("connect sqlite memory");
         let repo = ModelRepo::new(db);
 
-        repo.replace_for_user(vec![
-            UpsertProviderConfig {
-                id: Some("legacy-deepseek".to_string()),
-                name: "Legacy DeepSeek".to_string(),
-                provider_type: "deepseek".to_string(),
-                enabled: true,
-                api_key: "secret".to_string(),
-                base_url: "https://api.deepseek.com/v1".to_string(),
-                models: vec![UpsertModelConfig {
-                    id: Some("legacy-deepseek-chat".to_string()),
-                    name: "DeepSeek Chat".to_string(),
-                    model_id: "deepseek-chat".to_string(),
-                }],
-            },
-            UpsertProviderConfig {
-                id: Some("legacy-claude".to_string()),
-                name: "Legacy Claude".to_string(),
-                provider_type: "claude".to_string(),
-                enabled: true,
-                api_key: "secret".to_string(),
-                base_url: "https://api.anthropic.com".to_string(),
-                models: vec![UpsertModelConfig {
-                    id: Some("legacy-claude-sonnet".to_string()),
-                    name: "Claude Sonnet".to_string(),
-                    model_id: "claude-3-5-sonnet-20241022".to_string(),
-                }],
-            },
-        ])
+        repo.replace_for_user(vec![UpsertProviderConfig {
+            id: Some("custom-gateway".to_string()),
+            name: "Custom Gateway".to_string(),
+            provider_type: "weird-protocol".to_string(),
+            enabled: true,
+            api_key: "secret".to_string(),
+            base_url: "https://gateway.example.com/v1".to_string(),
+            models: vec![UpsertModelConfig {
+                id: Some("custom-gateway-model".to_string()),
+                name: "Custom Model".to_string(),
+                model_id: "custom-model".to_string(),
+            }],
+        }])
         .await
         .expect("replace providers");
 
         let providers = repo.list_for_user().await.expect("list providers");
 
-        let provider_types: HashMap<_, _> = providers
+        let provider = providers
             .iter()
-            .map(|provider| (provider.id.as_str(), provider.provider_type.as_str()))
-            .collect();
-
-        assert_eq!(provider_types.get("legacy-deepseek"), Some(&"openai"));
-        assert_eq!(provider_types.get("legacy-claude"), Some(&"anthropic"));
+            .find(|provider| provider.id == "custom-gateway")
+            .expect("custom provider should exist");
+        assert_eq!(provider.provider_type, "weird-protocol");
     }
 
     #[tokio::test]

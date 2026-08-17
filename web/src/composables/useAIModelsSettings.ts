@@ -104,9 +104,10 @@ export function useAIModelsSettings() {
 
   function apiCategoryName(value: string) {
     const normalized = value.trim().toLowerCase()
-    if (normalized === "openai") return "OpenAI"
-    if (normalized === "anthropic") return "Anthropic"
-    if (normalized === "gemini") return "Gemini"
+    if (normalized === "chat_completions") return "Chat Completions"
+    if (normalized === "responses") return "Responses"
+    if (normalized === "anthropic_messages") return "Anthropic Messages"
+    if (normalized === "gemini_generate_content") return "Gemini GenerateContent"
     return value
   }
 

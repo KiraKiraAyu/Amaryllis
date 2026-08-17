@@ -45,7 +45,7 @@ async fn test_state_and_cfg() -> (TestRuntimeState, TraderRuntimeConfig) {
         name: "test-trader".to_string(),
         ai_model_id: "deepseek-chat".to_string(),
         ai_model_name: "deepseek-chat".to_string(),
-        ai_provider_type: "openai".to_string(),
+        ai_provider_type: "chat_completions".to_string(),
         ai_api_key: String::new(),
         ai_base_url: "https://api.deepseek.com/v1".to_string(),
         exchange_id: "exchange-test".to_string(),

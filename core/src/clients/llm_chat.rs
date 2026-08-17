@@ -6,15 +6,17 @@ use serde::{Deserialize, Serialize};
 use crate::error::{AppError, Result};
 
 mod anthropic;
+mod chat_completions;
 mod gemini;
-mod openai;
+mod responses;
 mod urls;
 mod util;
 
 use anthropic::AnthropicClient;
+use chat_completions::ChatCompletionsClient;
 use gemini::GeminiClient;
-use openai::OpenAiCompatibleClient;
-use urls::{default_base_url, is_openai_compatible_url, normalize_base_url};
+use responses::ResponsesClient;
+use urls::{default_base_url, normalize_base_url};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LlmMessage {
@@ -140,11 +142,10 @@ impl DefaultLlmClient {
 
 fn provider_client_for(http: Client, config: LlmClientConfig) -> Arc<dyn LlmProviderClient> {
     match normalize_provider_type(&config.provider) {
-        "anthropic" => Arc::new(AnthropicClient::new(http, config)),
-        "gemini" if !is_openai_compatible_url(&config.base_url) => {
-            Arc::new(GeminiClient::new(http, config))
-        }
-        _ => Arc::new(OpenAiCompatibleClient::new(http, config)),
+        "anthropic_messages" => Arc::new(AnthropicClient::new(http, config)),
+        "gemini_generate_content" => Arc::new(GeminiClient::new(http, config)),
+        "responses" => Arc::new(ResponsesClient::new(http, config)),
+        _ => Arc::new(ChatCompletionsClient::new(http, config)),
     }
 }
 
@@ -176,27 +177,32 @@ pub fn supported_provider_types() -> &'static [SupportedProviderType] {
 }
 
 pub fn normalize_provider_type(provider: &str) -> &'static str {
-    match provider.trim().to_ascii_lowercase().as_str() {
-        "claude" | "anthropic" => "anthropic",
-        "gemini" | "google" => "gemini",
-        "openai" | "openai-compatible" | "deepseek" | "qwen" | "grok" | "xai" | "kimi"
-        | "moonshot" => "openai",
+    let normalized = provider.trim().to_ascii_lowercase().replace([' ', '-'], "_");
+    match normalized.as_str() {
+        "chat_completions" => "chat_completions",
+        "responses" => "responses",
+        "anthropic_messages" => "anthropic_messages",
+        "gemini_generate_content" => "gemini_generate_content",
         _ => "",
     }
 }
 
 const SUPPORTED_PROVIDER_TYPES: &[SupportedProviderType] = &[
     SupportedProviderType {
-        provider_type: "openai",
-        name: "OpenAI",
+        provider_type: "chat_completions",
+        name: "Chat Completions",
     },
     SupportedProviderType {
-        provider_type: "anthropic",
-        name: "Anthropic",
+        provider_type: "responses",
+        name: "Responses",
     },
     SupportedProviderType {
-        provider_type: "gemini",
-        name: "Gemini",
+        provider_type: "anthropic_messages",
+        name: "Anthropic Messages",
+    },
+    SupportedProviderType {
+        provider_type: "gemini_generate_content",
+        name: "Gemini GenerateContent",
     },
 ];
 
@@ -205,45 +211,60 @@ mod tests {
     use super::*;
 
     #[test]
-    fn normalizes_vendor_aliases_to_api_categories() {
+    fn normalizes_api_category_aliases() {
         for provider in [
-            "openai",
-            "openai-compatible",
-            "deepseek",
-            "qwen",
-            "grok",
-            "kimi",
+            "chat_completions",
+            "chat-completions",
+            "Chat Completions",
+            "responses",
+            "Responses",
         ] {
-            assert_eq!(normalize_provider_type(provider), "openai");
+            assert_eq!(
+                normalize_provider_type(provider),
+                provider.trim().to_ascii_lowercase().replace([' ', '-'], "_")
+            );
         }
 
-        assert_eq!(normalize_provider_type("claude"), "anthropic");
-        assert_eq!(normalize_provider_type("anthropic"), "anthropic");
-        assert_eq!(normalize_provider_type("gemini"), "gemini");
-        assert_eq!(normalize_provider_type("google"), "gemini");
+        assert_eq!(
+            normalize_provider_type("anthropic_messages"),
+            "anthropic_messages"
+        );
+        assert_eq!(
+            normalize_provider_type("Anthropic-Messages"),
+            "anthropic_messages"
+        );
+        assert_eq!(
+            normalize_provider_type("gemini_generate_content"),
+            "gemini_generate_content"
+        );
+        assert_eq!(
+            normalize_provider_type("Gemini-Generate-Content"),
+            "gemini_generate_content"
+        );
+        assert_eq!(normalize_provider_type("openai"), "");
         assert_eq!(normalize_provider_type("unknown"), "");
     }
 
     #[test]
     fn provider_config_uses_api_category_defaults() {
         let config = provider_config(
-            "deepseek".to_string(),
+            "chat_completions".to_string(),
             "key".to_string(),
             "deepseek-chat".to_string(),
             String::new(),
         );
 
-        assert_eq!(config.provider, "openai");
+        assert_eq!(config.provider, "chat_completions");
         assert_eq!(config.base_url, "https://api.openai.com/v1");
 
         let config = provider_config(
-            "gemini".to_string(),
+            "gemini_generate_content".to_string(),
             "key".to_string(),
             "gemini-2.0-flash".to_string(),
             String::new(),
         );
 
-        assert_eq!(config.provider, "gemini");
+        assert_eq!(config.provider, "gemini_generate_content");
         assert_eq!(
             config.base_url,
             "https://generativelanguage.googleapis.com/v1beta"

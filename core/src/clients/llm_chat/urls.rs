@@ -2,9 +2,10 @@ use super::normalize_provider_type;
 
 pub(super) fn default_base_url(provider: &str) -> &'static str {
     match normalize_provider_type(provider) {
-        "anthropic" => "https://api.anthropic.com",
-        "gemini" => "https://generativelanguage.googleapis.com/v1beta",
-        "openai" => "https://api.openai.com/v1",
+        "anthropic_messages" => "https://api.anthropic.com",
+        "gemini_generate_content" => "https://generativelanguage.googleapis.com/v1beta",
+        // Chat Completions and Responses share the OpenAI API base URL.
+        "chat_completions" | "responses" => "https://api.openai.com/v1",
         _ => "",
     }
 }
@@ -18,7 +19,7 @@ pub(super) fn normalize_base_url(base_url: String, default_url: &str) -> String 
     raw.trim_end_matches('/').to_string()
 }
 
-pub(super) fn openai_chat_url(base_url: &str) -> String {
+pub(super) fn chat_completions_url(base_url: &str) -> String {
     if base_url.ends_with("/chat/completions") {
         base_url.to_string()
     } else if base_url.ends_with("/v1") || base_url.ends_with("/openai") {
@@ -28,7 +29,7 @@ pub(super) fn openai_chat_url(base_url: &str) -> String {
     }
 }
 
-pub(super) fn openai_models_url(base_url: &str) -> String {
+pub(super) fn chat_completions_models_url(base_url: &str) -> String {
     let base = base_url.trim_end_matches('/');
     if base.ends_with("/models") {
         base.to_string()
@@ -38,6 +39,16 @@ pub(super) fn openai_models_url(base_url: &str) -> String {
         format!("{base}/models")
     } else {
         format!("{base}/v1/models")
+    }
+}
+
+pub(super) fn responses_url(base_url: &str) -> String {
+    if base_url.ends_with("/responses") {
+        base_url.to_string()
+    } else if base_url.ends_with("/v1") || base_url.ends_with("/openai") {
+        format!("{base_url}/responses")
+    } else {
+        format!("{base_url}/v1/responses")
     }
 }
 
@@ -129,11 +140,6 @@ fn gemini_api_base(base_url: &str) -> String {
     }
 }
 
-pub(super) fn is_openai_compatible_url(base_url: &str) -> bool {
-    let base = base_url.trim_end_matches('/').to_ascii_lowercase();
-    base.ends_with("/chat/completions") || base.ends_with("/openai") || base.contains("/openai/")
-}
-
 fn encode_path_segment(value: &str) -> String {
     let mut encoded = String::new();
     for byte in value.trim().as_bytes() {
@@ -151,14 +157,30 @@ mod tests {
     use super::*;
 
     #[test]
-    fn openai_chat_url_supports_openai_compatible_base_paths() {
+    fn chat_completions_url_supports_compatible_base_paths() {
         assert_eq!(
-            openai_chat_url("https://api.deepseek.com/v1"),
+            chat_completions_url("https://api.deepseek.com/v1"),
             "https://api.deepseek.com/v1/chat/completions"
         );
         assert_eq!(
-            openai_chat_url("https://generativelanguage.googleapis.com/v1beta/openai"),
+            chat_completions_url("https://generativelanguage.googleapis.com/v1beta/openai"),
             "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+        );
+    }
+
+    #[test]
+    fn responses_url_appends_responses_endpoint() {
+        assert_eq!(
+            responses_url("https://api.openai.com/v1"),
+            "https://api.openai.com/v1/responses"
+        );
+        assert_eq!(
+            responses_url("https://api.openai.com/v1/responses"),
+            "https://api.openai.com/v1/responses"
+        );
+        assert_eq!(
+            responses_url("https://custom-gateway.example.com"),
+            "https://custom-gateway.example.com/v1/responses"
         );
     }
 
