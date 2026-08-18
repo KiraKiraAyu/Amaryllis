@@ -10,8 +10,10 @@ use crate::{
 
 use super::{
     AvailableLlmModel, LlmClientConfig, LlmMessage, LlmProviderClient,
-    urls::{chat_completions_models_url, responses_url},
-    util::{dedupe_models, provider_api_error, with_system_prompt},
+    openai_catalog::list_openai_models,
+    sse::SseLineReader,
+    urls::responses_url,
+    util::{provider_api_error, with_system_prompt},
 };
 
 #[derive(Clone, Debug)]
@@ -35,11 +37,16 @@ struct ResponsesRequestPayload {
     max_output_tokens: u32,
 }
 
+/// Output items are tagged by `type`. Only `message` items carry `content`;
+/// `reasoning` items (and any type added in the future) must not break
+/// deserialization, so unknown tags fall back to `Other`.
 #[derive(Debug, Deserialize)]
-struct ResponsesOutput {
-    #[serde(rename = "type")]
-    output_type: String,
-    content: Vec<ResponsesContent>,
+#[serde(tag = "type")]
+enum ResponsesOutputItem {
+    #[serde(rename = "message")]
+    Message { content: Vec<ResponsesContent> },
+    #[serde(other)]
+    Other,
 }
 
 #[derive(Debug, Deserialize)]
@@ -51,44 +58,15 @@ struct ResponsesContent {
 
 #[derive(Debug, Deserialize)]
 struct ResponsesPayload {
-    output: Vec<ResponsesOutput>,
-}
-
-#[derive(Debug, Deserialize)]
-struct OpenAiModelsResponse {
-    data: Vec<OpenAiModelInfo>,
-}
-
-#[derive(Debug, Deserialize)]
-struct OpenAiModelInfo {
-    id: String,
     #[serde(default)]
-    name: Option<String>,
+    status: Option<String>,
+    output: Vec<ResponsesOutputItem>,
 }
 
 #[async_trait::async_trait]
 impl LlmProviderClient for ResponsesClient {
     async fn list_models(&self) -> Result<Vec<AvailableLlmModel>> {
-        let url = chat_completions_models_url(&self.config.base_url);
-        let response = send_text(
-            self.http.get(&url).bearer_auth(&self.config.api_key),
-            OutboundRequestLog::new("llm.responses.list_models", Method::GET, &url),
-        )
-        .await?;
-
-        if !response.status.is_success() {
-            return Err(provider_api_error(
-                &self.config.provider,
-                response.status,
-                response.body,
-            ));
-        }
-
-        let parsed: OpenAiModelsResponse = serde_json::from_str(&response.body)?;
-        Ok(dedupe_models(parsed.data.into_iter().map(|model| {
-            let name = model.name.unwrap_or_else(|| model.id.clone());
-            AvailableLlmModel { id: model.id, name }
-        })))
+        list_openai_models(&self.http, &self.config).await
     }
 
     async fn check_model(&self) -> Result<()> {
@@ -154,6 +132,15 @@ impl LlmProviderClient for ResponsesClient {
         }
 
         let parsed: ResponsesPayload = serde_json::from_str(&response.body)?;
+        if let Some(status) = parsed.status.as_deref()
+            && status != "completed"
+        {
+            return Err(AppError::BadGateway(format!(
+                "{} API returned response status '{status}'",
+                self.config.provider
+            )));
+        }
+
         collect_output_text(&parsed.output).ok_or_else(|| {
             AppError::BadGateway(format!("No response from {}", self.config.provider))
         })
@@ -190,45 +177,44 @@ impl LlmProviderClient for ResponsesClient {
 
         let mut full_response = String::new();
         let mut stream = response.bytes_stream();
-        let mut line_buf = String::new();
+        let mut reader = SseLineReader::default();
 
         while let Some(chunk_result) = stream.next().await {
             let chunk = chunk_result?;
-            line_buf.push_str(&String::from_utf8_lossy(&chunk));
+            reader.push(&chunk);
 
-            // Process complete SSE lines
-            while let Some(newline_pos) = line_buf.find('\n') {
-                let line = line_buf[..newline_pos].trim().to_string();
-                line_buf = line_buf[newline_pos + 1..].to_string();
-
+            while let Some(line) = reader.next_line() {
                 if line.is_empty() || line.starts_with(':') {
                     continue;
                 }
 
-                if let Some(data) = line.strip_prefix("data: ") {
-                    let data = data.trim();
-                    if data == "[DONE]" {
-                        continue;
-                    }
+                let Some(data) = line.strip_prefix("data: ") else {
+                    continue;
+                };
+                let data = data.trim();
+                if data == "[DONE]" {
+                    continue;
+                }
 
-                    // Responses API streams typed events; text deltas arrive
-                    // as `response.output_text.delta`.
-                    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(data) {
-                        if parsed.get("type").and_then(|t| t.as_str())
-                            != Some("response.output_text.delta")
-                        {
-                            continue;
-                        }
+                let parsed: serde_json::Value = serde_json::from_str(data).map_err(|err| {
+                    AppError::BadGateway(format!(
+                        "Malformed SSE event from {} API: {err}",
+                        self.config.provider
+                    ))
+                })?;
 
-                        if let Some(delta) = parsed
-                            .get("delta")
-                            .and_then(|d| d.as_str())
-                            .filter(|delta| !delta.is_empty())
-                        {
-                            full_response.push_str(delta);
-                            let _ = chunk_tx.send(delta.to_string());
-                        }
+                match decode_stream_event(&parsed) {
+                    StreamEventOutcome::Delta(delta) => {
+                        full_response.push_str(&delta);
+                        let _ = chunk_tx.send(delta);
                     }
+                    StreamEventOutcome::Failure(message) => {
+                        return Err(AppError::BadGateway(format!(
+                            "{} API stream {message}",
+                            self.config.provider
+                        )));
+                    }
+                    StreamEventOutcome::Ignored => {}
                 }
             }
         }
@@ -244,11 +230,67 @@ impl LlmProviderClient for ResponsesClient {
     }
 }
 
-fn collect_output_text(output: &[ResponsesOutput]) -> Option<String> {
+#[derive(Debug)]
+enum StreamEventOutcome {
+    Delta(String),
+    Failure(String),
+    Ignored,
+}
+
+/// Terminal events (`response.failed`, `response.incomplete`, `error`) must
+/// surface as errors even after text deltas were already received, otherwise
+/// a truncated response would be reported as success.
+fn decode_stream_event(parsed: &serde_json::Value) -> StreamEventOutcome {
+    match parsed.get("type").and_then(|value| value.as_str()) {
+        Some("response.output_text.delta") => match parsed
+            .get("delta")
+            .and_then(|delta| delta.as_str())
+            .filter(|delta| !delta.is_empty())
+        {
+            Some(delta) => StreamEventOutcome::Delta(delta.to_string()),
+            None => StreamEventOutcome::Ignored,
+        },
+        Some("response.failed") => {
+            StreamEventOutcome::Failure(stream_failure_message(parsed, "failed"))
+        }
+        Some("response.incomplete") => {
+            StreamEventOutcome::Failure(stream_failure_message(parsed, "incomplete"))
+        }
+        Some("error") => StreamEventOutcome::Failure(stream_failure_message(parsed, "error")),
+        _ => StreamEventOutcome::Ignored,
+    }
+}
+
+fn stream_failure_message(parsed: &serde_json::Value, kind: &str) -> String {
+    // Terminal `response.*` events nest the payload under `response`, while
+    // top-level `error` events carry their message directly.
+    let scope = parsed.get("response").unwrap_or(parsed);
+    let reason = scope
+        .get("error")
+        .and_then(|error| error.get("message"))
+        .and_then(|message| message.as_str())
+        .or_else(|| scope.get("message").and_then(|message| message.as_str()))
+        .or_else(|| {
+            scope
+                .get("incomplete_details")
+                .and_then(|details| details.get("reason"))
+                .and_then(|reason| reason.as_str())
+        });
+
+    match reason {
+        Some(reason) => format!("{kind}: {reason}"),
+        None => kind.to_string(),
+    }
+}
+
+fn collect_output_text(output: &[ResponsesOutputItem]) -> Option<String> {
     let text = output
         .iter()
-        .filter(|item| item.output_type == "message")
-        .flat_map(|item| item.content.iter())
+        .filter_map(|item| match item {
+            ResponsesOutputItem::Message { content } => Some(content.iter()),
+            ResponsesOutputItem::Other => None,
+        })
+        .flatten()
         .filter(|content| content.content_type == "output_text")
         .filter_map(|content| content.text.as_deref())
         .collect::<Vec<_>>()
@@ -265,50 +307,127 @@ fn collect_output_text(output: &[ResponsesOutput]) -> Option<String> {
 mod tests {
     use super::*;
 
+    const REAL_RESPONSE_JSON: &str = r#"{
+        "id": "resp_68af4030592c81938ec0a5fbab4a3e9f05438e46b5f69a3b",
+        "object": "response",
+        "created_at": 1756315696,
+        "status": "completed",
+        "model": "gpt-5.5",
+        "output": [
+            {
+                "id": "rs_68af4030baa48193b0b43b4c2a176a1a05438e46b5f69a3b",
+                "type": "reasoning",
+                "summary": []
+            },
+            {
+                "id": "msg_68af40337e58819392e935fb404414d004414d004414d00",
+                "type": "message",
+                "status": "completed",
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "output_text",
+                        "annotations": [],
+                        "logprobs": [],
+                        "text": "Under a quilt of moonlight."
+                    }
+                ]
+            }
+        ]
+    }"#;
+
     #[test]
-    fn collects_message_output_text_and_skips_reasoning_items() {
-        let output = vec![
-            ResponsesOutput {
-                output_type: "reasoning".to_string(),
-                content: vec![ResponsesContent {
-                    content_type: "output_text".to_string(),
-                    text: Some("hidden reasoning".to_string()),
-                }],
-            },
-            ResponsesOutput {
-                output_type: "message".to_string(),
-                content: vec![
-                    ResponsesContent {
-                        content_type: "output_text".to_string(),
-                        text: Some("Hello ".to_string()),
-                    },
-                    ResponsesContent {
-                        content_type: "refusal".to_string(),
-                        text: None,
-                    },
-                    ResponsesContent {
-                        content_type: "output_text".to_string(),
-                        text: Some("world".to_string()),
-                    },
-                ],
-            },
-        ];
+    fn deserializes_official_response_shape_without_reasoning_content() {
+        let parsed: ResponsesPayload =
+            serde_json::from_str(REAL_RESPONSE_JSON).expect("official shape must deserialize");
+        assert_eq!(parsed.status.as_deref(), Some("completed"));
 
         assert_eq!(
-            collect_output_text(&output).as_deref(),
-            Some("Hello world")
+            collect_output_text(&parsed.output).as_deref(),
+            Some("Under a quilt of moonlight.")
         );
     }
 
     #[test]
-    fn collect_output_text_rejects_empty_output() {
+    fn collect_output_text_rejects_empty_or_untextual_output() {
         assert_eq!(collect_output_text(&[]), None);
-        assert_eq!(
-            collect_output_text(&[ResponsesOutput {
-                output_type: "message".to_string(),
-                content: vec![],
-            }]),
-            None
-        );
+
+        let refusal_only: ResponsesPayload =
+            serde_json::from_str(r#"{"output": [{"type": "message", "content": [{"type": "refusal", "refusal": "no"}]}]}"#)
+                .expect("refusal content must deserialize");
+        assert_eq!(collect_output_text(&refusal_only.output), None);
+
+        let reasoning_only: ResponsesPayload =
+            serde_json::from_str(r#"{"output": [{"type": "reasoning", "summary": []}]}"#)
+                .expect("reasoning item must deserialize");
+        assert_eq!(collect_output_text(&reasoning_only.output), None);
+    }
+
+    #[test]
+    fn stream_event_decoding_distinguishes_delta_failure_and_noise() {
+        let delta: serde_json::Value = serde_json::json!({
+            "type": "response.output_text.delta",
+            "item_id": "msg_1",
+            "delta": "你好"
+        });
+        match decode_stream_event(&delta) {
+            StreamEventOutcome::Delta(text) => assert_eq!(text, "你好"),
+            other => panic!("expected delta, got {other:?}"),
+        }
+
+        let completed: serde_json::Value =
+            serde_json::json!({"type": "response.completed", "response": {"id": "resp_1"}});
+        assert!(matches!(
+            decode_stream_event(&completed),
+            StreamEventOutcome::Ignored
+        ));
+
+        let empty_delta: serde_json::Value =
+            serde_json::json!({"type": "response.output_text.delta", "delta": ""});
+        assert!(matches!(
+            decode_stream_event(&empty_delta),
+            StreamEventOutcome::Ignored
+        ));
+    }
+
+    #[test]
+    fn stream_failure_events_report_their_reason() {
+        let failed: serde_json::Value = serde_json::json!({
+            "type": "response.failed",
+            "response": {
+                "status": "failed",
+                "error": {"code": "server_error", "message": "model overloaded"}
+            }
+        });
+        match decode_stream_event(&failed) {
+            StreamEventOutcome::Failure(message) => {
+                assert_eq!(message, "failed: model overloaded")
+            }
+            other => panic!("expected failure, got {other:?}"),
+        }
+
+        let incomplete: serde_json::Value = serde_json::json!({
+            "type": "response.incomplete",
+            "response": {
+                "status": "incomplete",
+                "incomplete_details": {"reason": "max_output_tokens"}
+            }
+        });
+        match decode_stream_event(&incomplete) {
+            StreamEventOutcome::Failure(message) => {
+                assert_eq!(message, "incomplete: max_output_tokens")
+            }
+            other => panic!("expected failure, got {other:?}"),
+        }
+
+        let error: serde_json::Value = serde_json::json!({
+            "type": "error",
+            "code": "invalid_request",
+            "message": "Unknown model"
+        });
+        match decode_stream_event(&error) {
+            StreamEventOutcome::Failure(message) => assert_eq!(message, "error: Unknown model"),
+            other => panic!("expected failure, got {other:?}"),
+        }
     }
 }

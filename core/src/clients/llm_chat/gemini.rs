@@ -10,6 +10,7 @@ use crate::{
 
 use super::{
     AvailableLlmModel, LlmClientConfig, LlmMessage, LlmProviderClient,
+    sse::SseLineReader,
     urls::{
         gemini_generate_content_url, gemini_model_url, gemini_models_url,
         gemini_stream_generate_content_url,
@@ -240,16 +241,13 @@ impl LlmProviderClient for GeminiClient {
 
         let mut full_response = String::new();
         let mut stream = response.bytes_stream();
-        let mut line_buf = String::new();
+        let mut reader = SseLineReader::default();
 
         while let Some(chunk_result) = stream.next().await {
             let chunk = chunk_result?;
-            line_buf.push_str(&String::from_utf8_lossy(&chunk));
+            reader.push(&chunk);
 
-            while let Some(newline_pos) = line_buf.find('\n') {
-                let line = line_buf[..newline_pos].trim().to_string();
-                line_buf = line_buf[newline_pos + 1..].to_string();
-
+            while let Some(line) = reader.next_line() {
                 if line.is_empty() || line.starts_with(':') {
                     continue;
                 }

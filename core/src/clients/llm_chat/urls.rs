@@ -29,11 +29,17 @@ pub(super) fn chat_completions_url(base_url: &str) -> String {
     }
 }
 
-pub(super) fn chat_completions_models_url(base_url: &str) -> String {
+/// Protocol-agnostic `/models` URL for the OpenAI API family. Accepts API
+/// bases ending in `/v1` or `/openai`, as well as full endpoint paths
+/// (`/chat/completions`, `/responses`, `/models`).
+pub(super) fn openai_models_url(base_url: &str) -> String {
     let base = base_url.trim_end_matches('/');
     if base.ends_with("/models") {
         base.to_string()
-    } else if let Some(api_base) = base.strip_suffix("/chat/completions") {
+    } else if let Some(api_base) = base
+        .strip_suffix("/chat/completions")
+        .or_else(|| base.strip_suffix("/responses"))
+    {
         format!("{api_base}/models")
     } else if base.ends_with("/v1") || base.ends_with("/openai") {
         format!("{base}/models")
@@ -165,6 +171,31 @@ mod tests {
         assert_eq!(
             chat_completions_url("https://generativelanguage.googleapis.com/v1beta/openai"),
             "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+        );
+    }
+
+    #[test]
+    fn openai_models_url_resolves_from_any_full_endpoint_path() {
+        for endpoint in [
+            "https://api.openai.com/v1",
+            "https://api.openai.com/v1/chat/completions",
+            "https://api.openai.com/v1/responses",
+            "https://api.openai.com/v1/models",
+        ] {
+            assert_eq!(
+                openai_models_url(endpoint),
+                "https://api.openai.com/v1/models",
+                "{endpoint}"
+            );
+        }
+
+        assert_eq!(
+            openai_models_url("https://api.deepseek.com/v1"),
+            "https://api.deepseek.com/v1/models"
+        );
+        assert_eq!(
+            openai_models_url("https://custom-gateway.example.com"),
+            "https://custom-gateway.example.com/v1/models"
         );
     }
 

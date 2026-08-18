@@ -8,7 +8,9 @@ use crate::error::{AppError, Result};
 mod anthropic;
 mod chat_completions;
 mod gemini;
+mod openai_catalog;
 mod responses;
+mod sse;
 mod urls;
 mod util;
 

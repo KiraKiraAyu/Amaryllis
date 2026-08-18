@@ -10,8 +10,10 @@ use crate::{
 
 use super::{
     AvailableLlmModel, LlmClientConfig, LlmMessage, LlmProviderClient,
-    urls::{chat_completions_url, chat_completions_models_url},
-    util::{dedupe_models, provider_api_error, with_system_prompt},
+    openai_catalog::list_openai_models,
+    sse::SseLineReader,
+    urls::chat_completions_url,
+    util::{provider_api_error, with_system_prompt},
 };
 
 #[derive(Clone, Debug)]
@@ -50,45 +52,10 @@ struct ChatMessageContent {
     content: String,
 }
 
-#[derive(Debug, Deserialize)]
-struct OpenAiModelsResponse {
-    data: Vec<OpenAiModelInfo>,
-}
-
-#[derive(Debug, Deserialize)]
-struct OpenAiModelInfo {
-    id: String,
-    #[serde(default)]
-    name: Option<String>,
-}
-
 #[async_trait::async_trait]
 impl LlmProviderClient for ChatCompletionsClient {
     async fn list_models(&self) -> Result<Vec<AvailableLlmModel>> {
-        let url = chat_completions_models_url(&self.config.base_url);
-        let response = send_text(
-            self.http.get(&url).bearer_auth(&self.config.api_key),
-            OutboundRequestLog::new(
-                "llm.chat_completions.list_models",
-                Method::GET,
-                &url,
-            ),
-        )
-        .await?;
-
-        if !response.status.is_success() {
-            return Err(provider_api_error(
-                &self.config.provider,
-                response.status,
-                response.body,
-            ));
-        }
-
-        let parsed: OpenAiModelsResponse = serde_json::from_str(&response.body)?;
-        Ok(dedupe_models(parsed.data.into_iter().map(|model| {
-            let name = model.name.unwrap_or_else(|| model.id.clone());
-            AvailableLlmModel { id: model.id, name }
-        })))
+        list_openai_models(&self.http, &self.config).await
     }
 
     async fn check_model(&self) -> Result<()> {
@@ -164,17 +131,14 @@ impl LlmProviderClient for ChatCompletionsClient {
 
         let mut full_response = String::new();
         let mut stream = response.bytes_stream();
-        let mut line_buf = String::new();
+        let mut reader = SseLineReader::default();
 
         while let Some(chunk_result) = stream.next().await {
             let chunk = chunk_result?;
-            line_buf.push_str(&String::from_utf8_lossy(&chunk));
+            reader.push(&chunk);
 
             // Process complete SSE lines
-            while let Some(newline_pos) = line_buf.find('\n') {
-                let line = line_buf[..newline_pos].trim().to_string();
-                line_buf = line_buf[newline_pos + 1..].to_string();
-
+            while let Some(line) = reader.next_line() {
                 if line.is_empty() || line.starts_with(':') {
                     continue;
                 }
