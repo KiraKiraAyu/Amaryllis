@@ -402,6 +402,33 @@ pub struct PositionEntryView {
     pub unrealized_pnl: f64,
 }
 
+/// One chronological entry of the trader's recent history.
+/// `analysis` entries are past AI decisions; `trade` entries are closed
+/// positions with their realized results.
+#[derive(Clone, Debug, Serialize)]
+#[serde(tag = "kind")]
+pub enum TimelineEntryView {
+    #[serde(rename = "analysis")]
+    Analysis {
+        time: String,
+        symbol: String,
+        action: String,
+        confidence: f64,
+        reason: String,
+    },
+    #[serde(rename = "trade")]
+    Trade {
+        time: String,
+        symbol: String,
+        side: String,
+        entry_price: f64,
+        exit_price: f64,
+        quantity: f64,
+        realized_pnl: f64,
+        roi_pct: f64,
+    },
+}
+
 /// Typed snapshot used to build the user-side trading prompt.
 /// Constructed from live `MarketState` + `AccountMetrics` + open positions
 /// during trading. Fixed strategy parameters (leverage, margin mode) live
@@ -425,6 +452,8 @@ pub struct TradingPromptData {
     pub realized_pnl: f64,
     pub margin_usage_pct: f64,
     pub positions: Vec<PositionEntryView>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub timeline: Vec<TimelineEntryView>,
 }
 
 #[cfg(test)]
@@ -573,6 +602,7 @@ mod tests {
                 mark_price: 45000.0,
                 unrealized_pnl: 50.0,
             }],
+            timeline: vec![],
         };
         let toml_str = toml::to_string_pretty(&data).unwrap();
         assert!(toml_str.contains("current_time = \"2026-08-17 14:30 UTC\""));
@@ -585,6 +615,7 @@ mod tests {
         assert!(!toml_str.contains("technical data"));
         assert!(!toml_str.contains("leverage"));
         assert!(!toml_str.contains("margin_mode"));
+        assert!(!toml_str.contains("timeline"));
     }
 
     #[test]

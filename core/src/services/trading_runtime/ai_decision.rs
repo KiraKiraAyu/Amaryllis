@@ -1,5 +1,6 @@
 use super::data_context::load_trader_data_context;
 use super::prompt_assemble::{build_system_prompt, build_trading_prompt};
+use super::prompt_data::TimelineEntryView;
 use super::service::*;
 use crate::repositories::trading::records::history::InsertTraderDecisionRecord;
 
@@ -10,6 +11,67 @@ fn momentum(m: &MarketState) -> f64 {
     } else {
         0.0
     }
+}
+
+/// Format an epoch-seconds timestamp as a compact timeline time (`MM-DD HH:MM`).
+fn format_timeline_time(ts: i64) -> String {
+    chrono::DateTime::from_timestamp(ts, 0)
+        .map(|dt| dt.format("%m-%d %H:%M").to_string())
+        .unwrap_or_default()
+}
+
+/// Load the trader's recent history as a chronological timeline (oldest first):
+/// past AI analyses from the decisions table plus closed trades with their
+/// realized results. Non-AI decision rows (CLOSE/SYSTEM) are already covered
+/// by trade entries and are skipped to avoid duplication.
+async fn load_recent_timeline(state: &SharedState, trader_id: &str) -> Vec<TimelineEntryView> {
+    const HISTORY_LIMIT: i64 = 10;
+
+    let decisions = state
+        .trading_repo
+        .decisions(trader_id, None, HISTORY_LIMIT, 0)
+        .await
+        .unwrap_or_default();
+    let trades = state
+        .trading_repo
+        .trades(trader_id, HISTORY_LIMIT, 0)
+        .await
+        .unwrap_or_default();
+
+    let mut entries: Vec<(i64, TimelineEntryView)> = Vec::new();
+    for d in decisions {
+        if !matches!(d.decision.as_str(), "LONG" | "SHORT" | "NO ACTION") {
+            continue;
+        }
+        entries.push((
+            d.created_at,
+            TimelineEntryView::Analysis {
+                time: format_timeline_time(d.created_at),
+                symbol: d.symbol,
+                action: d.decision,
+                confidence: d.confidence,
+                reason: d.reason,
+            },
+        ));
+    }
+    for t in trades {
+        entries.push((
+            t.closed_at,
+            TimelineEntryView::Trade {
+                time: format_timeline_time(t.closed_at),
+                symbol: t.symbol,
+                side: t.side,
+                entry_price: t.entry_price,
+                exit_price: t.exit_price,
+                quantity: t.quantity,
+                realized_pnl: t.realized_pnl,
+                roi_pct: t.roi_pct,
+            },
+        ));
+    }
+
+    entries.sort_by_key(|(ts, _)| *ts);
+    entries.into_iter().map(|(_, entry)| entry).collect()
 }
 
 pub async fn generate_ai_decision(
@@ -104,11 +166,14 @@ pub async fn generate_ai_decision(
         }
     };
 
+    let timeline = load_recent_timeline(state, &cfg.trader_id).await;
+
     let prompt = build_trading_prompt(
         symbol,
         &m,
         metrics,
         open_positions,
+        &timeline,
         now_ts,
         &data_context.rendered,
     );

@@ -9,7 +9,9 @@
 
 use super::account_sim::AccountMetrics;
 use super::models::{MarketState, PositionView, TraderRuntimeConfig};
-use super::prompt_data::{PositionEntryView, StrategyPromptData, TradingPromptData};
+use super::prompt_data::{
+    PositionEntryView, StrategyPromptData, TimelineEntryView, TradingPromptData,
+};
 
 // ---------------------------------------------------------------------------
 // Static text blocks
@@ -83,6 +85,8 @@ pub fn build_system_prompt(cfg: &TraderRuntimeConfig) -> String {
 // ---------------------------------------------------------------------------
 
 /// Build the user-side trading prompt from live market state and account metrics.
+/// `timeline` is the trader's recent history (past analyses and closed trades),
+/// oldest first, so the AI reads its own track record in chronological order.
 /// `now_ts` is the cycle timestamp (epoch seconds) so backtests report the
 /// simulated clock instead of wall-clock time.
 pub fn build_trading_prompt(
@@ -90,6 +94,7 @@ pub fn build_trading_prompt(
     m: &MarketState,
     metrics: &AccountMetrics,
     open_positions: &[PositionView],
+    timeline: &[TimelineEntryView],
     now_ts: i64,
     strategy_data_context: &str,
 ) -> String {
@@ -132,12 +137,13 @@ pub fn build_trading_prompt(
         realized_pnl: metrics.realized_pnl,
         margin_usage_pct: metrics.margin_used_ratio * 100.0,
         positions,
+        timeline: timeline.to_vec(),
     };
 
     let toml_str = toml::to_string_pretty(&data).unwrap_or_default();
 
     let mut parts: Vec<String> = vec![format!(
-        "Analyze the following market data and decide: LONG, SHORT, or NO ACTION.\n\n```toml\n{toml_str}```"
+        "Analyze the following market data and your recent trading history (timeline), then decide: LONG, SHORT, or NO ACTION.\n\n```toml\n{toml_str}```"
     )];
 
     if !strategy_data_context.trim().is_empty() {
@@ -170,6 +176,7 @@ mod tests {
     use super::build_trading_prompt;
     use crate::services::trading_runtime::account_sim::AccountMetrics;
     use crate::services::trading_runtime::models::{MarketState, PositionView};
+    use crate::services::trading_runtime::prompt_data::TimelineEntryView;
     use serde_json::json;
 
     #[test]
@@ -284,6 +291,7 @@ mod tests {
             &m,
             &metrics,
             &positions,
+            &[],
             1_755_436_200,
             "## Strategy Data Context\nklines here",
         );
@@ -296,5 +304,64 @@ mod tests {
         assert!(!prompt.contains("leverage"));
         assert!(!prompt.contains("margin_mode"));
         assert!(!prompt.contains("Respond with JSON"));
+    }
+
+    #[test]
+    fn trading_prompt_serializes_chronological_timeline_entries() {
+        let m = MarketState {
+            price: 45000.0,
+            prev_price: 44800.0,
+            volatility: 0.02,
+        };
+        let metrics = AccountMetrics {
+            total_balance: 10000.0,
+            available_balance: 8000.0,
+            used_margin: 2000.0,
+            unrealized_pnl: 50.0,
+            realized_pnl: -20.0,
+            margin_used_ratio: 0.2,
+        };
+        let timeline = vec![
+            TimelineEntryView::Analysis {
+                time: "08-17 14:25".to_string(),
+                symbol: "BTCUSDT".to_string(),
+                action: "NO ACTION".to_string(),
+                confidence: 0.72,
+                reason: "range momentum".to_string(),
+            },
+            TimelineEntryView::Trade {
+                time: "08-17 14:30".to_string(),
+                symbol: "BTCUSDT".to_string(),
+                side: "LONG".to_string(),
+                entry_price: 44000.0,
+                exit_price: 45000.0,
+                quantity: 0.5,
+                realized_pnl: 480.0,
+                roi_pct: 10.9,
+            },
+        ];
+
+        let prompt = build_trading_prompt(
+            "BTCUSDT",
+            &m,
+            &metrics,
+            &[],
+            &timeline,
+            1_755_436_200,
+            "",
+        );
+
+        assert!(prompt.contains("your recent trading history"));
+        assert!(prompt.contains("[[timeline]]"));
+        assert!(prompt.contains("kind = \"analysis\""));
+        assert!(prompt.contains("action = \"NO ACTION\""));
+        assert!(prompt.contains("confidence = 0.72"));
+        assert!(prompt.contains("range momentum"));
+        assert!(prompt.contains("kind = \"trade\""));
+        assert!(prompt.contains("side = \"LONG\""));
+        assert!(prompt.contains("entry_price = 44000"));
+        assert!(prompt.contains("exit_price = 45000"));
+        assert!(prompt.contains("realized_pnl = 480"));
+        assert!(prompt.contains("roi_pct = 10.9"));
     }
 }
