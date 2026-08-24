@@ -122,8 +122,9 @@ fn update_next_scan_at(state: &SharedState, trader_id: &str, next_scan: Option<u
 
 pub async fn run_trader_loop(
     engine: TradingRuntimeService,
-    cfg: TraderRuntimeConfig,
+    mut cfg: TraderRuntimeConfig,
     mut stop_rx: watch::Receiver<bool>,
+    wake_rx: Arc<Notify>,
 ) -> Result<(), AppError> {
     let symbols = parse_symbols(&cfg.trading_symbols);
     if symbols.is_empty() {
@@ -252,11 +253,26 @@ pub async fn run_trader_loop(
                         Err(_) => break,
                     }
                 }
+                _ = wake_rx.notified() => {}
             }
         }
 
         // Clear next_scan_at while scanning
         update_next_scan_at(&engine.inner.state, &cfg.trader_id, None);
+
+        // Prompt edits are persisted to the DB while the loop is running;
+        // reload them so manual wakes and scheduled scans use the latest prompt.
+        if let Ok(Some(row)) = engine
+            .inner
+            .state
+            .trading_repo
+            .get_trader(&cfg.trader_id)
+            .await
+        {
+            cfg.custom_prompt = row.custom_prompt;
+            cfg.override_base_prompt = row.override_base_prompt != 0;
+            cfg.system_prompt_template = row.system_prompt_template;
+        }
 
         let result = process_cycle(
             &engine.inner.state,

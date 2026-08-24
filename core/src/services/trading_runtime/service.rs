@@ -8,7 +8,7 @@ pub use crate::clients::binance::*;
 pub use futures_util::StreamExt;
 pub use serde_json::{Value, json};
 pub use tokio::{
-    sync::{Mutex, mpsc, watch},
+    sync::{Mutex, Notify, mpsc, watch},
     task::JoinHandle,
     time::{self, MissedTickBehavior},
 };
@@ -47,6 +47,7 @@ pub use super::{
 #[derive(Debug)]
 pub struct EngineWorker {
     stop_tx: watch::Sender<bool>,
+    wake_tx: Arc<Notify>,
     handle: JoinHandle<()>,
 }
 
@@ -171,10 +172,14 @@ impl TradingRuntimeService {
         set_trader_running(&state, &cfg.trader_id, true).await?;
 
         let (stop_tx, stop_rx) = watch::channel(false);
+        let wake_tx = Arc::new(Notify::new());
         let engine = self.clone();
         let cfg_for_task = cfg.clone();
+        let wake_rx = wake_tx.clone();
         let handle = tokio::spawn(async move {
-            if let Err(err) = run_trader_loop(engine.clone(), cfg_for_task.clone(), stop_rx).await {
+            if let Err(err) =
+                run_trader_loop(engine.clone(), cfg_for_task.clone(), stop_rx, wake_rx).await
+            {
                 error!("runtime loop failed: {err}");
                 if let Err(db_err) =
                     set_trader_running(&engine.inner.state, &cfg_for_task.trader_id, false).await
@@ -193,7 +198,14 @@ impl TradingRuntimeService {
         });
 
         let mut workers = self.inner.workers.lock().await;
-        workers.insert(cfg.trader_id.clone(), EngineWorker { stop_tx, handle });
+        workers.insert(
+            cfg.trader_id.clone(),
+            EngineWorker {
+                stop_tx,
+                wake_tx,
+                handle,
+            },
+        );
 
         info!(
             "runtime engine started for trader={} exchange={} model={}",
@@ -222,6 +234,41 @@ impl TradingRuntimeService {
         }
 
         self.stop_trader(trader_id).await
+    }
+
+    pub async fn wake_trader_for_user(&self, trader_id: &str) -> Result<(), AppError> {
+        let state = self.state();
+        if state.trading_repo.get_trader(trader_id).await?.is_none() {
+            return Err(AppError::TraderNotFound(trader_id.to_string()));
+        }
+
+        self.wake_trader(trader_id).await
+    }
+
+    pub async fn wake_trader(&self, trader_id: &str) -> Result<(), AppError> {
+        let workers = self.inner.workers.lock().await;
+        let worker = workers
+            .get(trader_id)
+            .ok_or_else(|| AppError::NotRunning(trader_id.to_string()))?;
+
+        worker.wake_tx.notify_one();
+        info!("manual wake requested trader={}", trader_id);
+        Ok(())
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn install_test_worker(&self, trader_id: &str) -> Arc<Notify> {
+        let wake_tx = Arc::new(Notify::new());
+        let mut workers = self.inner.workers.lock().await;
+        workers.insert(
+            trader_id.to_string(),
+            EngineWorker {
+                stop_tx: watch::channel(false).0,
+                wake_tx: wake_tx.clone(),
+                handle: tokio::spawn(async {}),
+            },
+        );
+        wake_tx
     }
 
     pub async fn stop_trader(&self, trader_id: &str) -> Result<(), AppError> {

@@ -122,7 +122,11 @@ fn indicator_kline_count(item: &StrategyDataItem) -> usize {
         "rsi" | "atr" => period.saturating_add(1),
         _ => period,
     };
-    DEFAULT_KLINE_COUNT.max(minimum).min(MAX_KLINE_COUNT)
+    // Exchanges return the still-open candle as the last row; it is dropped
+    // by the closed-candle filter, so fetch one extra to keep the minimum.
+    DEFAULT_KLINE_COUNT
+        .max(minimum.saturating_add(1))
+        .min(MAX_KLINE_COUNT)
 }
 
 async fn fetch_klines(
@@ -461,6 +465,6 @@ mod tests {
             output_mode: "latest".to_string(),
         };
 
-        assert_eq!(indicator_kline_count(&item), 121);
+        assert_eq!(indicator_kline_count(&item), 122);
     }
 }

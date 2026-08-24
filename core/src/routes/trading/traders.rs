@@ -17,6 +17,7 @@ pub fn router() -> Router<AppState> {
         .route("/traders/{id}/config", get(traders::config))
         .route("/traders/{id}/start", post(traders::start))
         .route("/traders/{id}/stop", post(traders::stop))
+        .route("/traders/{id}/wake", post(traders::wake))
         .route("/traders/{id}/prompt", put(traders::update_prompt))
         .route("/equity-history", get(traders::equity_history))
         .route("/status", get(traders::status))

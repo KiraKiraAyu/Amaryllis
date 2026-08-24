@@ -222,6 +222,10 @@ impl TradingService {
         stop_trader(self.trading_runtime_service.as_ref(), id).await
     }
 
+    pub async fn wake_trader(&self, id: &str) -> AppResult<TraderMessagePayload> {
+        wake_trader(self.trading_runtime_service.as_ref(), id).await
+    }
+
     pub async fn update_trader_prompt(
         &self,
         id: &str,

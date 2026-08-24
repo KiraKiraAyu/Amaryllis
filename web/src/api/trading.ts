@@ -58,6 +58,7 @@ const Api = {
   TraderConfig: "/api/trading/traders/{id}/config",
   TraderStart: "/api/trading/traders/{id}/start",
   TraderStop: "/api/trading/traders/{id}/stop",
+  TraderWake: "/api/trading/traders/{id}/wake",
   TraderPrompt: "/api/trading/traders/{id}/prompt",
   TraderSyncBalance: "/api/trading/traders/{id}/sync-balance",
   TraderClosePosition: "/api/trading/traders/{id}/close-position",
@@ -122,6 +123,10 @@ export function startTraderApi(id: string) {
 
 export function stopTraderApi(id: string) {
   return request.post<TraderMessagePayload>(Api.TraderStop.replace("{id}", id))
+}
+
+export function wakeTraderApi(id: string) {
+  return request.post<TraderMessagePayload>(Api.TraderWake.replace("{id}", id))
 }
 
 export function updateTraderPromptApi(id: string, data: UpdatePromptRequest) {

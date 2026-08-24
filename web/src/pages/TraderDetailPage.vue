@@ -27,6 +27,8 @@ const {
   loadAll,
   startTrader,
   stopTrader,
+  wakeTrader,
+  waking,
 } = useTraderDetail(traderId)
 
 // Reload when trader ID changes
@@ -76,6 +78,15 @@ function pnlClass(val: number): string {
           />
           <Button
             v-else-if="trader && trader.is_running"
+            icon="pi pi-bolt"
+            label="Wake"
+            severity="warn"
+            :loading="waking"
+            class="rounded-xl h-11 px-4 cursor-pointer bg-amber-500! border-amber-500! hover:bg-amber-600! hover:border-amber-600! text-white!"
+            @click="wakeTrader"
+          />
+          <Button
+            v-if="trader && trader.is_running"
             icon="pi pi-stop"
             label="Stop"
             severity="danger"

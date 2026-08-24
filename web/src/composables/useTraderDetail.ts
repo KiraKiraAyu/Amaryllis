@@ -8,6 +8,7 @@ import {
   getTraderStatusApi,
   startTraderApi,
   stopTraderApi,
+  wakeTraderApi,
 } from "@/api/trading"
 import { useRealtimeStore } from "@/stores/realtime"
 import { useToast } from "@/stores/toast"
@@ -255,6 +256,7 @@ export function useTraderDetail(traderId: Ref<string>) {
   const feed = ref<FeedMessage[]>([])
   const typing = ref(false)
   const showSystemOps = ref(false)
+  const waking = ref(false)
 
   /** Unix timestamp (seconds) of the next scheduled scan, or null when
    *  the trader is stopped or a scan is in progress. */
@@ -645,6 +647,20 @@ export function useTraderDetail(traderId: Ref<string>) {
     }
   }
 
+  async function wakeTrader() {
+    if (waking.value) return
+
+    waking.value = true
+    try {
+      await wakeTraderApi(traderId.value)
+      toast.success("Wake requested")
+    } catch {
+      /* handled by interceptor */
+    } finally {
+      waking.value = false
+    }
+  }
+
   onUnmounted(() => {
     if (typewriterTimer) clearInterval(typewriterTimer)
     stopActivityPolling()
@@ -666,5 +682,7 @@ export function useTraderDetail(traderId: Ref<string>) {
     loadAll,
     startTrader,
     stopTrader,
+    wakeTrader,
+    waking,
   }
 }

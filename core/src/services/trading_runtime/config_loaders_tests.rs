@@ -557,6 +557,39 @@ async fn test_startup_recovery_resumes_running_trader() {
 }
 
 #[tokio::test]
+async fn test_wake_trader_requires_registered_worker() {
+    let (state, cfg) = test_state_and_cfg().await;
+    insert_test_trader(&state, &cfg, true, false).await;
+
+    let engine = TradingRuntimeService::new_for_test(
+        state.db.clone(),
+        state.config.live.clone(),
+        state.runtime_engine_manager.clone(),
+        state.llm_service.clone(),
+        state.realtime_hub.clone(),
+    );
+
+    let missing = engine
+        .wake_trader_for_user("missing-trader")
+        .await
+        .expect_err("missing trader should not wake");
+    assert!(matches!(missing, AppError::TraderNotFound(_)));
+
+    let stopped = engine
+        .wake_trader_for_user(&cfg.trader_id)
+        .await
+        .expect_err("stopped trader should not wake");
+    assert!(matches!(stopped, AppError::NotRunning(_)));
+
+    let wake_tx = engine.install_test_worker(&cfg.trader_id).await;
+    engine
+        .wake_trader_for_user(&cfg.trader_id)
+        .await
+        .expect("running trader should accept wake");
+    wake_tx.notified().await;
+}
+
+#[tokio::test]
 async fn test_finalize_execution_intent_terminal_only() {
     let (state, cfg) = test_state_and_cfg().await;
     let ts = 1_700_100_000_i64;

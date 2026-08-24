@@ -126,6 +126,14 @@ pub async fn stop(
     Ok(Json(ApiResponse::success(Some(payload), None)))
 }
 
+pub async fn wake(
+    State(app): State<state::AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<ApiResponse<TraderMessagePayload>>> {
+    let payload = trading_service(&app).wake_trader(&id).await?;
+    Ok(Json(ApiResponse::success(Some(payload), None)))
+}
+
 pub async fn update_prompt(
     State(app): State<state::AppState>,
     Path(id): Path<String>,

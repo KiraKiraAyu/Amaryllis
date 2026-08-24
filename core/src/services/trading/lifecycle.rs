@@ -328,6 +328,28 @@ pub async fn stop_trader(
     }
 }
 
+pub async fn wake_trader(
+    trading_runtime_service: &TradingRuntimeService,
+    id: &str,
+) -> AppResult<TraderMessagePayload> {
+    match trading_runtime_service.wake_trader_for_user(id).await {
+        Ok(_) => Ok(TraderMessagePayload {
+            message: "Trader wake requested successfully",
+        }),
+        Err(AppError::NotRunning(_)) => {
+            Err(app_error(AppErrorKind::Conflict, "Trader is not running"))
+        }
+        Err(AppError::TraderNotFound(_)) => Err(app_error(
+            AppErrorKind::NotFound,
+            "Trader does not exist or no permission",
+        )),
+        Err(err) => {
+            tracing::error!("Failed to wake trader={id}: {err}");
+            Err(AppError::Internal(format!("Failed to wake trader: {err}")))
+        }
+    }
+}
+
 pub async fn update_trader_prompt(
     app: &SharedState,
     id: &str,
