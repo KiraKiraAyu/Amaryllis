@@ -86,6 +86,7 @@ pub async fn generate_ai_decision(
     risk_level: &str,
     trigger_source: &str,
     correlation_id: &str,
+    backtest_mode: bool,
 ) -> DecisionSignal {
     if hard_risk_trigger {
         warn!(
@@ -97,11 +98,27 @@ pub async fn generate_ai_decision(
             prev_price: 100.0,
             volatility: 0.01,
         });
+        if !backtest_mode {
+            emit_runtime_event_best_effort(
+                state,
+                cfg,
+                EVENT_RISK_GUARD_ACTIVE,
+                symbol,
+                "",
+                risk_level,
+                trigger_source,
+                "Risk guard active: drawdown/margin threshold reached, holding position",
+                correlation_id,
+                json!({ "symbol": symbol, "risk_level": risk_level }),
+                now_ts,
+            )
+            .await;
+        }
         return DecisionSignal {
             symbol: symbol.to_string(),
             action: "NO ACTION".to_string(),
             confidence: 0.95,
-            reason: "risk control active: drawdown/margin threshold reached".to_string(),
+            reason: String::new(),
             timeframe: "3m",
             price: m.price,
             momentum: momentum(&m),
@@ -121,11 +138,27 @@ pub async fn generate_ai_decision(
                 "[AI_PROMPT] skipped — no market data trader={} symbol={}",
                 cfg.trader_id, symbol
             );
+            if !backtest_mode {
+                emit_runtime_event_best_effort(
+                    state,
+                    cfg,
+                    EVENT_MARKET_DATA_UNAVAILABLE,
+                    symbol,
+                    "",
+                    risk_level,
+                    trigger_source,
+                    "No market data available for symbol, holding position",
+                    correlation_id,
+                    json!({ "symbol": symbol }),
+                    now_ts,
+                )
+                .await;
+            }
             return DecisionSignal {
                 symbol: symbol.to_string(),
                 action: "NO ACTION".to_string(),
                 confidence: 0.5,
-                reason: "no market data".to_string(),
+                reason: String::new(),
                 timeframe: "3m",
                 price: 0.0,
                 momentum: 0.0,
@@ -148,11 +181,27 @@ pub async fn generate_ai_decision(
                 "[AI_PROMPT] skipped - strategy data unavailable trader={} symbol={} err={}",
                 cfg.trader_id, symbol, err
             );
+            if !backtest_mode {
+                emit_runtime_event_best_effort(
+                    state,
+                    cfg,
+                    EVENT_MARKET_DATA_UNAVAILABLE,
+                    symbol,
+                    "",
+                    risk_level,
+                    "strategy_data_unavailable",
+                    &format!("Strategy market data unavailable: {err}"),
+                    correlation_id,
+                    json!({ "symbol": symbol, "error": err.to_string() }),
+                    now_ts,
+                )
+                .await;
+            }
             return DecisionSignal {
                 symbol: symbol.to_string(),
                 action: "NO ACTION".to_string(),
                 confidence: 0.5,
-                reason: format!("strategy market data unavailable: {err}"),
+                reason: String::new(),
                 timeframe: "5m",
                 price: m.price,
                 momentum,
@@ -200,6 +249,22 @@ pub async fn generate_ai_decision(
         });
 
     if cfg.ai_api_key.trim().is_empty() || cfg.ai_model_id.trim().is_empty() {
+        if !backtest_mode {
+            emit_runtime_event_best_effort(
+                state,
+                cfg,
+                EVENT_AI_FALLBACK,
+                symbol,
+                "",
+                risk_level,
+                trigger_source,
+                "AI not configured — decision derived from momentum heuristic",
+                correlation_id,
+                json!({ "symbol": symbol, "momentum": momentum }),
+                now_ts,
+            )
+            .await;
+        }
         return generate_fallback_decision(
             symbol,
             &m,
@@ -271,6 +336,22 @@ pub async fn generate_ai_decision(
         }
         Err(e) => {
             warn!("AI chat failed for {}: {}", symbol, e);
+            if !backtest_mode {
+                emit_runtime_event_best_effort(
+                    state,
+                    cfg,
+                    EVENT_AI_FALLBACK,
+                    symbol,
+                    "",
+                    risk_level,
+                    trigger_source,
+                    &format!("AI request failed ({e}) — decision derived from momentum heuristic"),
+                    correlation_id,
+                    json!({ "symbol": symbol, "momentum": momentum, "error": e.to_string() }),
+                    now_ts,
+                )
+                .await;
+            }
             generate_fallback_decision(
                 symbol,
                 &m,
@@ -302,7 +383,7 @@ pub fn generate_fallback_decision(
             symbol: symbol.to_string(),
             action: "LONG".to_string(),
             confidence: (0.55 + (momentum / threshold).min(1.5) * 0.2).clamp(0.55, 0.9),
-            reason: format!("uptrend momentum={:.4}", momentum),
+            reason: String::new(),
             timeframe: "3m",
             price: m.price,
             momentum,
@@ -318,7 +399,7 @@ pub fn generate_fallback_decision(
             symbol: symbol.to_string(),
             action: "SHORT".to_string(),
             confidence: (0.55 + ((-momentum) / threshold).min(1.5) * 0.2).clamp(0.55, 0.9),
-            reason: format!("downtrend momentum={:.4}", momentum),
+            reason: String::new(),
             timeframe: "3m",
             price: m.price,
             momentum,
@@ -334,7 +415,7 @@ pub fn generate_fallback_decision(
             symbol: symbol.to_string(),
             action: "NO ACTION".to_string(),
             confidence: 0.5,
-            reason: format!("range momentum={:.4}", momentum),
+            reason: String::new(),
             timeframe: "3m",
             price: m.price,
             momentum,

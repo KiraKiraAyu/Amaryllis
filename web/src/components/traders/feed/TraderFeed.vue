@@ -76,6 +76,8 @@ function roleLabel(role: string): string {
       return "Trader"
     case "prompt":
       return "System Prompt"
+    case "notice":
+      return "Notice"
     case "warning":
       return "Warning"
     default:

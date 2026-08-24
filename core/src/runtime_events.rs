@@ -24,6 +24,10 @@ pub const EVENT_STALE_INTENT_RECONCILE_PENDING: &str = "stale_intent_reconcile_p
 
 pub const EVENT_BUDGET_CIRCUIT_BREAKER: &str = "budget_circuit_breaker";
 
+pub const EVENT_RISK_GUARD_ACTIVE: &str = "risk_guard_active";
+pub const EVENT_MARKET_DATA_UNAVAILABLE: &str = "market_data_unavailable";
+pub const EVENT_AI_FALLBACK: &str = "ai_fallback";
+
 pub const CANONICAL_RUNTIME_EVENT_TYPES: &[RuntimeEventCatalogItem] = &[
     RuntimeEventCatalogItem {
         event_type: EVENT_LIVE_RISK_SNAPSHOT,
@@ -68,6 +72,18 @@ pub const CANONICAL_RUNTIME_EVENT_TYPES: &[RuntimeEventCatalogItem] = &[
     RuntimeEventCatalogItem {
         event_type: EVENT_BUDGET_CIRCUIT_BREAKER,
         description: "Budget circuit breaker triggered: unrealized loss exceeded the budget limit.",
+    },
+    RuntimeEventCatalogItem {
+        event_type: EVENT_RISK_GUARD_ACTIVE,
+        description: "Risk guard held a decision because drawdown/margin thresholds were reached.",
+    },
+    RuntimeEventCatalogItem {
+        event_type: EVENT_MARKET_DATA_UNAVAILABLE,
+        description: "Decision skipped the AI prompt because market/kline data was unavailable.",
+    },
+    RuntimeEventCatalogItem {
+        event_type: EVENT_AI_FALLBACK,
+        description: "AI unavailable; decision derived from the momentum fallback heuristic.",
     },
 ];
 

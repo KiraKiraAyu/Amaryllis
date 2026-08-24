@@ -746,6 +746,7 @@ pub async fn process_cycle(
             live_risk_level,
             trigger_source,
             &cycle_correlation_id,
+            backtest_mode,
         )
         .await;
 
