@@ -250,7 +250,7 @@ pub async fn generate_ai_decision(
             system_prompt: system_prompt_owned.clone(),
         });
 
-    if cfg.ai_api_key.trim().is_empty() || cfg.ai_model_id.trim().is_empty() {
+    if cfg.ai_api_key.trim().is_empty() {
         if !backtest_mode {
             emit_runtime_event_best_effort(
                 state,
@@ -260,7 +260,7 @@ pub async fn generate_ai_decision(
                 "",
                 risk_level,
                 trigger_source,
-                "AI not configured — decision derived from momentum heuristic",
+                "AI API key not configured — capital protection HOLD applied",
                 correlation_id,
                 json!({ "symbol": symbol, "momentum": momentum }),
                 now_ts,
@@ -276,6 +276,7 @@ pub async fn generate_ai_decision(
             &timeframe,
             prompt,
             system_prompt_owned,
+            "API key not configured",
         );
     }
 
@@ -348,7 +349,7 @@ pub async fn generate_ai_decision(
                     "",
                     risk_level,
                     trigger_source,
-                    &format!("AI request failed ({e}) — decision derived from momentum heuristic"),
+                    &format!("AI request failed ({e}) — capital protection HOLD applied"),
                     correlation_id,
                     json!({ "symbol": symbol, "momentum": momentum, "error": e.to_string() }),
                     now_ts,
@@ -364,6 +365,7 @@ pub async fn generate_ai_decision(
                 &timeframe,
                 prompt,
                 system_prompt_owned,
+                &e.to_string(),
             )
         }
     }
@@ -378,59 +380,29 @@ pub fn generate_fallback_decision(
     timeframe: &str,
     prompt: String,
     system_prompt: Option<String>,
+    reason: &str,
 ) -> DecisionSignal {
     let momentum = momentum(m);
-
-    let threshold = (0.0015 + m.volatility * 0.2).clamp(0.001, 0.01);
-
-    if momentum > threshold {
-        DecisionSignal {
-            symbol: symbol.to_string(),
-            action: "LONG".to_string(),
-            confidence: (0.55 + (momentum / threshold).min(1.5) * 0.2).clamp(0.55, 0.9),
-            reason: String::new(),
-            timeframe: timeframe.to_string(),
-            price: m.price,
-            momentum,
-            risk_level: risk_level.to_string(),
-            trigger_source: trigger_source.to_string(),
-            action_taken: "open-long".to_string(),
-            correlation_id: correlation_id.to_string(),
-            prompt,
-            system_prompt,
-        }
-    } else if momentum < -threshold {
-        DecisionSignal {
-            symbol: symbol.to_string(),
-            action: "SHORT".to_string(),
-            confidence: (0.55 + ((-momentum) / threshold).min(1.5) * 0.2).clamp(0.55, 0.9),
-            reason: String::new(),
-            timeframe: timeframe.to_string(),
-            price: m.price,
-            momentum,
-            risk_level: risk_level.to_string(),
-            trigger_source: trigger_source.to_string(),
-            action_taken: "open-short".to_string(),
-            correlation_id: correlation_id.to_string(),
-            prompt,
-            system_prompt,
-        }
+    let fallback_reason = if reason.trim().is_empty() {
+        "AI inference unavailable — capital protection HOLD applied".to_string()
     } else {
-        DecisionSignal {
-            symbol: symbol.to_string(),
-            action: "NO ACTION".to_string(),
-            confidence: 0.5,
-            reason: String::new(),
-            timeframe: timeframe.to_string(),
-            price: m.price,
-            momentum,
-            risk_level: risk_level.to_string(),
-            trigger_source: trigger_source.to_string(),
-            action_taken: "hold-range".to_string(),
-            correlation_id: correlation_id.to_string(),
-            prompt,
-            system_prompt,
-        }
+        format!("AI inference unavailable ({reason}) — capital protection HOLD applied")
+    };
+
+    DecisionSignal {
+        symbol: symbol.to_string(),
+        action: "NO ACTION".to_string(),
+        confidence: 0.0,
+        reason: fallback_reason,
+        timeframe: timeframe.to_string(),
+        price: m.price,
+        momentum,
+        risk_level: risk_level.to_string(),
+        trigger_source: trigger_source.to_string(),
+        action_taken: "hold-ai-fallback".to_string(),
+        correlation_id: correlation_id.to_string(),
+        prompt,
+        system_prompt,
     }
 }
 
@@ -694,8 +666,11 @@ mod tests {
             "5m",
             "prompt text".to_string(),
             None,
+            "simulated failure",
         );
-        assert_eq!(fallback.action, "LONG");
+        assert_eq!(fallback.action, "NO ACTION");
+        assert_eq!(fallback.confidence, 0.0);
+        assert_eq!(fallback.action_taken, "hold-ai-fallback");
         assert_eq!(fallback.timeframe, "5m");
     }
 }

@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
-use crate::error::{AppError, Result};
+use crate::error::Result;
 
 mod anthropic;
 mod chat_completions;
@@ -71,12 +71,12 @@ pub(super) trait LlmProviderClient: Send + Sync + std::fmt::Debug {
 }
 
 impl DefaultLlmClient {
-    pub fn new(config: LlmClientConfig) -> Result<Self> {
-        if !is_supported_provider(&config.provider) {
-            return Err(AppError::BadRequest(format!(
-                "Unsupported LLM provider: {}",
-                config.provider
-            )));
+    pub fn new(mut config: LlmClientConfig) -> Result<Self> {
+        let normalized = normalize_provider_type(&config.provider);
+        if normalized.is_empty() {
+            config.provider = "chat_completions".to_string();
+        } else {
+            config.provider = normalized.to_string();
         }
 
         let http = Client::builder()
@@ -157,10 +157,15 @@ pub fn provider_config(
     model: String,
     base_url: String,
 ) -> LlmClientConfig {
-    let provider = normalize_provider_type(&provider).to_string();
-    let default_url = default_base_url(&provider);
+    let normalized = normalize_provider_type(&provider);
+    let effective_provider = if normalized.is_empty() {
+        "chat_completions"
+    } else {
+        normalized
+    };
+    let default_url = default_base_url(effective_provider);
     LlmClientConfig {
-        provider,
+        provider: effective_provider.to_string(),
         api_key,
         model,
         base_url: normalize_base_url(base_url, default_url),
@@ -172,6 +177,7 @@ pub fn is_supported_provider(provider: &str) -> bool {
     SUPPORTED_PROVIDER_TYPES
         .iter()
         .any(|provider_type| provider_type.provider_type == normalized)
+        || provider.trim().is_empty()
 }
 
 pub fn supported_provider_types() -> &'static [SupportedProviderType] {
@@ -218,14 +224,12 @@ mod tests {
             "chat_completions",
             "chat-completions",
             "Chat Completions",
-            "responses",
-            "Responses",
         ] {
-            assert_eq!(
-                normalize_provider_type(provider),
-                provider.trim().to_ascii_lowercase().replace([' ', '-'], "_")
-            );
+            assert_eq!(normalize_provider_type(provider), "chat_completions");
         }
+
+        assert_eq!(normalize_provider_type("responses"), "responses");
+        assert_eq!(normalize_provider_type("Responses"), "responses");
 
         assert_eq!(
             normalize_provider_type("anthropic_messages"),
@@ -235,6 +239,7 @@ mod tests {
             normalize_provider_type("Anthropic-Messages"),
             "anthropic_messages"
         );
+
         assert_eq!(
             normalize_provider_type("gemini_generate_content"),
             "gemini_generate_content"
@@ -243,7 +248,7 @@ mod tests {
             normalize_provider_type("Gemini-Generate-Content"),
             "gemini_generate_content"
         );
-        assert_eq!(normalize_provider_type("openai"), "");
+        assert_eq!(normalize_provider_type(""), "");
         assert_eq!(normalize_provider_type("unknown"), "");
     }
 

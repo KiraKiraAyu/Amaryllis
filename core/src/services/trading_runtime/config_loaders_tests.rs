@@ -433,6 +433,7 @@ async fn test_persisted_decision_uses_completion_time_and_keeps_cycle_timing() {
         "3m",
         String::new(),
         None,
+        "test error",
     );
 
     let metrics = AccountMetrics {
