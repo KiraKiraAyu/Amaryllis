@@ -181,10 +181,19 @@ function decisionToFeedMessages(decision: DecisionPayload): FeedMessage[] {
     })
   }
 
+  const triggerSource = (payload.trigger_source as string) || "ai_model"
+  const isFallback =
+    triggerSource !== "ai_model" ||
+    !decision.reason ||
+    Boolean(payload.system_note)
+  const systemNote = (payload.system_note as string) || ""
+
   messages.push({
     id: `decision-${decision.id}`,
     role: "trader",
-    title: `AI Decision: ${decision.symbol} -> ${decision.decision}`,
+    title: isFallback
+      ? `System Guard: ${decision.symbol} -> ${decision.decision}`
+      : `AI Decision: ${decision.symbol} -> ${decision.decision}`,
     content: decision.reason || "",
     timestamp: decisionCompletedAt,
     data: {
@@ -193,6 +202,9 @@ function decisionToFeedMessages(decision: DecisionPayload): FeedMessage[] {
       confidence: decision.confidence,
       timeframe: decision.timeframe,
       correlation_id: payload.correlation_id,
+      trigger_source: triggerSource,
+      is_fallback: isFallback,
+      system_note: systemNote,
     },
   })
 

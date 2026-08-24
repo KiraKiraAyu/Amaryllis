@@ -143,24 +143,38 @@ impl LlmProviderClient for ChatCompletionsClient {
                     continue;
                 }
 
-                if let Some(data) = line.strip_prefix("data: ") {
-                    let data = data.trim();
-                    if data == "[DONE]" {
+                let trimmed_line = line.trim();
+                if let Some(raw_data) = trimmed_line.strip_prefix("data:") {
+                    let data = raw_data.trim();
+                    if data.is_empty() || data == "[DONE]" {
                         continue;
                     }
 
                     // Parse the SSE JSON chunk
                     if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(data)
-                        && let Some(content) = parsed
-                            .get("choices")
-                            .and_then(|c| c.get(0))
-                            .and_then(|c| c.get("delta"))
+                        && let Some(choice) = parsed.get("choices").and_then(|c| c.get(0))
+                    {
+                        let delta = choice.get("delta");
+                        let content = delta
                             .and_then(|d| d.get("content"))
                             .and_then(|c| c.as_str())
-                        && !content.is_empty()
-                    {
-                        full_response.push_str(content);
-                        let _ = chunk_tx.send(content.to_string());
+                            .unwrap_or("");
+
+                        let reasoning = delta
+                            .and_then(|d| d.get("reasoning_content").or_else(|| d.get("reasoning")))
+                            .and_then(|c| c.as_str())
+                            .unwrap_or("");
+
+                        let text_chunk = if !content.is_empty() {
+                            content
+                        } else {
+                            reasoning
+                        };
+
+                        if !text_chunk.is_empty() {
+                            full_response.push_str(text_chunk);
+                            let _ = chunk_tx.send(text_chunk.to_string());
+                        }
                     }
                 }
             }

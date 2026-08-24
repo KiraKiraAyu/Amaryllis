@@ -508,7 +508,6 @@ mod tests {
 
         // Cutoff at candle 20 (close_time = 20 * 300_000 = 6_000_000 ms = 6000 s)
         let as_of_ts_sec = 6000;
-        let mut fetch_cache: HashMap<(String, usize), Vec<MarketKline>> = HashMap::new();
         let cutoff_ms = as_of_ts_sec * 1000;
 
         let filtered: Vec<MarketKline> = historical_candles

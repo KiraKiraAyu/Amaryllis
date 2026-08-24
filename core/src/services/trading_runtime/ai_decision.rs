@@ -141,6 +141,7 @@ pub async fn generate_ai_decision(
             correlation_id: correlation_id.to_string(),
             prompt: String::new(),
             system_prompt: None,
+            system_note: Some("Risk guard active: drawdown/margin threshold reached".to_string()),
         };
     }
 
@@ -181,6 +182,7 @@ pub async fn generate_ai_decision(
                 correlation_id: correlation_id.to_string(),
                 prompt: String::new(),
                 system_prompt: None,
+                system_note: Some("No market data available for symbol".to_string()),
             };
         }
     };
@@ -225,6 +227,7 @@ pub async fn generate_ai_decision(
                     correlation_id: correlation_id.to_string(),
                     prompt: String::new(),
                     system_prompt: None,
+                    system_note: Some(format!("Strategy market data unavailable: {err}")),
                 };
             }
         };
@@ -267,6 +270,7 @@ pub async fn generate_ai_decision(
                 correlation_id: correlation_id.to_string(),
                 prompt,
                 system_prompt: system_prompt_owned,
+                system_note: None,
             };
         }
     }
@@ -384,6 +388,7 @@ pub async fn generate_ai_decision(
                 correlation_id: correlation_id.to_string(),
                 prompt,
                 system_prompt: system_prompt_owned,
+                system_note: None,
             }
         }
         Err(e) => {
@@ -431,7 +436,7 @@ pub fn generate_fallback_decision(
     reason: &str,
 ) -> DecisionSignal {
     let momentum = momentum(m);
-    let fallback_reason = if reason.trim().is_empty() {
+    let system_note = if reason.trim().is_empty() {
         "AI inference unavailable — capital protection HOLD applied".to_string()
     } else {
         format!("AI inference unavailable ({reason}) — capital protection HOLD applied")
@@ -441,16 +446,17 @@ pub fn generate_fallback_decision(
         symbol: symbol.to_string(),
         action: "NO ACTION".to_string(),
         confidence: 0.0,
-        reason: fallback_reason,
+        reason: String::new(), // Do NOT populate AI reason with system error messages!
         timeframe: timeframe.to_string(),
         price: m.price,
         momentum,
         risk_level: risk_level.to_string(),
         trigger_source: trigger_source.to_string(),
-        action_taken: "hold-ai-fallback".to_string(),
+        action_taken: format!("hold-{}", trigger_source),
         correlation_id: correlation_id.to_string(),
         prompt,
         system_prompt,
+        system_note: Some(system_note),
     }
 }
 
@@ -470,6 +476,7 @@ pub async fn persist_decision(
         "prompt_hint": cfg.custom_prompt,
         "prompt": d.prompt,
         "system_prompt": d.system_prompt,
+        "system_note": d.system_note,
         "risk_level": d.risk_level,
         "trigger_source": d.trigger_source,
         "action_taken": d.action_taken,
@@ -718,7 +725,9 @@ mod tests {
         );
         assert_eq!(fallback.action, "NO ACTION");
         assert_eq!(fallback.confidence, 0.0);
-        assert_eq!(fallback.action_taken, "hold-ai-fallback");
+        assert_eq!(fallback.reason, "");
+        assert!(fallback.system_note.as_ref().unwrap().contains("simulated failure"));
+        assert_eq!(fallback.action_taken, "hold-fallback");
         assert_eq!(fallback.timeframe, "5m");
     }
 }

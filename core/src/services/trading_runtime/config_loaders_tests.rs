@@ -1266,6 +1266,7 @@ async fn test_live_open_constraint_skip_persists_feedback_without_execution_inte
         correlation_id: "cycle_constraint_skip".to_string(),
         prompt: String::new(),
         system_prompt: None,
+        system_note: None,
     }];
     let market = HashMap::from([(
         "BTCUSDT".to_string(),

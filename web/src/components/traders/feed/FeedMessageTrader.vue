@@ -59,8 +59,22 @@ function executionSummary(exec: Record<string, unknown>): string {
       </span>
     </div>
 
-    <!-- Reasoning -->
-    <div v-if="props.msg.content" class="mb-4">
+    <!-- System Protection / Fallback Notice (when not a genuine LLM reasoning) -->
+    <div
+      v-if="props.msg.data?.is_fallback || props.msg.data?.system_note"
+      class="mb-4 p-3.5 rounded-xl border border-amber-500/25 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+    >
+      <div class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider mb-1">
+        <span class="pi pi-shield"></span>
+        <span>Capital Protection Active</span>
+      </div>
+      <p class="text-xs text-surface-700 dark:text-surface-300 leading-relaxed">
+        {{ props.msg.data?.system_note || 'AI inference unavailable — capital protection HOLD applied.' }}
+      </p>
+    </div>
+
+    <!-- Genuine LLM Reasoning -->
+    <div v-else-if="props.msg.content" class="mb-4">
       <div
         class="text-xs font-bold uppercase tracking-wider text-surface-400 mb-1"
       >

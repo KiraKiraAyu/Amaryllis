@@ -156,6 +156,7 @@ pub struct DecisionSignal {
     pub correlation_id: String,
     pub prompt: String,
     pub system_prompt: Option<String>,
+    pub system_note: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy)]
