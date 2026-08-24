@@ -251,7 +251,7 @@ pub async fn runtime_metrics(
         .into_iter()
         .map(|(risk_level, count)| RiskLevelCountPayload { risk_level, count })
         .collect();
-    risk_level_distribution.sort_by(|a, b| b.count.cmp(&a.count));
+    risk_level_distribution.sort_by_key(|b| std::cmp::Reverse(b.count));
 
     Ok(RuntimeMetricsPayload {
         trader_id,

@@ -41,45 +41,45 @@ impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let (status, error_message) = match self {
             AppError::Unauthorized(message) => {
-                tracing::error!("Unauthorized error: {}", message);
+                tracing::warn!("Unauthorized error: {}", message);
                 (StatusCode::UNAUTHORIZED, message)
             }
             AppError::Forbidden(message) => {
-                tracing::error!("Forbidden error: {}", message);
+                tracing::warn!("Forbidden error: {}", message);
                 (StatusCode::FORBIDDEN, "Forbidden".to_string())
             }
             AppError::NotFound(message) => {
-                tracing::error!("Not found error: {}", message);
+                tracing::warn!("Not found error: {}", message);
                 (StatusCode::NOT_FOUND, message)
             }
             AppError::Conflict(message) => {
-                tracing::error!("Conflict error: {}", message);
+                tracing::warn!("Conflict error: {}", message);
                 (StatusCode::CONFLICT, message)
             }
             AppError::AlreadyRunning(trader_id) => {
-                tracing::error!("Trader already running: {}", trader_id);
+                tracing::warn!("Trader already running: {}", trader_id);
                 (
                     StatusCode::CONFLICT,
                     format!("Trader `{trader_id}` is already running"),
                 )
             }
             AppError::NotRunning(trader_id) => {
-                tracing::error!("Trader not running: {}", trader_id);
+                tracing::warn!("Trader not running: {}", trader_id);
                 (
                     StatusCode::CONFLICT,
                     format!("Trader `{trader_id}` is not running"),
                 )
             }
             AppError::TraderNotFound(trader_id) => {
-                tracing::error!("Trader not found or no permission: {}", trader_id);
+                tracing::warn!("Trader not found or no permission: {}", trader_id);
                 (StatusCode::NOT_FOUND, "Trader not found".to_string())
             }
             AppError::BadRequest(message) => {
-                tracing::error!("Bad request error: {}", message);
+                tracing::warn!("Bad request error: {}", message);
                 (StatusCode::BAD_REQUEST, message)
             }
             AppError::InvalidConfig(message) => {
-                tracing::error!("Invalid trader configuration: {}", message);
+                tracing::warn!("Invalid trader configuration: {}", message);
                 (
                     StatusCode::BAD_REQUEST,
                     format!("Invalid trader configuration: {message}"),
@@ -90,14 +90,14 @@ impl IntoResponse for AppError {
                 (StatusCode::BAD_GATEWAY, message)
             }
             AppError::UnsupportedExchange(exchange) => {
-                tracing::error!("Unsupported exchange: {}", exchange);
+                tracing::warn!("Unsupported exchange: {}", exchange);
                 (
                     StatusCode::BAD_REQUEST,
                     format!("Unsupported exchange: {exchange}"),
                 )
             }
             AppError::InvalidExchangeConfig(message) => {
-                tracing::error!("Invalid exchange configuration: {}", message);
+                tracing::warn!("Invalid exchange configuration: {}", message);
                 (
                     StatusCode::BAD_REQUEST,
                     format!("Invalid exchange configuration: {message}"),
@@ -196,9 +196,46 @@ mod tests {
     use super::*;
 
     #[test]
-    fn bad_request_maps_to_bad_request_status() {
-        let response = AppError::BadRequest("Invalid request body".into()).into_response();
+    fn maps_all_app_error_status_codes_correctly() {
+        assert_eq!(
+            AppError::BadRequest("Invalid".into()).into_response().status(),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            AppError::Unauthorized("No auth".into()).into_response().status(),
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            AppError::Forbidden("Denied".into()).into_response().status(),
+            StatusCode::FORBIDDEN
+        );
+        assert_eq!(
+            AppError::NotFound("Missing".into()).into_response().status(),
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            AppError::Conflict("Duplicate".into()).into_response().status(),
+            StatusCode::CONFLICT
+        );
+        assert_eq!(
+            AppError::BadGateway("Upstream failed".into()).into_response().status(),
+            StatusCode::BAD_GATEWAY
+        );
+        assert_eq!(
+            AppError::Internal("Server crash".into()).into_response().status(),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
 
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    #[test]
+    fn api_response_serializes_success_and_failure_structures() {
+        let success_resp = ApiResponse::success(Some(42), "ok".to_string());
+        assert!(success_resp.success);
+        assert_eq!(success_resp.data, Some(42));
+        assert_eq!(success_resp.message, Some("ok".to_string()));
+
+        let failure_resp = ApiResponse::failure("something went wrong");
+        assert!(!failure_resp.success);
+        assert_eq!(failure_resp.error, Some("something went wrong".to_string()));
     }
 }

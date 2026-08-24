@@ -1,4 +1,7 @@
 use super::service::*;
+use crate::clients::exchanges::user_stream::{
+    binance_account_update, binance_order_update, binance_user_stream_event_to_exchange_events,
+};
 use crate::repositories::trading::records::{
     accounts::TraderAccountRecord,
     orders::{InsertOrderFillRecord, InsertTraderOrderRecord, UpdateTraderOrderRecord},
@@ -70,9 +73,7 @@ pub async fn apply_order_trade_update_event(
     if ev.event_type != "ORDER_TRADE_UPDATE" {
         return Ok(());
     }
-    let ExchangeUserStreamEvent::OrderUpdate(update) =
-        binance_order_trade_update_to_exchange_event(ev.clone())
-    else {
+    let ExchangeUserStreamEvent::OrderUpdate(update) = binance_order_update(ev.clone()) else {
         return Ok(());
     };
     apply_order_stream_update_event(state, cfg, &update, ts).await
@@ -304,9 +305,7 @@ pub async fn apply_account_update_event(
     if ev.event_type != "ACCOUNT_UPDATE" {
         return Ok(());
     }
-    let ExchangeUserStreamEvent::AccountUpdate(update) =
-        binance_account_update_to_exchange_event(ev.clone())
-    else {
+    let ExchangeUserStreamEvent::AccountUpdate(update) = binance_account_update(ev.clone()) else {
         return Ok(());
     };
     apply_account_stream_update_event(state, cfg, &update, ts).await
@@ -410,102 +409,4 @@ pub async fn apply_account_stream_update_event(
         });
 
     Ok(())
-}
-
-fn binance_user_stream_event_to_exchange_events(
-    event: BinanceUserStreamEvent,
-) -> Vec<ExchangeUserStreamEvent> {
-    match event {
-        BinanceUserStreamEvent::OrderTradeUpdate(ev) => {
-            vec![binance_order_trade_update_to_exchange_event(ev)]
-        }
-        BinanceUserStreamEvent::AccountUpdate(ev) => {
-            vec![binance_account_update_to_exchange_event(ev)]
-        }
-        BinanceUserStreamEvent::ListenKeyExpired { event_time } => {
-            vec![ExchangeUserStreamEvent::ListenKeyExpired {
-                exchange_type: "binance".to_string(),
-                event_time,
-            }]
-        }
-        BinanceUserStreamEvent::Unknown => Vec::new(),
-    }
-}
-
-fn binance_order_trade_update_to_exchange_event(
-    ev: BinanceOrderTradeUpdateEvent,
-) -> ExchangeUserStreamEvent {
-    let reduce_only = ev.order.reduce_only;
-    let side = ev.order.side.trim().to_uppercase();
-    ExchangeUserStreamEvent::OrderUpdate(ExchangeOrderStreamUpdate {
-        exchange_type: "binance".to_string(),
-        symbol: ev.order.symbol.trim().to_uppercase(),
-        order_id: ev.order.order_id.to_string(),
-        client_order_id: ev.order.client_order_id,
-        side: side.clone(),
-        position_side: match (side.as_str(), reduce_only) {
-            ("SELL", false) | ("BUY", true) => "SHORT".to_string(),
-            _ => "LONG".to_string(),
-        },
-        order_type: ev.order.order_type.trim().to_uppercase(),
-        status: ev.order.order_status.trim().to_uppercase(),
-        execution_type: ev.order.execution_type.trim().to_uppercase(),
-        trade_id: (ev.order.trade_id > 0).then(|| ev.order.trade_id.to_string()),
-        orig_qty: parse_f64(&ev.order.orig_qty),
-        filled_qty: parse_f64(&ev.order.cum_qty),
-        last_fill_price: parse_f64(&ev.order.last_fill_price),
-        last_fill_qty: parse_f64(&ev.order.last_fill_qty),
-        fee: parse_f64(&ev.order.fee),
-        fee_asset: if ev.order.fee_asset.trim().is_empty() {
-            "USDT".to_string()
-        } else {
-            ev.order.fee_asset.trim().to_uppercase()
-        },
-        realized_pnl: parse_f64(&ev.order.realized_pnl),
-        reduce_only,
-        event_time: ev.event_time,
-        trade_time: ev.order.trade_time,
-    })
-}
-
-fn binance_account_update_to_exchange_event(
-    ev: BinanceAccountUpdateEvent,
-) -> ExchangeUserStreamEvent {
-    let balances = ev
-        .account
-        .balances
-        .into_iter()
-        .filter(|b| b.asset.eq_ignore_ascii_case("USDT"))
-        .map(|b| ExchangeAccountBalanceUpdate {
-            asset: b.asset.trim().to_uppercase(),
-            wallet_balance: parse_f64(&b.wallet_balance),
-            available_balance: parse_f64(&b.cross_wallet_balance),
-            unrealized_pnl: 0.0,
-        })
-        .collect();
-    let positions = ev
-        .account
-        .positions
-        .into_iter()
-        .map(|p| {
-            let qty_raw = parse_f64(&p.position_amt);
-            ExchangeAccountPositionUpdate {
-                symbol: p.symbol.trim().to_uppercase(),
-                position_side: normalize_position_side(&p.position_side, qty_raw).to_string(),
-                quantity: qty_raw.abs(),
-                entry_price: parse_f64(&p.entry_price),
-                mark_price: parse_f64(&p.entry_price),
-                unrealized_pnl: parse_f64(&p.unrealized_pnl),
-                leverage: 1,
-                liquidation_price: 0.0,
-            }
-        })
-        .collect();
-
-    ExchangeUserStreamEvent::AccountUpdate(ExchangeAccountStreamUpdate {
-        exchange_type: "binance".to_string(),
-        balances,
-        positions,
-        event_time: ev.event_time,
-    })
 }

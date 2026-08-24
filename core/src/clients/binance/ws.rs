@@ -1,8 +1,4 @@
-use futures_util::StreamExt;
 use serde::Deserialize;
-use tokio::sync::{mpsc, watch};
-use tokio_tungstenite::{connect_async, tungstenite::Message};
-use tracing::warn;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct BinanceUserStreamEnvelope {
@@ -105,74 +101,10 @@ pub struct BinancePositionPayload {
 
 #[derive(Debug, Clone)]
 pub enum BinanceUserStreamEvent {
-    OrderTradeUpdate(BinanceOrderTradeUpdateEvent),
+    OrderTradeUpdate(Box<BinanceOrderTradeUpdateEvent>),
     AccountUpdate(BinanceAccountUpdateEvent),
     ListenKeyExpired { event_time: i64 },
     Unknown,
-}
-
-pub fn spawn_binance_user_stream_reader(
-    ws_url: String,
-    mut stop_rx: watch::Receiver<bool>,
-) -> mpsc::Receiver<BinanceUserStreamEvent> {
-    let (tx, rx) = mpsc::channel(1024);
-
-    tokio::spawn(async move {
-        let connect: Result<
-            (
-                tokio_tungstenite::WebSocketStream<
-                    tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
-                >,
-                tokio_tungstenite::tungstenite::handshake::client::Response,
-            ),
-            tokio_tungstenite::tungstenite::Error,
-        > = connect_async(ws_url).await;
-        let (mut ws_stream, _) = match connect {
-            Ok(v) => v,
-            Err(err) => {
-                warn!("binance user stream connect failed: {}", err);
-                let _ = tx.send(BinanceUserStreamEvent::Unknown).await;
-                return;
-            }
-        };
-
-        loop {
-            tokio::select! {
-                changed = stop_rx.changed() => {
-                    match changed {
-                        Ok(_) => {
-                            if *stop_rx.borrow() {
-                                break;
-                            }
-                        }
-                        Err(_) => break,
-                    }
-                }
-                message = ws_stream.next() => {
-                    match message {
-                        Some(Ok(Message::Text(text))) => {
-                            let event = parse_binance_user_stream_event(&text);
-                            if tx.send(event).await.is_err() {
-                                break;
-                            }
-                        }
-                        Some(Ok(Message::Ping(_))) => {}
-                        Some(Ok(Message::Pong(_))) => {}
-                        Some(Ok(Message::Binary(_))) => {}
-                        Some(Ok(Message::Frame(_))) => {}
-                        Some(Ok(Message::Close(_))) => break,
-                        Some(Err(err)) => {
-                            warn!("binance user stream read error: {}", err);
-                            break;
-                        }
-                        None => break,
-                    }
-                }
-            }
-        }
-    });
-
-    rx
 }
 
 pub fn parse_binance_user_stream_event(text: &str) -> BinanceUserStreamEvent {
@@ -183,7 +115,7 @@ pub fn parse_binance_user_stream_event(text: &str) -> BinanceUserStreamEvent {
 
     match envelope.event_type.as_str() {
         "ORDER_TRADE_UPDATE" => match serde_json::from_str::<BinanceOrderTradeUpdateEvent>(text) {
-            Ok(v) => BinanceUserStreamEvent::OrderTradeUpdate(v),
+            Ok(v) => BinanceUserStreamEvent::OrderTradeUpdate(Box::new(v)),
             Err(_) => BinanceUserStreamEvent::Unknown,
         },
         "ACCOUNT_UPDATE" => match serde_json::from_str::<BinanceAccountUpdateEvent>(text) {

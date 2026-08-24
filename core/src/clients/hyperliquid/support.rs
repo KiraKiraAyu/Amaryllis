@@ -85,10 +85,10 @@ pub(super) fn parse_json_response(resp: OutboundResponse) -> Result<Value, AppEr
     if !status.is_success() {
         return Err(exchange_api_error(status, body));
     }
-    if let Ok(error) = serde_json::from_str::<HyperliquidError>(&body) {
-        if !error.error.trim().is_empty() {
-            return Err(exchange_api_error(status, error.error));
-        }
+    if let Ok(error) = serde_json::from_str::<HyperliquidError>(&body)
+        && !error.error.trim().is_empty()
+    {
+        return Err(exchange_api_error(status, error.error));
     }
     serde_json::from_str::<Value>(&body).map_err(AppError::ExchangeJson)
 }

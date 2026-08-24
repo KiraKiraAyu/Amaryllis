@@ -204,18 +204,15 @@ impl LlmProviderClient for AnthropicClient {
                 // Anthropic SSE: "event: content_block_delta" then "data: {...}"
                 if let Some(data) = line.strip_prefix("data: ") {
                     let data = data.trim();
-                    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(data) {
-                        // Check for content_block_delta with text_delta
-                        if let Some(text) = parsed
+                    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(data)
+                        && let Some(text) = parsed
                             .get("delta")
                             .and_then(|d| d.get("text"))
                             .and_then(|t| t.as_str())
-                        {
-                            if !text.is_empty() {
-                                full_response.push_str(text);
-                                let _ = chunk_tx.send(text.to_string());
-                            }
-                        }
+                        && !text.is_empty()
+                    {
+                        full_response.push_str(text);
+                        let _ = chunk_tx.send(text.to_string());
                     }
                 }
             }

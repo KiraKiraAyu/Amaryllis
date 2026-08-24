@@ -124,12 +124,12 @@ fn validate_data_template(template: &StrategyDataTemplate) -> std::result::Resul
             return Err(format!("indicator '{id}' has an unsupported output_mode"));
         }
 
-        if let Some(period) = item.params.get("period").and_then(Value::as_u64) {
-            if period == 0 || period as usize > MAX_KLINE_COUNT {
-                return Err(format!(
-                    "indicator '{id}' period must be between 1 and {MAX_KLINE_COUNT}"
-                ));
-            }
+        if let Some(period) = item.params.get("period").and_then(Value::as_u64)
+            && (period == 0 || period as usize > MAX_KLINE_COUNT)
+        {
+            return Err(format!(
+                "indicator '{id}' period must be between 1 and {MAX_KLINE_COUNT}"
+            ));
         }
     }
 

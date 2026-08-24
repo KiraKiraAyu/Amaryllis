@@ -698,7 +698,7 @@ pub async fn notify_runtime_alert_webhook_best_effort(
                 max_attempts: max_retries as i64,
                 success,
                 error_message: error_message.clone(),
-                latency_ms: latency_ms as i64,
+                latency_ms,
                 created_at: now_ts(),
             })
             .await;

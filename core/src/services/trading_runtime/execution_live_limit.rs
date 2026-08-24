@@ -79,5 +79,4 @@ pub async fn place_live_open_order_limit_first(
             client_order_id: Some(crate::clients::short_client_order_id("nfx_mkt_")),
         })
         .await
-        .map_err(AppError::from)
 }

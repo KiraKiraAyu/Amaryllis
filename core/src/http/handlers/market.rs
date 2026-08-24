@@ -22,12 +22,12 @@ pub async fn handle_klines(
         exchange,
     }): Query<KlinesQuery>,
 ) -> Result<Json<ApiResponse<Vec<KlinePayload>>>> {
-    if let Some(l) = limit {
-        if l <= 0 {
-            return Err(AppError::BadRequest(
-                "limit must be a positive number".into(),
-            ));
-        }
+    if let Some(l) = limit
+        && l <= 0
+    {
+        return Err(AppError::BadRequest(
+            "limit must be a positive number".into(),
+        ));
     }
     let payload = market::klines(symbol, interval, limit, exchange).await?;
     Ok(Json(ApiResponse::success(Some(payload), None)))

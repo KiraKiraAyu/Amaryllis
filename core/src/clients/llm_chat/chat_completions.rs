@@ -150,19 +150,17 @@ impl LlmProviderClient for ChatCompletionsClient {
                     }
 
                     // Parse the SSE JSON chunk
-                    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(data) {
-                        if let Some(content) = parsed
+                    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(data)
+                        && let Some(content) = parsed
                             .get("choices")
                             .and_then(|c| c.get(0))
                             .and_then(|c| c.get("delta"))
                             .and_then(|d| d.get("content"))
                             .and_then(|c| c.as_str())
-                        {
-                            if !content.is_empty() {
-                                full_response.push_str(content);
-                                let _ = chunk_tx.send(content.to_string());
-                            }
-                        }
+                        && !content.is_empty()
+                    {
+                        full_response.push_str(content);
+                        let _ = chunk_tx.send(content.to_string());
                     }
                 }
             }

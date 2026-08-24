@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use crate::{
-    clients::outbound_http::{OutboundRequestLog, send_text},
+    clients::outbound_http::{http_client, send_text, OutboundRequestLog},
     error::AppError,
 };
 
@@ -105,7 +105,7 @@ async fn fetch_binance_compatible_klines(
         limit.min(1500)
     );
     let response = send_text(
-        reqwest::Client::new().get(&url),
+        http_client().get(&url),
         OutboundRequestLog::new(log_name, Method::GET, &url),
     )
     .await?;
@@ -191,7 +191,7 @@ async fn fetch_binance_compatible_symbols(
 ) -> Result<Vec<MarketSymbol>, AppError> {
     let url = format!("{base_url}/fapi/v1/exchangeInfo");
     let response = send_text(
-        reqwest::Client::new().get(&url),
+        http_client().get(&url),
         OutboundRequestLog::new(log_name, Method::GET, &url),
     )
     .await?;
@@ -235,7 +235,7 @@ async fn fetch_binance_compatible_symbols(
 pub(crate) async fn fetch_okx_symbols() -> Result<Vec<MarketSymbol>, AppError> {
     let url = "https://www.okx.com/api/v5/public/instruments?instType=SWAP";
     let response = send_text(
-        reqwest::Client::new().get(url),
+        http_client().get(url),
         OutboundRequestLog::new("market.okx.symbols", Method::GET, url),
     )
     .await?;
@@ -296,7 +296,7 @@ pub(crate) async fn fetch_okx_klines(
         limit.min(300)
     );
     let response = send_text(
-        reqwest::Client::new().get(&url),
+        http_client().get(&url),
         OutboundRequestLog::new("market.okx.klines", Method::GET, &url),
     )
     .await?;
@@ -324,7 +324,7 @@ pub(crate) async fn fetch_okx_klines(
 pub(crate) async fn fetch_bitget_symbols() -> Result<Vec<MarketSymbol>, AppError> {
     let url = "https://api.bitget.com/api/v2/mix/market/contracts?productType=USDT-FUTURES";
     let response = send_text(
-        reqwest::Client::new().get(url),
+        http_client().get(url),
         OutboundRequestLog::new("market.bitget.symbols", Method::GET, url),
     )
     .await?;
@@ -384,7 +384,7 @@ pub(crate) async fn fetch_bitget_klines(
         limit.min(1000)
     );
     let response = send_text(
-        reqwest::Client::new().get(&url),
+        http_client().get(&url),
         OutboundRequestLog::new("market.bitget.klines", Method::GET, &url),
     )
     .await?;
@@ -476,7 +476,7 @@ pub(crate) async fn fetch_hyperliquid_klines(
 async fn hyperliquid_info(body: Value, log_name: &'static str) -> Result<Value, AppError> {
     let url = "https://api.hyperliquid.xyz/info";
     let response = send_text(
-        reqwest::Client::new().post(url).json(&body),
+        http_client().post(url).json(&body),
         OutboundRequestLog::new(log_name, Method::POST, url),
     )
     .await?;

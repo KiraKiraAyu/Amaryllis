@@ -121,7 +121,7 @@ pub struct ExchangeAccountStreamUpdate {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExchangeUserStreamEvent {
-    OrderUpdate(ExchangeOrderStreamUpdate),
+    OrderUpdate(Box<ExchangeOrderStreamUpdate>),
     AccountUpdate(ExchangeAccountStreamUpdate),
     ListenKeyExpired {
         exchange_type: String,
@@ -138,35 +138,27 @@ pub fn spawn_exchange_user_stream_reader(
 
     tokio::spawn(async move {
         let connect = connect_async(&session.ws_url).await;
-        let (ws_stream, _) = match connect {
+        let (mut ws_stream, _) = match connect {
             Ok(v) => v,
             Err(err) => {
-                warn!(
-                    "{} user stream connect failed: {}",
-                    session.exchange_type, err
-                );
+                warn!("{} user stream connect failed: {}", session.exchange_type, err);
                 let _ = tx.send(ExchangeUserStreamEvent::Unknown).await;
                 return;
             }
         };
-        let (mut write, mut read) = ws_stream.split();
 
-        for message in &session.initial_text_messages {
-            if let Err(err) = write.send(Message::Text(message.clone())).await {
-                warn!(
-                    "{} user stream initial message failed: {}",
-                    session.exchange_type, err
-                );
+        for text in &session.initial_text_messages {
+            if let Err(err) = ws_stream.send(Message::Text(text.clone())).await {
+                warn!("{} user stream initial message failed: {}", session.exchange_type, err);
                 let _ = tx.send(ExchangeUserStreamEvent::Unknown).await;
                 return;
             }
         }
 
-        let heartbeat_enabled =
-            session.heartbeat_text.is_some() && session.heartbeat_interval_secs > 0;
-        let mut heartbeat =
-            time::interval(Duration::from_secs(session.heartbeat_interval_secs.max(1)));
-        heartbeat.set_missed_tick_behavior(MissedTickBehavior::Skip);
+        let (mut write, mut read) = ws_stream.split();
+        let heartbeat_enabled = session.heartbeat_text.is_some() && session.heartbeat_interval_secs > 0;
+        let mut heartbeat = time::interval(Duration::from_secs(session.heartbeat_interval_secs.max(1)));
+        heartbeat.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
         loop {
             tokio::select! {
@@ -181,11 +173,11 @@ pub fn spawn_exchange_user_stream_reader(
                     }
                 }
                 _ = heartbeat.tick(), if heartbeat_enabled => {
-                    if let Some(text) = session.heartbeat_text.as_deref() {
-                        if let Err(err) = write.send(Message::Text(text.to_string())).await {
-                            warn!("{} user stream heartbeat failed: {}", session.exchange_type, err);
-                            break;
-                        }
+                    if let Some(text) = session.heartbeat_text.as_deref()
+                        && let Err(err) = write.send(Message::Text(text.to_string())).await
+                    {
+                        warn!("{} user stream heartbeat failed: {}", session.exchange_type, err);
+                        break;
                     }
                 }
                 message = read.next() => {
@@ -238,9 +230,15 @@ pub fn parse_exchange_user_stream_events(
 }
 
 pub fn parse_binance_user_stream_events(text: &str) -> Vec<ExchangeUserStreamEvent> {
-    match parse_binance_user_stream_event(text) {
+    binance_user_stream_event_to_exchange_events(parse_binance_user_stream_event(text))
+}
+
+pub fn binance_user_stream_event_to_exchange_events(
+    event: BinanceUserStreamEvent,
+) -> Vec<ExchangeUserStreamEvent> {
+    match event {
         BinanceUserStreamEvent::OrderTradeUpdate(ev) => {
-            vec![binance_order_update(ev)]
+            vec![binance_order_update(*ev)]
         }
         BinanceUserStreamEvent::AccountUpdate(ev) => {
             vec![binance_account_update(ev)]
@@ -380,11 +378,11 @@ pub fn parse_hyperliquid_user_stream_events(text: &str) -> Vec<ExchangeUserStrea
     }
 }
 
-fn binance_order_update(ev: BinanceOrderTradeUpdateEvent) -> ExchangeUserStreamEvent {
+pub fn binance_order_update(ev: BinanceOrderTradeUpdateEvent) -> ExchangeUserStreamEvent {
     let event_time = positive_i64(ev.event_time, 0);
     let trade_time = positive_i64(ev.order.trade_time, event_time);
     let reduce_only = ev.order.reduce_only;
-    ExchangeUserStreamEvent::OrderUpdate(ExchangeOrderStreamUpdate {
+    ExchangeUserStreamEvent::OrderUpdate(Box::new(ExchangeOrderStreamUpdate {
         exchange_type: "binance".to_string(),
         symbol: ev.order.symbol.trim().to_uppercase(),
         order_id: ev.order.order_id.to_string(),
@@ -405,10 +403,10 @@ fn binance_order_update(ev: BinanceOrderTradeUpdateEvent) -> ExchangeUserStreamE
         reduce_only,
         event_time,
         trade_time,
-    })
+    }))
 }
 
-fn binance_account_update(ev: BinanceAccountUpdateEvent) -> ExchangeUserStreamEvent {
+pub fn binance_account_update(ev: BinanceAccountUpdateEvent) -> ExchangeUserStreamEvent {
     let event_time = positive_i64(ev.event_time, 0);
     let balances = ev
         .account
@@ -463,7 +461,7 @@ fn okx_order_update(
         .unwrap_or(0);
     let trade_id = optional_string(row, "tradeId");
 
-    ExchangeUserStreamEvent::OrderUpdate(ExchangeOrderStreamUpdate {
+    ExchangeUserStreamEvent::OrderUpdate(Box::new(ExchangeOrderStreamUpdate {
         exchange_type: "okx".to_string(),
         symbol: okx_internal_symbol(&inst_id),
         order_id: str_value(row, "ordId"),
@@ -492,7 +490,7 @@ fn okx_order_update(
         reduce_only,
         event_time,
         trade_time: event_time,
-    })
+    }))
 }
 
 fn okx_account_balances(row: &Value) -> Vec<ExchangeAccountBalanceUpdate> {
@@ -584,7 +582,7 @@ fn bitget_order_update(row: &Value) -> ExchangeUserStreamEvent {
         .unwrap_or(0);
     let trade_id = optional_string(row, "tradeId");
 
-    ExchangeUserStreamEvent::OrderUpdate(ExchangeOrderStreamUpdate {
+    ExchangeUserStreamEvent::OrderUpdate(Box::new(ExchangeOrderStreamUpdate {
         exchange_type: "bitget".to_string(),
         symbol: bitget_internal_symbol(
             &str_value(row, "instId").or_else_nonempty(str_value(row, "symbol")),
@@ -623,7 +621,7 @@ fn bitget_order_update(row: &Value) -> ExchangeUserStreamEvent {
         reduce_only,
         event_time,
         trade_time: event_time,
-    })
+    }))
 }
 
 fn bitget_balance_update(row: &Value) -> Option<ExchangeAccountBalanceUpdate> {
@@ -683,7 +681,7 @@ fn hyperliquid_fill_update(row: &Value) -> ExchangeUserStreamEvent {
     let qty = f64_value(row, "sz");
     let event_time = i64_value(row, "time").unwrap_or(0);
 
-    ExchangeUserStreamEvent::OrderUpdate(ExchangeOrderStreamUpdate {
+    ExchangeUserStreamEvent::OrderUpdate(Box::new(ExchangeOrderStreamUpdate {
         exchange_type: "hyperliquid".to_string(),
         symbol: hyperliquid_internal_symbol(&str_value(row, "coin")),
         order_id: i64_or_string(row, "oid"),
@@ -704,7 +702,7 @@ fn hyperliquid_fill_update(row: &Value) -> ExchangeUserStreamEvent {
         reduce_only,
         event_time,
         trade_time: event_time,
-    })
+    }))
 }
 
 fn hyperliquid_order_update(row: &Value) -> ExchangeUserStreamEvent {
@@ -719,7 +717,7 @@ fn hyperliquid_order_update(row: &Value) -> ExchangeUserStreamEvent {
         .or_else(|| i64_value(order, "timestamp"))
         .unwrap_or(0);
 
-    ExchangeUserStreamEvent::OrderUpdate(ExchangeOrderStreamUpdate {
+    ExchangeUserStreamEvent::OrderUpdate(Box::new(ExchangeOrderStreamUpdate {
         exchange_type: "hyperliquid".to_string(),
         symbol: hyperliquid_internal_symbol(&str_value(order, "coin")),
         order_id: i64_or_string(order, "oid"),
@@ -740,7 +738,7 @@ fn hyperliquid_order_update(row: &Value) -> ExchangeUserStreamEvent {
         reduce_only,
         event_time,
         trade_time: event_time,
-    })
+    }))
 }
 
 fn hyperliquid_account_events(data: &Value) -> Vec<ExchangeUserStreamEvent> {
@@ -808,7 +806,7 @@ fn str_value(row: &Value, key: &str) -> String {
                 .map(ToString::to_string)
                 .or_else(|| value.as_i64().map(|v| v.to_string()))
                 .or_else(|| value.as_u64().map(|v| v.to_string()))
-                .or_else(|| value.as_f64().map(|v| trim_float(v)))
+                .or_else(|| value.as_f64().map(trim_float))
         })
         .unwrap_or_default()
 }

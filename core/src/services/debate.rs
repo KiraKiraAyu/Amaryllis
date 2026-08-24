@@ -153,7 +153,7 @@ impl DebateService {
     pub async fn delete(&self, debate_id: &str) -> AppResult<DebateMessagePayload> {
         delete_debate(&self.debate_repo, debate_id)
             .await
-            .map_err(|err| AppError::BadRequest(err.into()))?;
+            .map_err(AppError::BadRequest)?;
 
         Ok(DebateMessagePayload {
             message: "Debate deleted",
@@ -171,7 +171,7 @@ impl DebateService {
             self.realtime_hub.clone(),
         )
         .await
-        .map_err(|err| AppError::BadRequest(err.into()))?;
+        .map_err(AppError::BadRequest)?;
 
         Ok(DebateActionPayload {
             id: debate_id.to_string(),
@@ -180,7 +180,7 @@ impl DebateService {
     }
 
     pub fn cancel(&self, debate_id: &str) -> AppResult<DebateActionPayload> {
-        cancel_debate(debate_id).map_err(|err| AppError::BadRequest(err.into()))?;
+        cancel_debate(debate_id).map_err(AppError::BadRequest)?;
 
         Ok(DebateActionPayload {
             id: debate_id.to_string(),
@@ -478,12 +478,12 @@ Format: Your analysis paragraph... then on a new line: VOTE: LONG|SHORT|HOLD"#,
 
             conversation_history.push((personality.clone(), response.chars().take(500).collect()));
 
-            // Push debate message to realtime clients in real-time
+            // Push debate message to realtime clients in real-time with full response
             realtime_hub.publish(crate::realtime::RealtimeEvent::DebateMessage {
                 debate_id: debate_id.clone(),
                 round: round as i64,
                 personality: personality.clone(),
-                content: response.chars().take(500).collect(),
+                content: response.clone(),
                 vote: vote.clone(),
             });
 
@@ -536,24 +536,27 @@ Format: Your analysis paragraph... then on a new line: VOTE: LONG|SHORT|HOLD"#,
 }
 
 fn extract_vote_from_response(response: &str) -> String {
-    let upper = response.to_uppercase();
-    // Look for "VOTE: XXX" pattern first
-    if let Some(pos) = upper.find("VOTE:") {
-        let rest = &upper[pos + 5..]
-            .trim_start()
+    let clean = response.replace(['*', '_', '`', '#'], " ");
+    let upper = clean.to_uppercase();
+
+    // Look for "VOTE: XXX" or "VOTE IS XXX" pattern first
+    if let Some(pos) = upper.find("VOTE") {
+        let rest = &upper[pos + 4..]
+            .trim_start_matches(|c: char| c.is_whitespace() || c == ':' || c == '-')
             .chars()
-            .take(10)
+            .take(20)
             .collect::<String>();
-        if rest.contains("LONG") {
+        if rest.starts_with("LONG") || rest.contains(" LONG") {
             return "LONG".to_string();
         }
-        if rest.contains("SHORT") {
+        if rest.starts_with("SHORT") || rest.contains(" SHORT") {
             return "SHORT".to_string();
         }
-        if rest.contains("HOLD") {
+        if rest.starts_with("HOLD") || rest.contains(" HOLD") {
             return "HOLD".to_string();
         }
     }
+
     // Fallback: count occurrences
     let longs = upper.matches("LONG").count();
     let shorts = upper.matches("SHORT").count();
@@ -571,4 +574,29 @@ fn remove_from_manager(debate_id: &str) {
     let mgr = get_debate_manager();
     let mut g = mgr.lock().unwrap_or_else(|e| e.into_inner());
     g.remove(debate_id);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extracts_standard_vote() {
+        assert_eq!(extract_vote_from_response("I think we should buy. VOTE: LONG"), "LONG");
+        assert_eq!(extract_vote_from_response("Market is crashing. VOTE: SHORT"), "SHORT");
+        assert_eq!(extract_vote_from_response("Too risky right now. VOTE: HOLD"), "HOLD");
+    }
+
+    #[test]
+    fn extracts_markdown_bold_vote() {
+        assert_eq!(extract_vote_from_response("Based on analysis: **VOTE**: **LONG**"), "LONG");
+        assert_eq!(extract_vote_from_response("### **VOTE: SHORT**"), "SHORT");
+        assert_eq!(extract_vote_from_response("My **VOTE** is `HOLD`"), "HOLD");
+    }
+
+    #[test]
+    fn falls_back_to_keyword_counting() {
+        let response = "I strongly suggest going long here. Long signals everywhere, very bullish long.";
+        assert_eq!(extract_vote_from_response(response), "LONG");
+    }
 }

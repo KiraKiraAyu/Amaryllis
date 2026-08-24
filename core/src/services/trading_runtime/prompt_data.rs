@@ -26,9 +26,10 @@ impl ExitRuleKind {
 }
 
 /// Parsed exit rule from strategy config JSON.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub enum ExitRule {
     /// Rule is absent, mode is unknown, or mode is "fixed" without a rate.
+    #[default]
     NotConfigured,
     /// Mode is "fixed" but the `pnl_rate` field is missing.
     FixedUnconfigured,
@@ -168,12 +169,6 @@ impl TpSlData {
             take_profit: self.take_profit.to_view(),
             stop_loss: self.stop_loss.to_view(),
         }
-    }
-}
-
-impl Default for ExitRule {
-    fn default() -> Self {
-        Self::NotConfigured
     }
 }
 

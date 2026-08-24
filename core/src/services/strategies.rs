@@ -279,14 +279,14 @@ impl StrategyService {
                 }
             }
         }
-        if symbols.is_empty() {
-            if let Some(s) = config.get("trading_symbols").and_then(|v| v.as_str()) {
-                symbols = s
-                    .split(',')
-                    .map(|sym| sym.trim().to_uppercase())
-                    .filter(|s| !s.is_empty())
-                    .collect();
-            }
+        if symbols.is_empty()
+            && let Some(s) = config.get("trading_symbols").and_then(|v| v.as_str())
+        {
+            symbols = s
+                .split(',')
+                .map(|sym| sym.trim().to_uppercase())
+                .filter(|s| !s.is_empty())
+                .collect();
         }
 
         if symbols.is_empty() {
@@ -306,7 +306,7 @@ impl StrategyService {
             if resolved_model.api_key.trim().is_empty() {
                 return Err(strategy_error(
                     AppErrorKind::BadRequest,
-                    &format!(
+                    format!(
                         "No API key found for model '{}'. Please configure it in Settings.",
                         ai_model_id
                     ),
@@ -327,7 +327,7 @@ impl StrategyService {
                 Err(e) => {
                     return Err(strategy_error(
                         AppErrorKind::BadGateway,
-                        &format!("AI call failed: {e}"),
+                        format!("AI call failed: {e}"),
                     ));
                 }
             };
@@ -377,29 +377,28 @@ fn parse_ai_decisions(raw: &str) -> Value {
     let stripped = raw
         .trim()
         .trim_start_matches("```json")
+        .trim_start_matches("```JSON")
         .trim_start_matches("```")
         .trim_end_matches("```")
         .trim();
 
-    if let Some(start) = stripped.find('[') {
-        if let Some(end) = stripped.rfind(']') {
-            if end >= start {
-                let candidate = &stripped[start..=end];
-                if let Ok(v) = serde_json::from_str::<Value>(candidate) {
-                    return v;
-                }
-            }
+    if let Some(start) = stripped.find('[')
+        && let Some(end) = stripped.rfind(']')
+        && end >= start
+    {
+        let candidate = &stripped[start..=end];
+        if let Ok(v) = serde_json::from_str::<Value>(candidate) {
+            return v;
         }
     }
 
-    if let Some(start) = stripped.find('{') {
-        if let Some(end) = stripped.rfind('}') {
-            if end >= start {
-                let candidate = &stripped[start..=end];
-                if let Ok(v) = serde_json::from_str::<Value>(candidate) {
-                    return json!([v]);
-                }
-            }
+    if let Some(start) = stripped.find('{')
+        && let Some(end) = stripped.rfind('}')
+        && end >= start
+    {
+        let candidate = &stripped[start..=end];
+        if let Ok(v) = serde_json::from_str::<Value>(candidate) {
+            return json!([v]);
         }
     }
 
@@ -633,5 +632,22 @@ mod tests {
         });
 
         assert!(validate_strategy_data_template(&config).is_ok());
+    }
+
+    #[test]
+    fn parses_ai_decisions_json_array_and_object() {
+        use super::parse_ai_decisions;
+
+        let array_input = r#"[{"action": "LONG", "symbol": "BTCUSDT", "confidence": 85, "reasoning": "Breakout"}]"#;
+        let parsed = parse_ai_decisions(array_input);
+        assert!(parsed.is_array());
+        assert_eq!(parsed[0]["action"], "LONG");
+
+        let object_input = r#"```json
+        {"action": "SHORT", "symbol": "ETHUSDT", "confidence": 75, "reasoning": "Resistance"}
+        ```"#;
+        let parsed_obj = parse_ai_decisions(object_input);
+        assert!(parsed_obj.is_array());
+        assert_eq!(parsed_obj[0]["action"], "SHORT");
     }
 }

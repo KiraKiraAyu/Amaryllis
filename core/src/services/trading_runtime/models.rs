@@ -147,7 +147,7 @@ pub struct DecisionSignal {
     pub action: String, // LONG / SHORT / NO ACTION
     pub confidence: f64,
     pub reason: String,
-    pub timeframe: &'static str,
+    pub timeframe: String,
     pub price: f64,
     pub momentum: f64,
     pub risk_level: String,

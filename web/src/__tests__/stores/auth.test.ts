@@ -5,20 +5,22 @@ import { useAuthStore } from "@/stores/auth"
 // Mock router
 vi.mock("@/router", () => ({
   default: {
-    push: vi.fn(),
+    push: vi.fn<() => Promise<void>>(),
   },
 }))
 
 // Mock API
 vi.mock("@/api/auth", () => ({
-  getAuthStatusApi: vi.fn().mockResolvedValue({ configured: true }),
+  getAuthStatusApi: vi
+    .fn<() => Promise<{ configured: boolean }>>()
+    .mockResolvedValue({ configured: true }),
   verifyApi: vi
-    .fn()
+    .fn<() => Promise<{ token: string; message: string }>>()
     .mockResolvedValue({ token: "verified-token", message: "ok" }),
-  setupStartApi: vi.fn(),
-  setupConfirmApi: vi.fn(),
-  resetStartApi: vi.fn(),
-  resetConfirmApi: vi.fn(),
+  setupStartApi: vi.fn<() => Promise<unknown>>(),
+  setupConfirmApi: vi.fn<() => Promise<unknown>>(),
+  resetStartApi: vi.fn<() => Promise<unknown>>(),
+  resetConfirmApi: vi.fn<() => Promise<unknown>>(),
 }))
 
 describe("Auth Store", () => {

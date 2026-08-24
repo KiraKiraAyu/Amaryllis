@@ -254,13 +254,13 @@ pub async fn delete_trader(
     trading_runtime_service: &TradingRuntimeService,
     id: &str,
 ) -> AppResult<TraderMessagePayload> {
-    if let Err(err) = trading_runtime_service.stop_trader_for_user(id).await {
-        if !matches!(err, AppError::NotRunning(_)) {
-            return Err(app_error(
-                AppErrorKind::Internal,
-                "Failed to stop running trader",
-            ));
-        }
+    if let Err(err) = trading_runtime_service.stop_trader_for_user(id).await
+        && !matches!(err, AppError::NotRunning(_))
+    {
+        return Err(app_error(
+            AppErrorKind::Internal,
+            "Failed to stop running trader",
+        ));
     }
 
     let deleted = app.trading_repo.delete_trader(id).await;

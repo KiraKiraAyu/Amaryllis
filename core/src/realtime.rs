@@ -300,4 +300,26 @@ mod tests {
             sl_price: None,
         }
     }
+
+    #[tokio::test]
+    async fn realtime_hub_broadcasts_to_subscribers() {
+        let hub = RealtimeHub::new();
+        let mut rx = hub.subscribe();
+
+        let event = RealtimeEvent::Error {
+            code: "TEST_ERR".to_string(),
+            message: "Test error message".to_string(),
+        };
+
+        let subscriber_count = hub.publish(event);
+        assert_eq!(subscriber_count, 1);
+
+        let received = rx.recv().await.expect("received event");
+        if let RealtimeEvent::Error { code, message } = received.as_ref() {
+            assert_eq!(code, "TEST_ERR");
+            assert_eq!(message, "Test error message");
+        } else {
+            panic!("unexpected event received");
+        }
+    }
 }

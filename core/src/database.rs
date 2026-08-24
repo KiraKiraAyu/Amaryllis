@@ -47,11 +47,11 @@ fn ensure_sqlite_file_ready(db_url: &str) -> Result<()> {
         )));
     };
 
-    if let Some(parent) = path.parent() {
-        if !parent.as_os_str().is_empty() {
-            fs::create_dir_all(parent)
-                .map_err(|err| AppError::Internal(format!("Database I/O error: {err}")))?;
-        }
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        fs::create_dir_all(parent)
+            .map_err(|err| AppError::Internal(format!("Database I/O error: {err}")))?;
     }
 
     OpenOptions::new()
@@ -68,13 +68,9 @@ fn is_memory_db(db_url: &str) -> bool {
 }
 
 fn sqlite_file_path(db_url: &str) -> Option<PathBuf> {
-    let raw = if let Some(v) = db_url.strip_prefix("sqlite://") {
-        v
-    } else if let Some(v) = db_url.strip_prefix("sqlite:") {
-        v
-    } else {
-        return None;
-    };
+    let raw = db_url
+        .strip_prefix("sqlite://")
+        .or_else(|| db_url.strip_prefix("sqlite:"))?;
 
     let cleaned = raw.split('?').next().unwrap_or(raw);
     if cleaned.is_empty() {

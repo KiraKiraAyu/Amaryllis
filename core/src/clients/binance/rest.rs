@@ -384,10 +384,10 @@ impl LiveExchangeAdapter for BinanceFuturesAdapter {
         symbol: Option<&str>,
     ) -> Result<Vec<ExchangeOpenOrder>, AppError> {
         let mut params = vec![];
-        if let Some(sym) = symbol {
-            if !sym.trim().is_empty() {
-                params.push(("symbol", sym.trim().to_uppercase()));
-            }
+        if let Some(sym) = symbol
+            && !sym.trim().is_empty()
+        {
+            params.push(("symbol", sym.trim().to_uppercase()));
         }
 
         let rows: Vec<BinanceOpenOrderRow> = self.signed_get("/fapi/v1/openOrders", params).await?;

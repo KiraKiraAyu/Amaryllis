@@ -23,7 +23,7 @@ pub async fn get_price_with_retry(
                 symbol, first_err
             );
             time::sleep(Duration::from_millis(250)).await;
-            adapter.get_price(symbol).await.map_err(AppError::from)
+            adapter.get_price(symbol).await
         }
     }
 }
@@ -36,7 +36,7 @@ pub async fn get_positions_with_retry(
         Err(first_err) => {
             warn!("live poll get_positions retry first_err={}", first_err);
             time::sleep(Duration::from_millis(250)).await;
-            adapter.get_positions().await.map_err(AppError::from)
+            adapter.get_positions().await
         }
     }
 }
@@ -49,7 +49,7 @@ pub async fn get_balances_with_retry(
         Err(first_err) => {
             warn!("live poll get_balances retry first_err={}", first_err);
             time::sleep(Duration::from_millis(250)).await;
-            adapter.get_balances().await.map_err(AppError::from)
+            adapter.get_balances().await
         }
     }
 }
@@ -62,7 +62,7 @@ pub async fn get_open_orders_with_retry(
         Err(first_err) => {
             warn!("live poll get_open_orders retry first_err={}", first_err);
             time::sleep(Duration::from_millis(250)).await;
-            adapter.get_open_orders(None).await.map_err(AppError::from)
+            adapter.get_open_orders(None).await
         }
     }
 }
@@ -80,10 +80,7 @@ pub async fn get_order_with_retry(
                 symbol, order_id, first_err
             );
             time::sleep(Duration::from_millis(250)).await;
-            adapter
-                .get_order(symbol, order_id)
-                .await
-                .map_err(AppError::from)
+            adapter.get_order(symbol, order_id).await
         }
     }
 }
@@ -101,10 +98,7 @@ pub async fn get_order_fills_with_retry(
                 symbol, order_id, first_err
             );
             time::sleep(Duration::from_millis(250)).await;
-            adapter
-                .get_order_fills(symbol, order_id)
-                .await
-                .map_err(AppError::from)
+            adapter.get_order_fills(symbol, order_id).await
         }
     }
 }
@@ -121,10 +115,7 @@ pub async fn get_symbol_constraints_with_retry(
                 symbol, first_err
             );
             time::sleep(Duration::from_millis(250)).await;
-            adapter
-                .get_symbol_constraints(symbol)
-                .await
-                .map_err(AppError::from)
+            adapter.get_symbol_constraints(symbol).await
         }
     }
 }

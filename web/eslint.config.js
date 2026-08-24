@@ -19,13 +19,9 @@ export default defineConfigWithVueTs(
   vueTsConfigs.recommended,
 
   {
-    ...pluginPlaywright.configs["flat/recommended"],
-    files: ["e2e/**/*.{test,spec}.{js,ts,jsx,tsx}"],
-  },
-
-  {
-    ...pluginVitest.configs.recommended,
-    files: ["src/**/__tests__/*"],
+    rules: {
+      "vue/no-mutating-props": ["error", { shallowOnly: true }],
+    },
   },
 
   ...pluginOxlint.buildFromOxlintConfigFile(".oxlintrc.json"),

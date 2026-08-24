@@ -430,6 +430,7 @@ async fn test_persisted_decision_uses_completion_time_and_keeps_cycle_timing() {
         "soft",
         "market_signal",
         "corr_decision_1",
+        "3m",
         String::new(),
         None,
     );
@@ -1255,7 +1256,7 @@ async fn test_live_open_constraint_skip_persists_feedback_without_execution_inte
         action: "LONG".to_string(),
         confidence: 0.9,
         reason: "test decision".to_string(),
-        timeframe: "5m",
+        timeframe: "5m".to_string(),
         price: 100.0,
         momentum: 0.0,
         risk_level: "normal".to_string(),

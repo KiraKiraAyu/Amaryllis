@@ -166,30 +166,30 @@ pub async fn run_trader_loop(
     // state version is 1, so changed() would return Ready right away).
     let _ = stop_rx.borrow_and_update();
 
-    if exec_ctx.mode == RuntimeExecutionMode::LiveExchange {
-        if let Some(adapter) = live_adapter.as_deref() {
-            match init_exchange_user_stream(adapter).await {
-                Ok(session) => {
-                    let reader_rx =
-                        spawn_exchange_user_stream_reader(session.clone(), stop_rx.clone());
-                    user_stream_rx = Some(reader_rx);
-                    user_stream_session = Some(session);
-                    info!(
-                        "exchange user stream initialized trader={} exchange={}",
-                        cfg.trader_id,
-                        adapter.exchange_type()
-                    );
-                }
-                Err(err) => {
-                    warn!(
-                        "exchange user stream init skipped trader={} exchange={} err={}",
-                        cfg.trader_id,
-                        adapter.exchange_type(),
-                        err
-                    );
-                    user_stream_rx = None;
-                    user_stream_session = None;
-                }
+    if exec_ctx.mode == RuntimeExecutionMode::LiveExchange
+        && let Some(adapter) = live_adapter.as_deref()
+    {
+        match init_exchange_user_stream(adapter).await {
+            Ok(session) => {
+                let reader_rx =
+                    spawn_exchange_user_stream_reader(session.clone(), stop_rx.clone());
+                user_stream_rx = Some(reader_rx);
+                user_stream_session = Some(session);
+                info!(
+                    "exchange user stream initialized trader={} exchange={}",
+                    cfg.trader_id,
+                    adapter.exchange_type()
+                );
+            }
+            Err(err) => {
+                warn!(
+                    "exchange user stream init skipped trader={} exchange={} err={}",
+                    cfg.trader_id,
+                    adapter.exchange_type(),
+                    err
+                );
+                user_stream_rx = None;
+                user_stream_session = None;
             }
         }
     }
@@ -371,13 +371,12 @@ pub async fn run_trader_loop(
     }
 
     if let (Some(adapter), Some(session)) = (live_adapter.as_deref(), user_stream_session.as_ref())
+        && let Err(err) = adapter.close_user_stream_session(session).await
     {
-        if let Err(err) = adapter.close_user_stream_session(session).await {
-            warn!(
-                "exchange user stream close failed trader={} err={}",
-                cfg.trader_id, err
-            );
-        }
+        warn!(
+            "exchange user stream close failed trader={} err={}",
+            cfg.trader_id, err
+        );
     }
 
     set_trader_running(&engine.inner.state, &cfg.trader_id, false).await?;
@@ -409,38 +408,38 @@ async fn handle_user_stream_keepalive(
     if exec_ctx.mode != RuntimeExecutionMode::LiveExchange {
         return;
     }
-    if let (Some(adapter), Some(session)) = (live_adapter, user_stream_session.as_ref()) {
-        if let Err(err) = adapter.keepalive_user_stream_session(session).await {
-            warn!(
-                "exchange user stream keepalive failed trader={} err={}",
-                cfg.trader_id, err
-            );
+    if let (Some(adapter), Some(session)) = (live_adapter, user_stream_session.as_ref())
+        && let Err(err) = adapter.keepalive_user_stream_session(session).await
+    {
+        warn!(
+            "exchange user stream keepalive failed trader={} err={}",
+            cfg.trader_id, err
+        );
 
-            if let Some(old_session) = user_stream_session.take() {
-                let _ = adapter.close_user_stream_session(&old_session).await;
+        if let Some(old_session) = user_stream_session.take() {
+            let _ = adapter.close_user_stream_session(&old_session).await;
+        }
+
+        time::sleep(backoff).await;
+        match init_exchange_user_stream(adapter).await {
+            Ok(session) => {
+                *user_stream_rx = Some(spawn_exchange_user_stream_reader(
+                    session.clone(),
+                    stop_rx.clone(),
+                ));
+                *user_stream_session = Some(session);
+                info!(
+                    "exchange user stream reconnected after keepalive failure trader={}",
+                    cfg.trader_id
+                );
             }
-
-            time::sleep(backoff).await;
-            match init_exchange_user_stream(adapter).await {
-                Ok(session) => {
-                    *user_stream_rx = Some(spawn_exchange_user_stream_reader(
-                        session.clone(),
-                        stop_rx.clone(),
-                    ));
-                    *user_stream_session = Some(session);
-                    info!(
-                        "exchange user stream reconnected after keepalive failure trader={}",
-                        cfg.trader_id
-                    );
-                }
-                Err(reconnect_err) => {
-                    warn!(
-                        "exchange user stream reconnect failed after keepalive error trader={} err={}",
-                        cfg.trader_id, reconnect_err
-                    );
-                    *user_stream_rx = None;
-                    *user_stream_session = None;
-                }
+            Err(reconnect_err) => {
+                warn!(
+                    "exchange user stream reconnect failed after keepalive error trader={} err={}",
+                    cfg.trader_id, reconnect_err
+                );
+                *user_stream_rx = None;
+                *user_stream_session = None;
             }
         }
     }
@@ -469,43 +468,10 @@ async fn handle_user_stream_event_safe(
             );
         }
 
-        if should_reconnect && exec_ctx.mode == RuntimeExecutionMode::LiveExchange {
-            if let Some(adapter) = live_adapter {
-                if let Some(old_session) = user_stream_session.take() {
-                    let _ = adapter.close_user_stream_session(&old_session).await;
-                }
-
-                time::sleep(backoff).await;
-                match init_exchange_user_stream(adapter).await {
-                    Ok(session) => {
-                        *user_stream_rx = Some(spawn_exchange_user_stream_reader(
-                            session.clone(),
-                            stop_rx.clone(),
-                        ));
-                        *user_stream_session = Some(session);
-                        info!(
-                            "exchange user stream reconnected after listen key expiration trader={}",
-                            cfg.trader_id
-                        );
-                    }
-                    Err(reconnect_err) => {
-                        warn!(
-                            "exchange user stream reconnect failed after listen key expiration trader={} err={}",
-                            cfg.trader_id, reconnect_err
-                        );
-                        *user_stream_rx = None;
-                        *user_stream_session = None;
-                    }
-                }
-            }
-        }
-    } else if exec_ctx.mode == RuntimeExecutionMode::LiveExchange {
-        if let Some(adapter) = live_adapter {
-            warn!(
-                "exchange user stream disconnected trader={}, attempting reconnect",
-                cfg.trader_id
-            );
-
+        if should_reconnect
+            && exec_ctx.mode == RuntimeExecutionMode::LiveExchange
+            && let Some(adapter) = live_adapter
+        {
             if let Some(old_session) = user_stream_session.take() {
                 let _ = adapter.close_user_stream_session(&old_session).await;
             }
@@ -519,18 +485,52 @@ async fn handle_user_stream_event_safe(
                     ));
                     *user_stream_session = Some(session);
                     info!(
-                        "exchange user stream reconnected after disconnect trader={}",
+                        "exchange user stream reconnected after listen key expiration trader={}",
                         cfg.trader_id
                     );
                 }
                 Err(reconnect_err) => {
                     warn!(
-                        "exchange user stream reconnect failed after disconnect trader={} err={}",
+                        "exchange user stream reconnect failed after listen key expiration trader={} err={}",
                         cfg.trader_id, reconnect_err
                     );
                     *user_stream_rx = None;
                     *user_stream_session = None;
                 }
+            }
+        }
+    } else if exec_ctx.mode == RuntimeExecutionMode::LiveExchange
+        && let Some(adapter) = live_adapter
+    {
+        warn!(
+            "exchange user stream disconnected trader={}, attempting reconnect",
+            cfg.trader_id
+        );
+
+        if let Some(old_session) = user_stream_session.take() {
+            let _ = adapter.close_user_stream_session(&old_session).await;
+        }
+
+        time::sleep(backoff).await;
+        match init_exchange_user_stream(adapter).await {
+            Ok(session) => {
+                *user_stream_rx = Some(spawn_exchange_user_stream_reader(
+                    session.clone(),
+                    stop_rx.clone(),
+                ));
+                *user_stream_session = Some(session);
+                info!(
+                    "exchange user stream reconnected after disconnect trader={}",
+                    cfg.trader_id
+                );
+            }
+            Err(reconnect_err) => {
+                warn!(
+                    "exchange user stream reconnect failed after disconnect trader={} err={}",
+                    cfg.trader_id, reconnect_err
+                );
+                *user_stream_rx = None;
+                *user_stream_session = None;
             }
         }
     }

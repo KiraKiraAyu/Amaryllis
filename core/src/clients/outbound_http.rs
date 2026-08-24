@@ -1,8 +1,16 @@
+use std::sync::OnceLock;
 use std::time::Instant;
 
-use reqwest::{Method, RequestBuilder, StatusCode};
+use reqwest::{Client, Method, RequestBuilder, StatusCode};
 use serde_json::Value;
 use tracing::{info, warn};
+
+static SHARED_HTTP_CLIENT: OnceLock<Client> = OnceLock::new();
+
+/// Returns a shared, connection-pooled `reqwest::Client`.
+pub fn http_client() -> &'static Client {
+    SHARED_HTTP_CLIENT.get_or_init(Client::new)
+}
 
 #[derive(Debug, Clone)]
 pub struct OutboundRequestLog {
@@ -222,5 +230,12 @@ mod tests {
         assert!(body.contains("\"Authorization\":\"<redacted>\""));
         assert!(!body.contains("secret"));
         assert!(!body.contains("Bearer token"));
+    }
+
+    #[test]
+    fn http_client_singleton_is_stable_and_cached() {
+        let client1 = http_client();
+        let client2 = http_client();
+        assert!(std::ptr::eq(client1, client2));
     }
 }

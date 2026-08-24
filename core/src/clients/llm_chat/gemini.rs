@@ -254,8 +254,8 @@ impl LlmProviderClient for GeminiClient {
 
                 if let Some(data) = line.strip_prefix("data: ") {
                     let data = data.trim();
-                    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(data) {
-                        if let Some(text) = parsed
+                    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(data)
+                        && let Some(text) = parsed
                             .get("candidates")
                             .and_then(|c| c.get(0))
                             .and_then(|c| c.get("content"))
@@ -263,12 +263,10 @@ impl LlmProviderClient for GeminiClient {
                             .and_then(|p| p.get(0))
                             .and_then(|p| p.get("text"))
                             .and_then(|t| t.as_str())
-                        {
-                            if !text.is_empty() {
-                                full_response.push_str(text);
-                                let _ = chunk_tx.send(text.to_string());
-                            }
-                        }
+                        && !text.is_empty()
+                    {
+                        full_response.push_str(text);
+                        let _ = chunk_tx.send(text.to_string());
                     }
                 }
             }

@@ -30,24 +30,24 @@ pub async fn handle_create_debate(
         participants,
     }): Json<CreateDebateRequest>,
 ) -> Result<Json<ApiResponse<DebateActionPayload>>> {
-    if let Some(ref n) = name {
-        if n.trim().is_empty() {
-            return Err(AppError::BadRequest(
-                "name cannot be empty if provided".into(),
-            ));
-        }
+    if let Some(ref n) = name
+        && n.trim().is_empty()
+    {
+        return Err(AppError::BadRequest(
+            "name cannot be empty if provided".into(),
+        ));
     }
-    if let Some(ref s) = symbol {
-        if s.trim().is_empty() {
-            return Err(AppError::BadRequest(
-                "symbol cannot be empty if provided".into(),
-            ));
-        }
+    if let Some(ref s) = symbol
+        && s.trim().is_empty()
+    {
+        return Err(AppError::BadRequest(
+            "symbol cannot be empty if provided".into(),
+        ));
     }
-    if let Some(r) = max_rounds {
-        if r < 1 {
-            return Err(AppError::BadRequest("max_rounds must be positive".into()));
-        }
+    if let Some(r) = max_rounds
+        && r < 1
+    {
+        return Err(AppError::BadRequest("max_rounds must be positive".into()));
     }
     let payload = app
         .services

@@ -132,26 +132,26 @@ pub async fn close_position(
     };
     let position_count = open_positions.len();
 
-    if !local_only {
-        if let Some(adapter) = enabled_live_adapter(app, &trader).await? {
-            let order_id = submit_live_close_order(
-                &runtime.inner.state,
-                &trader,
-                adapter.as_ref(),
-                &symbol,
-                &side,
-                &open_positions,
-            )
-            .await?;
+    if !local_only
+        && let Some(adapter) = enabled_live_adapter(app, &trader).await?
+    {
+        let order_id = submit_live_close_order(
+            &runtime.inner.state,
+            &trader,
+            adapter.as_ref(),
+            &symbol,
+            &side,
+            &open_positions,
+        )
+        .await?;
 
-            return Ok(ClosePositionPayload {
-                message: "Close order submitted",
-                mode: "live".to_string(),
-                order_id,
-                symbol,
-                side,
-            });
-        }
+        return Ok(ClosePositionPayload {
+            message: "Close order submitted",
+            mode: "live".to_string(),
+            order_id,
+            symbol,
+            side,
+        });
     }
 
     let trade_ids = (0..position_count)
@@ -429,10 +429,7 @@ pub async fn positions(
     trader_id: Option<String>,
     status: Option<String>,
 ) -> AppResult<PositionListPayload> {
-    let trader_id = match resolve_trader_id(app, trader_id).await {
-        Ok(v) => v,
-        Err(e) => return Err(e),
-    };
+    let trader_id = resolve_trader_id(app, trader_id).await?;
 
     let status = status
         .unwrap_or_else(|| "open".to_string())

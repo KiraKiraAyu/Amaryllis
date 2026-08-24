@@ -8,7 +8,7 @@ use uuid::Uuid;
 use crate::{
     clients::{
         market_data::normalize_crypto_symbol,
-        outbound_http::{OutboundRequestLog, send_text},
+        outbound_http::{OutboundRequestLog, http_client, send_text},
     },
     contracts::backtest::{BacktestMessagePayload, BacktestRunActionPayload, BacktestRunsPayload},
     error::{AppError, Result as AppResult},
@@ -195,7 +195,7 @@ impl BacktestService {
     pub fn stop(&self, run_id: String) -> AppResult<BacktestRunActionPayload> {
         let mut mgr = self.backtest_manager.lock().unwrap();
         mgr.stop(&run_id)
-            .map_err(|err| AppError::BadRequest(err.into()))?;
+            .map_err(AppError::BadRequest)?;
 
         Ok(BacktestRunActionPayload {
             run_id,
@@ -281,14 +281,23 @@ impl BacktestRunner {
         let run_id = self.cfg.run_id.clone();
         let virtual_trader_id = self.cfg.virtual_trader_id.clone();
 
-        // Parse symbols from runtime config
-        let symbols: Vec<String> = self
+        let mut symbols: Vec<String> = self
             .runtime_cfg
-            .trading_symbols
-            .split(',')
-            .filter(|s| !s.trim().is_empty())
-            .map(|s| s.trim().to_uppercase())
+            .symbols_config
+            .iter()
+            .map(|s| normalize_crypto_symbol(&s.symbol))
+            .filter(|s| !s.is_empty())
             .collect();
+
+        if symbols.is_empty() {
+            symbols = self
+                .runtime_cfg
+                .trading_symbols
+                .split(',')
+                .map(|s| normalize_crypto_symbol(s.trim()))
+                .filter(|s| !s.is_empty())
+                .collect();
+        }
 
         if symbols.is_empty() {
             let _ = write_run_status(
@@ -342,16 +351,17 @@ impl BacktestRunner {
             mode: RuntimeExecutionMode::Simulated,
         };
 
-        let mut metrics_cache = RunMetrics::default();
-        metrics_cache.initial_balance = self.cfg.initial_balance;
-        metrics_cache.max_equity = self.cfg.initial_balance;
-        metrics_cache.final_equity = self.cfg.initial_balance;
+        let mut metrics_cache = RunMetrics {
+            initial_balance: self.cfg.initial_balance,
+            max_equity: self.cfg.initial_balance,
+            final_equity: self.cfg.initial_balance,
+            ..Default::default()
+        };
 
-        let mut decision_cycle = 0usize;
         let mut max_equity = self.cfg.initial_balance;
 
         // Main loop — iterate through all unique timestamps across symbols
-        for ts_ms in &sorted_timestamps {
+        for (decision_idx, ts_ms) in sorted_timestamps.iter().enumerate() {
             // Check stop signal (non-blocking)
             if stop_rx.try_recv().is_ok() {
                 let _ =
@@ -364,18 +374,17 @@ impl BacktestRunner {
 
             // Update each symbol's market state with the bar at this timestamp
             for sym in &symbols {
-                if let Some(bar) = kline_maps.get(sym).and_then(|m| m.get(ts_ms)) {
-                    if let Some(state) = market.get_mut(sym) {
-                        state.prev_price = state.price;
-                        state.price = bar.close;
-                        let range = (bar.high - bar.low) / bar.close.max(1e-9);
-                        state.volatility = (state.volatility * 0.9 + range * 0.1).clamp(0.001, 0.1);
-                    }
+                if let Some(bar) = kline_maps.get(sym).and_then(|m| m.get(ts_ms))
+                    && let Some(state) = market.get_mut(sym)
+                {
+                    state.prev_price = state.price;
+                    state.price = bar.close;
+                    let range = (bar.high - bar.low) / bar.close.max(1e-9);
+                    state.volatility = (state.volatility * 0.9 + range * 0.1).clamp(0.001, 0.1);
                 }
             }
 
-            decision_cycle += 1;
-            let cycle = decision_cycle;
+            let cycle = decision_idx + 1;
 
             // Run process_cycle — reuses live trading logic with virtual time
             let result = process_cycle(
@@ -559,7 +568,7 @@ async fn fetch_klines_from_binance(
         symbol, interval, start_ts_ms, end_ts_ms
     );
     let resp = match send_text(
-        reqwest::Client::new().get(&url),
+        http_client().get(&url),
         OutboundRequestLog::new("backtest.binance.klines", Method::GET, &url),
     )
     .await
@@ -633,11 +642,21 @@ async fn load_klines_per_symbol(
     cfg: &BacktestConfig,
     runtime_cfg: &TraderRuntimeConfig,
 ) -> HashMap<String, Vec<KlineBar>> {
-    let symbols: Vec<String> = runtime_cfg
+    let mut symbols: Vec<String> = runtime_cfg
         .symbols_config
         .iter()
         .map(|s| normalize_crypto_symbol(&s.symbol))
+        .filter(|s| !s.is_empty())
         .collect();
+
+    if symbols.is_empty() {
+        symbols = runtime_cfg
+            .trading_symbols
+            .split(',')
+            .map(|s| normalize_crypto_symbol(s.trim()))
+            .filter(|s| !s.is_empty())
+            .collect();
+    }
 
     let mut result = HashMap::new();
     for symbol in &symbols {
@@ -660,5 +679,22 @@ fn interval_to_ms(interval: &str) -> Option<i64> {
         "4h" => Some(14_400_000),
         "1d" => Some(86_400_000),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_interval_to_ms() {
+        assert_eq!(interval_to_ms("1m"), Some(60_000));
+        assert_eq!(interval_to_ms("3m"), Some(180_000));
+        assert_eq!(interval_to_ms("5m"), Some(300_000));
+        assert_eq!(interval_to_ms("15m"), Some(900_000));
+        assert_eq!(interval_to_ms("1h"), Some(3_600_000));
+        assert_eq!(interval_to_ms("4h"), Some(14_400_000));
+        assert_eq!(interval_to_ms("1d"), Some(86_400_000));
+        assert_eq!(interval_to_ms("invalid"), None);
     }
 }

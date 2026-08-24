@@ -162,8 +162,7 @@ fn render_raw_klines(
 ) {
     let _ = writeln!(
         rendered,
-        "### {} ({}, {} closed candles)\ntime,open,high,low,close,volume",
-        "Kline",
+        "### Kline ({}, {} closed candles)\ntime,open,high,low,close,volume",
         timeframe,
         candles.len()
     );

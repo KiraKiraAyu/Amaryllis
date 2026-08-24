@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_arguments)]
+
 pub mod clients;
 pub mod config;
 pub mod contracts;

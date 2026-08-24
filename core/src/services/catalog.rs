@@ -53,4 +53,17 @@ mod tests {
             vec!["binance", "okx", "bitget", "hyperliquid", "aster"]
         );
     }
+
+    #[test]
+    fn supported_provider_types_includes_all_known_providers() {
+        let types = supported_provider_types()
+            .into_iter()
+            .map(|p| p.provider_type)
+            .collect::<Vec<_>>();
+
+        assert!(types.contains(&"chat_completions".to_string()));
+        assert!(types.contains(&"anthropic_messages".to_string()));
+        assert!(types.contains(&"gemini_generate_content".to_string()));
+        assert!(types.contains(&"responses".to_string()));
+    }
 }

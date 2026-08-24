@@ -88,6 +88,8 @@ pub async fn generate_ai_decision(
     correlation_id: &str,
     backtest_mode: bool,
 ) -> DecisionSignal {
+    let timeframe = format!("{}m", cfg.scan_interval_minutes.max(1));
+
     if hard_risk_trigger {
         warn!(
             "[AI_PROMPT] skipped — hard_risk_trigger=true trader={} symbol={}",
@@ -119,7 +121,7 @@ pub async fn generate_ai_decision(
             action: "NO ACTION".to_string(),
             confidence: 0.95,
             reason: String::new(),
-            timeframe: "3m",
+            timeframe: timeframe.clone(),
             price: m.price,
             momentum: momentum(&m),
             risk_level: risk_level.to_string(),
@@ -159,7 +161,7 @@ pub async fn generate_ai_decision(
                 action: "NO ACTION".to_string(),
                 confidence: 0.5,
                 reason: String::new(),
-                timeframe: "3m",
+                timeframe: timeframe.clone(),
                 price: 0.0,
                 momentum: 0.0,
                 risk_level: risk_level.to_string(),
@@ -202,7 +204,7 @@ pub async fn generate_ai_decision(
                 action: "NO ACTION".to_string(),
                 confidence: 0.5,
                 reason: String::new(),
-                timeframe: "5m",
+                timeframe,
                 price: m.price,
                 momentum,
                 risk_level: risk_level.to_string(),
@@ -271,6 +273,7 @@ pub async fn generate_ai_decision(
             risk_level,
             trigger_source,
             correlation_id,
+            &timeframe,
             prompt,
             system_prompt_owned,
         );
@@ -323,7 +326,7 @@ pub async fn generate_ai_decision(
                 action: decision.action,
                 confidence: decision.confidence,
                 reason: decision.reason,
-                timeframe: "3m",
+                timeframe,
                 price: m.price,
                 momentum,
                 risk_level: risk_level.to_string(),
@@ -358,6 +361,7 @@ pub async fn generate_ai_decision(
                 risk_level,
                 trigger_source,
                 correlation_id,
+                &timeframe,
                 prompt,
                 system_prompt_owned,
             )
@@ -371,6 +375,7 @@ pub fn generate_fallback_decision(
     risk_level: &str,
     trigger_source: &str,
     correlation_id: &str,
+    timeframe: &str,
     prompt: String,
     system_prompt: Option<String>,
 ) -> DecisionSignal {
@@ -384,7 +389,7 @@ pub fn generate_fallback_decision(
             action: "LONG".to_string(),
             confidence: (0.55 + (momentum / threshold).min(1.5) * 0.2).clamp(0.55, 0.9),
             reason: String::new(),
-            timeframe: "3m",
+            timeframe: timeframe.to_string(),
             price: m.price,
             momentum,
             risk_level: risk_level.to_string(),
@@ -400,7 +405,7 @@ pub fn generate_fallback_decision(
             action: "SHORT".to_string(),
             confidence: (0.55 + ((-momentum) / threshold).min(1.5) * 0.2).clamp(0.55, 0.9),
             reason: String::new(),
-            timeframe: "3m",
+            timeframe: timeframe.to_string(),
             price: m.price,
             momentum,
             risk_level: risk_level.to_string(),
@@ -416,7 +421,7 @@ pub fn generate_fallback_decision(
             action: "NO ACTION".to_string(),
             confidence: 0.5,
             reason: String::new(),
-            timeframe: "3m",
+            timeframe: timeframe.to_string(),
             price: m.price,
             momentum,
             risk_level: risk_level.to_string(),
@@ -461,7 +466,7 @@ pub async fn persist_decision(
             id: Uuid::now_v7().to_string(),
             trader_id: cfg.trader_id.clone(),
             symbol: d.symbol.clone(),
-            timeframe: d.timeframe.to_string(),
+            timeframe: d.timeframe.clone(),
             decision: d.action.clone(),
             confidence: d.confidence,
             reason: d.reason.clone(),
@@ -473,7 +478,7 @@ pub async fn persist_decision(
     Ok(())
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TradingDecision {
     pub action: String,
     pub confidence: f64,
@@ -481,102 +486,216 @@ pub struct TradingDecision {
 }
 
 pub fn parse_ai_response(response: &str) -> TradingDecision {
-    let lower = response.to_lowercase();
+    if let Some(decision) = try_parse_json_decision(response) {
+        return decision;
+    }
 
-    // Try JSON extraction first, fall back to keyword matching
-    let action = extract_json_action(response).unwrap_or_else(|| {
-        if lower.contains("long") && !lower.contains("no action") {
-            "LONG".to_string()
-        } else if lower.contains("short") && !lower.contains("no action") {
-            "SHORT".to_string()
-        } else {
-            "NO ACTION".to_string()
+    parse_unstructured_decision(response)
+}
+
+fn strip_markdown_fence(text: &str) -> &str {
+    let trimmed = text.trim();
+    if trimmed.starts_with("```") {
+        trimmed
+            .trim_start_matches("```json")
+            .trim_start_matches("```JSON")
+            .trim_start_matches("```")
+            .trim_end_matches("```")
+            .trim()
+    } else {
+        trimmed
+    }
+}
+
+fn try_parse_json_decision(response: &str) -> Option<TradingDecision> {
+    let candidate = strip_markdown_fence(response);
+
+    // Direct JSON parse
+    if let Ok(val) = serde_json::from_str::<serde_json::Value>(candidate)
+        && let Some(decision) = extract_decision_from_json_val(&val)
+    {
+        return Some(decision);
+    }
+
+    // Embedded JSON block { ... } inside text
+    if let Some(start) = candidate.find('{')
+        && let Some(end) = candidate.rfind('}')
+        && end > start
+    {
+        let slice = &candidate[start..=end];
+        if let Ok(val) = serde_json::from_str::<serde_json::Value>(slice)
+            && let Some(decision) = extract_decision_from_json_val(&val)
+        {
+            return Some(decision);
         }
-    });
+    }
 
-    let reason = extract_json_reason(response).unwrap_or_else(|| response.to_string());
-    let confidence = extract_confidence(&lower).unwrap_or(0.7);
+    None
+}
+
+fn extract_decision_from_json_val(val: &serde_json::Value) -> Option<TradingDecision> {
+    let action_raw = val
+        .get("action")
+        .or_else(|| val.get("decision"))
+        .or_else(|| val.get("signal"))
+        .and_then(serde_json::Value::as_str)?;
+
+    let action = normalize_action(action_raw);
+
+    let confidence = val
+        .get("confidence")
+        .or_else(|| val.get("confidence_score"))
+        .and_then(|v| {
+            if let Some(f) = v.as_f64() {
+                Some(normalize_confidence(f))
+            } else if let Some(s) = v.as_str() {
+                s.trim_end_matches('%')
+                    .trim()
+                    .parse::<f64>()
+                    .ok()
+                    .map(normalize_confidence)
+            } else {
+                None
+            }
+        })
+        .unwrap_or(0.7);
+
+    let reason = val
+        .get("reason")
+        .or_else(|| val.get("reasoning"))
+        .or_else(|| val.get("explanation"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("")
+        .to_string();
+
+    Some(TradingDecision {
+        action,
+        confidence,
+        reason,
+    })
+}
+
+fn normalize_action(raw: &str) -> String {
+    match raw.trim().to_ascii_uppercase().as_str() {
+        "LONG" | "BUY" | "OPEN_LONG" => "LONG".to_string(),
+        "SHORT" | "SELL" | "OPEN_SHORT" => "SHORT".to_string(),
+        _ => "NO ACTION".to_string(),
+    }
+}
+
+fn normalize_confidence(value: f64) -> f64 {
+    if (0.0..=1.0).contains(&value) {
+        value
+    } else if (1.0..=100.0).contains(&value) {
+        value / 100.0
+    } else {
+        0.7
+    }
+}
+
+fn parse_unstructured_decision(response: &str) -> TradingDecision {
+    let lower = response.to_lowercase();
+    let action = if (lower.contains("long") || lower.contains("buy"))
+        && !lower.contains("no action")
+        && !lower.contains("hold")
+    {
+        "LONG".to_string()
+    } else if (lower.contains("short") || lower.contains("sell"))
+        && !lower.contains("no action")
+        && !lower.contains("hold")
+    {
+        "SHORT".to_string()
+    } else {
+        "NO ACTION".to_string()
+    };
+
+    let confidence = extract_confidence_from_text(&lower).unwrap_or(0.7);
 
     TradingDecision {
         action,
         confidence,
-        reason,
+        reason: response.trim().to_string(),
     }
 }
 
-/// Attempt to extract the action from a JSON response.
-fn extract_json_action(response: &str) -> Option<String> {
-    let trimmed = response.trim();
-
-    // Strip markdown code fences if present
-    let json_str = if trimmed.starts_with("```") {
-        let inner = trimmed
-            .trim_start_matches("```json")
-            .trim_start_matches("```")
-            .trim_end_matches("```")
-            .trim();
-        inner
-    } else {
-        trimmed
-    };
-
-    let parsed: serde_json::Value = serde_json::from_str(json_str).ok()?;
-
-    if let Some(action) = parsed.get("action").and_then(|v| v.as_str()) {
-        let normalized = action.trim().to_uppercase();
-        return match normalized.as_str() {
-            "LONG" | "BUY" => Some("LONG".to_string()),
-            "SHORT" | "SELL" => Some("SHORT".to_string()),
-            "NO ACTION" | "NOACTION" | "HOLD" | "NONE" | "WAIT" => Some("NO ACTION".to_string()),
-            _ => Some("NO ACTION".to_string()),
-        };
-    }
-
-    None
-}
-
-/// Attempt to extract the "reason" field from a JSON response.
-/// Handles both standard JSON and JSON embedded in markdown code fences.
-fn extract_json_reason(response: &str) -> Option<String> {
-    let trimmed = response.trim();
-
-    // Strip markdown code fences if present (```json ... ``` or ``` ... ```)
-    let json_str = if trimmed.starts_with("```") {
-        let inner = trimmed
-            .trim_start_matches("```json")
-            .trim_start_matches("```")
-            .trim_end_matches("```")
-            .trim();
-        inner
-    } else {
-        trimmed
-    };
-
-    // Try parsing as a JSON object
-    let parsed: serde_json::Value = serde_json::from_str(json_str).ok()?;
-
-    if let Some(reason) = parsed.get("reason").and_then(|v| v.as_str()) {
-        return Some(reason.to_string());
-    }
-    // Also check "reasoning" as some models use that field name
-    if let Some(reasoning) = parsed.get("reasoning").and_then(|v| v.as_str()) {
-        return Some(reasoning.to_string());
-    }
-
-    None
-}
-
-fn extract_confidence(text: &str) -> Option<f64> {
-    for token in text.split_whitespace() {
-        let clean = token.trim_matches(|c: char| !c.is_ascii_digit() && c != '.');
-        if let Ok(value) = clean.parse::<f64>() {
-            if (0.0..=1.0).contains(&value) {
-                return Some(value);
-            }
-            if (1.0..=100.0).contains(&value) {
-                return Some(value / 100.0);
+fn extract_confidence_from_text(text: &str) -> Option<f64> {
+    if let Some(pos) = text.find("confidence") {
+        let snippet = &text[pos..];
+        for token in snippet.split_whitespace().take(6) {
+            let clean = token.trim_matches(|c: char| !c.is_ascii_digit() && c != '.');
+            if let Ok(val) = clean.parse::<f64>() {
+                return Some(normalize_confidence(val));
             }
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_valid_json_decision() {
+        let text = r#"{"action": "LONG", "confidence": 0.85, "reason": "Strong breakout on high volume"}"#;
+        let d = parse_ai_response(text);
+        assert_eq!(d.action, "LONG");
+        assert!((d.confidence - 0.85).abs() < f64::EPSILON);
+        assert_eq!(d.reason, "Strong breakout on high volume");
+    }
+
+    #[test]
+    fn parses_markdown_fenced_json_with_percent_confidence() {
+        let text = "```json\n{\n  \"action\": \"SHORT\",\n  \"confidence\": \"90%\",\n  \"reasoning\": \"RSI overbought divergence\"\n}\n```";
+        let d = parse_ai_response(text);
+        assert_eq!(d.action, "SHORT");
+        assert!((d.confidence - 0.90).abs() < f64::EPSILON);
+        assert_eq!(d.reason, "RSI overbought divergence");
+    }
+
+    #[test]
+    fn parses_embedded_json_surrounded_by_text_and_numbers() {
+        let text = "Based on market conditions at BTC price $65432 and GPT-4 analysis:\n```json\n{\"action\": \"BUY\", \"confidence\": 0.88, \"reason\": \"EMA crossover\"}\n```\nTrade safely in 2026.";
+        let d = parse_ai_response(text);
+        assert_eq!(d.action, "LONG");
+        assert!((d.confidence - 0.88).abs() < f64::EPSILON);
+        assert_eq!(d.reason, "EMA crossover");
+    }
+
+    #[test]
+    fn parses_unstructured_text_fallback() {
+        let text = "I recommend to open LONG position with confidence 0.75 due to bullish trend.";
+        let d = parse_ai_response(text);
+        assert_eq!(d.action, "LONG");
+        assert!((d.confidence - 0.75).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn parses_hold_decision_correctly() {
+        let text = r#"{"action": "HOLD", "confidence": 0.6, "reason": "Consolidation phase"}"#;
+        let d = parse_ai_response(text);
+        assert_eq!(d.action, "NO ACTION");
+    }
+
+    #[test]
+    fn momentum_and_fallback_decisions() {
+        let m_bullish = MarketState {
+            price: 105.0,
+            prev_price: 100.0,
+            volatility: 0.01,
+        };
+        assert!(momentum(&m_bullish) > 0.0);
+        let fallback = generate_fallback_decision(
+            "BTCUSDT",
+            &m_bullish,
+            "low",
+            "fallback",
+            "test_corr",
+            "5m",
+            "prompt text".to_string(),
+            None,
+        );
+        assert_eq!(fallback.action, "LONG");
+        assert_eq!(fallback.timeframe, "5m");
+    }
 }

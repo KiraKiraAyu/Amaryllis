@@ -23,7 +23,7 @@ async function loadSymbols() {
         activeSymbol.value = symbols.value[0]!
       }
     }
-  } catch (e) {
+  } catch {
     //
   }
 }
@@ -42,7 +42,7 @@ async function loadKlines() {
       low: Number(k.low),
       close: Number(k.close),
     }))
-  } catch (e) {
+  } catch {
     klines.value = []
   } finally {
     loading.value = false
