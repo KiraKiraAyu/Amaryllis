@@ -13,10 +13,7 @@ use crate::{
     contracts::backtest::{BacktestMessagePayload, BacktestRunActionPayload, BacktestRunsPayload},
     error::{AppError, Result as AppResult},
     realtime::RealtimeHub,
-    repositories::{
-        backtests::{BacktestRepo, CreateBacktestRunRecord},
-        trading::records::traders::CreateTraderRecord,
-    },
+    repositories::backtests::{BacktestRepo, CreateBacktestRunRecord},
     services::trading_runtime::{
         self,
         config_loaders::{load_trader_runtime_config, now_i64},
@@ -72,15 +69,6 @@ impl BacktestService {
         initial_balance: Option<f64>,
         interval: Option<String>,
     ) -> AppResult<BacktestRunActionPayload> {
-        // Load source trader record (for strategy_id and other DB fields)
-        let source_trader = self
-            .runtime_state
-            .trading_repo
-            .get_trader(trader_id)
-            .await
-            .map_err(|e| AppError::Internal(format!("Failed to load trader: {e}")))?
-            .ok_or_else(|| AppError::TraderNotFound(trader_id.to_string()))?;
-
         // Load source trader runtime config (for AI/exchange/strategy details)
         let source_cfg = load_trader_runtime_config(&self.runtime_state, trader_id)
             .await?
@@ -101,37 +89,13 @@ impl BacktestService {
             interval: interval.unwrap_or_else(|| "5m".to_string()),
         };
 
-        // Create virtual trader in database (copy source trader's config)
-        let now = now_i64();
-        self.runtime_state
-            .trading_repo
-            .create_trader_with_snapshot(CreateTraderRecord {
-                id: virtual_trader_id.clone(),
-                snapshot_id: Uuid::now_v7().to_string(),
-                name: format!("[Backtest] {}", source_cfg.name),
-                ai_model_id: source_cfg.ai_model_id.clone(),
-                exchange_id: source_cfg.exchange_id.clone(),
-                strategy_id: source_trader.strategy_id.clone(),
-                initial_balance: cfg.initial_balance,
-                scan_interval_minutes: source_cfg.scan_interval_minutes,
-                is_cross_margin: source_cfg.is_cross_margin,
-                use_ai500: false,
-                use_oi_top: false,
-                custom_prompt: source_cfg.custom_prompt.clone(),
-                override_base_prompt: source_cfg.override_base_prompt,
-                system_prompt_template: source_cfg.system_prompt_template.clone(),
-                created_at: now,
-                updated_at: now,
-            })
-            .await
-            .map_err(|e| AppError::Internal(format!("Failed to create virtual trader: {e}")))?;
-
-        // Load the virtual trader's runtime config (picks up strategy config etc.)
-        let runtime_cfg = load_trader_runtime_config(&self.runtime_state, &virtual_trader_id)
-            .await?
-            .ok_or_else(|| AppError::Internal("Virtual trader not found after creation".into()))?;
+        let mut runtime_cfg = source_cfg.clone();
+        runtime_cfg.trader_id = virtual_trader_id.clone();
+        runtime_cfg.name = format!("[Backtest] {}", source_cfg.name);
+        runtime_cfg.initial_balance = cfg.initial_balance;
 
         // Persist initial backtest run row
+        let now = now_i64();
         let config_json = serde_json::to_string(&cfg).unwrap_or_default();
         self.backtest_repo
             .create_run(CreateBacktestRunRecord {
@@ -249,7 +213,7 @@ impl BacktestService {
 struct BacktestRunner {
     cfg: BacktestConfig,
     runtime_cfg: TraderRuntimeConfig,
-    klines_by_symbol: HashMap<String, Vec<KlineBar>>,
+    klines_by_symbol: HashMap<String, Vec<crate::clients::market_data::MarketKline>>,
     runtime_state: trading_runtime::models::SharedState,
     backtest_repo: Arc<BacktestRepo>,
     realtime_hub: RealtimeHub,
@@ -265,14 +229,6 @@ struct RunMetrics {
     max_equity: f64,
     final_equity: f64,
     initial_balance: f64,
-}
-
-#[derive(Debug, Clone)]
-struct KlineBar {
-    open_time: i64,
-    high: f64,
-    low: f64,
-    close: f64,
 }
 
 impl BacktestRunner {
@@ -313,7 +269,8 @@ impl BacktestRunner {
         }
 
         // Build per-symbol kline lookup maps and collect all unique timestamps
-        let mut kline_maps: HashMap<String, BTreeMap<i64, KlineBar>> = HashMap::new();
+        let mut kline_maps: HashMap<String, BTreeMap<i64, crate::clients::market_data::MarketKline>> =
+            HashMap::new();
         let mut all_timestamps: BTreeSet<i64> = BTreeSet::new();
 
         for (symbol, klines) in &self.klines_by_symbol {
@@ -386,7 +343,7 @@ impl BacktestRunner {
 
             let cycle = decision_idx + 1;
 
-            // Run process_cycle — reuses live trading logic with virtual time
+            // Run process_cycle — reuses live trading logic with virtual time and historical context
             let result = process_cycle(
                 &self.runtime_state,
                 &self.runtime_cfg,
@@ -396,6 +353,7 @@ impl BacktestRunner {
                 None, // no live adapter — simulated mode
                 ts_sec,
                 true, // backtest_mode
+                Some(&self.klines_by_symbol),
             )
             .await;
 
@@ -562,7 +520,7 @@ async fn fetch_klines_from_binance(
     interval: &str,
     start_ts_ms: i64,
     end_ts_ms: i64,
-) -> Vec<KlineBar> {
+) -> Vec<crate::clients::market_data::MarketKline> {
     let url = format!(
         "https://fapi.binance.com/fapi/v1/klines?symbol={}&interval={}&startTime={}&endTime={}&limit=1500",
         symbol, interval, start_ts_ms, end_ts_ms
@@ -592,14 +550,18 @@ async fn fetch_klines_from_binance(
     };
     rows.into_iter()
         .filter_map(|r| {
-            if r.len() < 5 {
+            if r.len() < 7 {
                 return None;
             }
-            Some(KlineBar {
+            Some(crate::clients::market_data::MarketKline {
                 open_time: r[0].as_i64()?,
+                open: r[1].as_str()?.parse().ok()?,
                 high: r[2].as_str()?.parse().ok()?,
                 low: r[3].as_str()?.parse().ok()?,
                 close: r[4].as_str()?.parse().ok()?,
+                volume: r[5].as_str()?.parse().ok().unwrap_or(0.0),
+                close_time: r[6].as_i64().unwrap_or_else(|| r[0].as_i64().unwrap_or(0) + 300_000),
+                quote_volume: r.get(7).and_then(|v| v.as_str()).and_then(|s| s.parse().ok()).unwrap_or(0.0),
             })
         })
         .collect()
@@ -611,10 +573,10 @@ async fn fetch_klines_for_symbol(
     interval: &str,
     start_ts: i64,
     end_ts: i64,
-) -> Vec<KlineBar> {
+) -> Vec<crate::clients::market_data::MarketKline> {
     let start_ms = start_ts * 1000;
     let end_ms = end_ts * 1000;
-    let mut all: Vec<KlineBar> = Vec::new();
+    let mut all: Vec<crate::clients::market_data::MarketKline> = Vec::new();
     let mut cursor = start_ms;
     let batch_limit = 1500i64;
     let ms_per_bar = interval_to_ms(interval).unwrap_or(300_000);
@@ -641,7 +603,7 @@ async fn fetch_klines_for_symbol(
 async fn load_klines_per_symbol(
     cfg: &BacktestConfig,
     runtime_cfg: &TraderRuntimeConfig,
-) -> HashMap<String, Vec<KlineBar>> {
+) -> HashMap<String, Vec<crate::clients::market_data::MarketKline>> {
     let mut symbols: Vec<String> = runtime_cfg
         .symbols_config
         .iter()

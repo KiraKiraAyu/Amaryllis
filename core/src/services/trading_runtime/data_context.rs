@@ -22,23 +22,29 @@ pub async fn load_trader_data_context(
     state: &SharedState,
     cfg: &TraderRuntimeConfig,
     symbol: &str,
+    as_of_ts_sec: Option<i64>,
+    historical_klines: Option<&[MarketKline]>,
 ) -> Result<TraderDataContext, AppError> {
     let template =
         validate_strategy_data_template(&cfg.strategy_config).map_err(AppError::InvalidConfig)?;
-    let exchange = state
-        .exchange_repo
-        .find_runtime_config(&cfg.exchange_id)
-        .await?
-        .ok_or_else(|| {
-            AppError::InvalidExchangeConfig("Trader exchange account not found".into())
-        })?;
+    let exchange_type = if historical_klines.is_some() {
+        "simulated".to_string()
+    } else {
+        match state.exchange_repo.find_runtime_config(&cfg.exchange_id).await {
+            Ok(Some(row)) => row.exchange_type,
+            _ => "binance".to_string(),
+        }
+    };
 
     let mut fetch_cache: HashMap<(String, usize), Vec<MarketKline>> = HashMap::new();
     let mut rendered = format!(
         "## Strategy Market Data\n- Exchange: {}\n- Symbol: {}\n",
-        exchange.exchange_type, symbol
+        exchange_type, symbol
     );
     let mut indicator_lines: Vec<String> = Vec::new();
+    let cutoff_ms = as_of_ts_sec
+        .map(|ts| ts * 1000)
+        .unwrap_or_else(|| chrono::Utc::now().timestamp_millis());
 
     for item in template
         .items
@@ -49,16 +55,25 @@ pub async fn load_trader_data_context(
             let key = (timeframe.clone(), item.count);
             let mut candles = if let Some(cached) = fetch_cache.get(&key) {
                 cached.clone()
+            } else if let Some(history) = historical_klines {
+                let filtered: Vec<MarketKline> = history
+                    .iter()
+                    .filter(|candle| candle.close_time <= cutoff_ms)
+                    .cloned()
+                    .collect();
+                let start_idx = filtered.len().saturating_sub(item.count);
+                let sliced = filtered[start_idx..].to_vec();
+                fetch_cache.insert(key, sliced.clone());
+                sliced
             } else {
                 let candles =
-                    fetch_klines(&exchange.exchange_type, symbol, timeframe, item.count).await?;
+                    fetch_klines(&exchange_type, symbol, timeframe, item.count).await?;
                 fetch_cache.insert(key, candles.clone());
                 candles
             };
 
             if item.closed_only {
-                let now_ms = chrono::Utc::now().timestamp_millis();
-                candles.retain(|candle| candle.close_time <= now_ms);
+                candles.retain(|candle| candle.close_time <= cutoff_ms);
             }
             if candles.is_empty() {
                 return Err(AppError::BadGateway(format!(
@@ -81,14 +96,23 @@ pub async fn load_trader_data_context(
             let key = (timeframe.clone(), count);
             let mut candles = if let Some(cached) = fetch_cache.get(&key) {
                 cached.clone()
+            } else if let Some(history) = historical_klines {
+                let filtered: Vec<MarketKline> = history
+                    .iter()
+                    .filter(|candle| candle.close_time <= cutoff_ms)
+                    .cloned()
+                    .collect();
+                let start_idx = filtered.len().saturating_sub(count);
+                let sliced = filtered[start_idx..].to_vec();
+                fetch_cache.insert(key, sliced.clone());
+                sliced
             } else {
                 let candles =
-                    fetch_klines(&exchange.exchange_type, symbol, timeframe, count).await?;
+                    fetch_klines(&exchange_type, symbol, timeframe, count).await?;
                 fetch_cache.insert(key, candles.clone());
                 candles
             };
-            let now_ms = chrono::Utc::now().timestamp_millis();
-            candles.retain(|candle| candle.close_time <= now_ms);
+            candles.retain(|candle| candle.close_time <= cutoff_ms);
             if candles.is_empty() {
                 return Err(AppError::BadGateway(format!(
                     "No closed {} Kline data available for {}",
@@ -465,5 +489,34 @@ mod tests {
         };
 
         assert_eq!(indicator_kline_count(&item), 122);
+    }
+
+    #[tokio::test]
+    async fn test_historical_data_context_slicing_isolates_temporal_state() {
+        let historical_candles: Vec<MarketKline> = (1..=50)
+            .map(|i| MarketKline {
+                open_time: (i - 1) * 300_000,
+                open: i as f64,
+                high: i as f64 + 1.0,
+                low: i as f64 - 0.5,
+                close: i as f64 + 0.5,
+                volume: 100.0,
+                quote_volume: 1000.0,
+                close_time: i * 300_000,
+            })
+            .collect();
+
+        // Cutoff at candle 20 (close_time = 20 * 300_000 = 6_000_000 ms = 6000 s)
+        let as_of_ts_sec = 6000;
+        let mut fetch_cache: HashMap<(String, usize), Vec<MarketKline>> = HashMap::new();
+        let cutoff_ms = as_of_ts_sec * 1000;
+
+        let filtered: Vec<MarketKline> = historical_candles
+            .iter()
+            .filter(|c| c.close_time <= cutoff_ms)
+            .cloned()
+            .collect();
+        assert_eq!(filtered.len(), 20);
+        assert_eq!(filtered.last().unwrap().close, 20.5);
     }
 }

@@ -2,7 +2,17 @@ use super::data_context::load_trader_data_context;
 use super::prompt_assemble::{build_system_prompt, build_trading_prompt};
 use super::prompt_data::TimelineEntryView;
 use super::service::*;
+use crate::clients::market_data::MarketKline;
 use crate::repositories::trading::records::history::InsertTraderDecisionRecord;
+
+type CachedDecision = (String, f64, String);
+type DecisionCache = std::sync::Mutex<HashMap<String, CachedDecision>>;
+
+static BACKTEST_DECISION_CACHE: std::sync::OnceLock<DecisionCache> = std::sync::OnceLock::new();
+
+fn get_backtest_decision_cache() -> &'static DecisionCache {
+    BACKTEST_DECISION_CACHE.get_or_init(|| std::sync::Mutex::new(HashMap::new()))
+}
 
 /// Calculate price momentum from current and previous prices.
 fn momentum(m: &MarketState) -> f64 {
@@ -87,6 +97,7 @@ pub async fn generate_ai_decision(
     trigger_source: &str,
     correlation_id: &str,
     backtest_mode: bool,
+    historical_klines: Option<&[MarketKline]>,
 ) -> DecisionSignal {
     let timeframe = format!("{}m", cfg.scan_interval_minutes.max(1));
 
@@ -176,46 +187,47 @@ pub async fn generate_ai_decision(
 
     let momentum = momentum(&m);
 
-    let data_context = match load_trader_data_context(state, cfg, symbol).await {
-        Ok(context) => context,
-        Err(err) => {
-            warn!(
-                "[AI_PROMPT] skipped - strategy data unavailable trader={} symbol={} err={}",
-                cfg.trader_id, symbol, err
-            );
-            if !backtest_mode {
-                emit_runtime_event_best_effort(
-                    state,
-                    cfg,
-                    EVENT_MARKET_DATA_UNAVAILABLE,
-                    symbol,
-                    "",
-                    risk_level,
-                    "strategy_data_unavailable",
-                    &format!("Strategy market data unavailable: {err}"),
-                    correlation_id,
-                    json!({ "symbol": symbol, "error": err.to_string() }),
-                    now_ts,
-                )
-                .await;
+    let data_context =
+        match load_trader_data_context(state, cfg, symbol, Some(now_ts), historical_klines).await {
+            Ok(context) => context,
+            Err(err) => {
+                warn!(
+                    "[AI_PROMPT] skipped - strategy data unavailable trader={} symbol={} err={}",
+                    cfg.trader_id, symbol, err
+                );
+                if !backtest_mode {
+                    emit_runtime_event_best_effort(
+                        state,
+                        cfg,
+                        EVENT_MARKET_DATA_UNAVAILABLE,
+                        symbol,
+                        "",
+                        risk_level,
+                        "strategy_data_unavailable",
+                        &format!("Strategy market data unavailable: {err}"),
+                        correlation_id,
+                        json!({ "symbol": symbol, "error": err.to_string() }),
+                        now_ts,
+                    )
+                    .await;
+                }
+                return DecisionSignal {
+                    symbol: symbol.to_string(),
+                    action: "NO ACTION".to_string(),
+                    confidence: 0.5,
+                    reason: String::new(),
+                    timeframe,
+                    price: m.price,
+                    momentum,
+                    risk_level: risk_level.to_string(),
+                    trigger_source: "strategy_data_unavailable".to_string(),
+                    action_taken: "hold-data-unavailable".to_string(),
+                    correlation_id: correlation_id.to_string(),
+                    prompt: String::new(),
+                    system_prompt: None,
+                };
             }
-            return DecisionSignal {
-                symbol: symbol.to_string(),
-                action: "NO ACTION".to_string(),
-                confidence: 0.5,
-                reason: String::new(),
-                timeframe,
-                price: m.price,
-                momentum,
-                risk_level: risk_level.to_string(),
-                trigger_source: "strategy_data_unavailable".to_string(),
-                action_taken: "hold-data-unavailable".to_string(),
-                correlation_id: correlation_id.to_string(),
-                prompt: String::new(),
-                system_prompt: None,
-            };
-        }
-    };
+        };
 
     let timeline = load_recent_timeline(state, &cfg.trader_id).await;
 
@@ -233,6 +245,31 @@ pub async fn generate_ai_decision(
     } else {
         Some(build_system_prompt(cfg))
     };
+
+    // Check backtest decision cache
+    if backtest_mode {
+        let cached_opt = {
+            let cache = get_backtest_decision_cache().lock().unwrap();
+            cache.get(&prompt).cloned()
+        };
+        if let Some((action, confidence, reason)) = cached_opt {
+            return DecisionSignal {
+                symbol: symbol.to_string(),
+                action,
+                confidence,
+                reason,
+                timeframe,
+                price: m.price,
+                momentum,
+                risk_level: risk_level.to_string(),
+                trigger_source: trigger_source.to_string(),
+                action_taken: format!("ai-cached-{}-{}", cfg.ai_model_id, correlation_id),
+                correlation_id: correlation_id.to_string(),
+                prompt,
+                system_prompt: system_prompt_owned,
+            };
+        }
+    }
 
     // Always publish the prompt to realtime clients so users can see what's sent to the AI
     info!(
@@ -322,6 +359,17 @@ pub async fn generate_ai_decision(
     {
         Ok(response) => {
             let decision = parse_ai_response(&response);
+            if backtest_mode {
+                let mut cache = get_backtest_decision_cache().lock().unwrap();
+                cache.insert(
+                    prompt.clone(),
+                    (
+                        decision.action.clone(),
+                        decision.confidence,
+                        decision.reason.clone(),
+                    ),
+                );
+            }
             DecisionSignal {
                 symbol: symbol.to_string(),
                 action: decision.action,

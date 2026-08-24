@@ -254,9 +254,6 @@ pub async fn ensure_fixed_tp_sl_orders(
 ) -> Result<(), AppError> {
     let take_profit = configured_fixed_take_profit(&cfg.strategy_config)?;
     let stop_loss = configured_fixed_stop_loss(&cfg.strategy_config)?;
-    if adapter.exchange_type() != "aster" {
-        return Ok(());
-    }
 
     let positions = adapter.get_positions().await?;
     let open_orders = adapter.get_open_orders(None).await?;
@@ -301,6 +298,14 @@ pub async fn ensure_fixed_tp_sl_orders(
 
             match adapter.place_conditional_order(request.clone()).await {
                 Ok(response) => created_order_ids.push((request.symbol.clone(), response.order_id)),
+                Err(AppError::UnsupportedExchange(msg)) => {
+                    tracing::info!(
+                        "exchange {} does not support hosted conditional orders ({}), skipping",
+                        adapter.exchange_type(),
+                        msg
+                    );
+                    return Ok(());
+                }
                 Err(err) => {
                     for (symbol, order_id) in created_order_ids {
                         if let Err(cancel_err) = adapter.cancel_order(&symbol, &order_id).await {

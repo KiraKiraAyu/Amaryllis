@@ -9,10 +9,11 @@ use sha2::Sha256;
 use crate::{
     clients::{
         exchanges::{
-            CancelOrderResponse, ExchangeBalance, ExchangeCredentials, ExchangeMarginMode,
-            ExchangeOpenOrder, ExchangeOrderDetail, ExchangeOrderType, ExchangePosition,
-            ExchangeSide, ExchangeSymbolConstraints, ExchangeTradeFill, LiveExchangeAdapter,
-            PlaceOrderRequest, PlaceOrderResponse, PositionSide, TimeInForce,
+            CancelOrderResponse, ExchangeBalance, ExchangeConditionalOrderType,
+            ExchangeCredentials, ExchangeMarginMode, ExchangeOpenOrder, ExchangeOrderDetail,
+            ExchangeOrderType, ExchangePosition, ExchangeSide, ExchangeSymbolConstraints,
+            ExchangeTradeFill, LiveExchangeAdapter, PlaceConditionalOrderRequest, PlaceOrderRequest,
+            PlaceOrderResponse, PositionSide, TimeInForce,
         },
         outbound_http::{OutboundRequestLog, OutboundResponse, send_text},
     },
@@ -295,6 +296,91 @@ impl LiveExchangeAdapter for BinanceFuturesAdapter {
                 }
                 .to_string(),
             ));
+        }
+
+        let payload: BinanceOrderResponse = self.signed_post("/fapi/v1/order", params).await?;
+        Ok(PlaceOrderResponse {
+            order_id: payload.order_id.to_string(),
+            client_order_id: payload.client_order_id,
+            symbol: payload.symbol,
+            side: payload.side,
+            position_side: payload.position_side,
+            reduce_only: payload.reduce_only,
+            status: payload.status,
+            order_type: payload.order_type,
+            price: parse_f64(&payload.price),
+            orig_qty: parse_f64(&payload.orig_qty),
+            executed_qty: parse_f64(&payload.executed_qty),
+            update_time: payload.update_time,
+        })
+    }
+
+    async fn place_conditional_order(
+        &self,
+        req: PlaceConditionalOrderRequest,
+    ) -> Result<PlaceOrderResponse, AppError> {
+        if req.quantity <= 0.0 || !req.quantity.is_finite() {
+            return Err(AppError::InvalidExchangeConfig(
+                "conditional order quantity must be > 0".to_string(),
+            ));
+        }
+        if req.trigger_price <= 0.0 || !req.trigger_price.is_finite() {
+            return Err(AppError::InvalidExchangeConfig(
+                "conditional order trigger price must be > 0".to_string(),
+            ));
+        }
+
+        let symbol = req.symbol.trim().to_uppercase();
+        if symbol.is_empty() {
+            return Err(AppError::InvalidExchangeConfig(
+                "symbol is required".to_string(),
+            ));
+        }
+
+        let hedge_mode = self.dual_side_position().await?;
+        let mut params = vec![
+            ("symbol", symbol),
+            (
+                "side",
+                match req.side {
+                    ExchangeSide::Buy => "BUY".to_string(),
+                    ExchangeSide::Sell => "SELL".to_string(),
+                },
+            ),
+            (
+                "type",
+                match req.conditional_type {
+                    ExchangeConditionalOrderType::TakeProfitMarket => {
+                        "TAKE_PROFIT_MARKET".to_string()
+                    }
+                    ExchangeConditionalOrderType::StopMarket => "STOP_MARKET".to_string(),
+                },
+            ),
+            ("quantity", format_decimal(req.quantity)),
+            ("stopPrice", format_decimal(req.trigger_price)),
+            ("workingType", "MARK_PRICE".to_string()),
+            (
+                "newClientOrderId",
+                req.client_order_id
+                    .unwrap_or_else(|| crate::clients::short_client_order_id("tpsl_")),
+            ),
+        ];
+
+        if hedge_mode {
+            let position_side = req
+                .position_side
+                .unwrap_or_else(|| inferred_position_side_for_order(req.side, true));
+            params.push((
+                "positionSide",
+                match position_side {
+                    PositionSide::Both => "BOTH",
+                    PositionSide::Long => "LONG",
+                    PositionSide::Short => "SHORT",
+                }
+                .to_string(),
+            ));
+        } else if req.reduce_only {
+            params.push(("reduceOnly", "true".to_string()));
         }
 
         let payload: BinanceOrderResponse = self.signed_post("/fapi/v1/order", params).await?;

@@ -283,6 +283,7 @@ pub async fn run_trader_loop(
             live_adapter.as_deref(),
             now_i64(),
             false,
+            None,
         )
         .await;
         match result {
@@ -545,6 +546,7 @@ pub async fn process_cycle(
     live_adapter: Option<&dyn LiveExchangeAdapter>,
     now_ts: i64,
     backtest_mode: bool,
+    historical_klines_by_symbol: Option<&HashMap<String, Vec<crate::clients::market_data::MarketKline>>>,
 ) -> Result<(), AppError> {
     let cycle_started_at = now_ts;
 
@@ -733,6 +735,10 @@ pub async fn process_cycle(
             "ai_model"
         };
 
+        let hist_slice = historical_klines_by_symbol
+            .and_then(|m| m.get(sym))
+            .map(|v| v.as_slice());
+
         let decision_started_at = now_ts;
         let signal = generate_ai_decision(
             state,
@@ -747,6 +753,7 @@ pub async fn process_cycle(
             trigger_source,
             &cycle_correlation_id,
             backtest_mode,
+            hist_slice,
         )
         .await;
 

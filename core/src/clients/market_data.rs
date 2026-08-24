@@ -9,7 +9,7 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct MarketKline {
+pub struct MarketKline {
     #[serde(rename = "openTime")]
     pub open_time: i64,
     pub open: f64,
