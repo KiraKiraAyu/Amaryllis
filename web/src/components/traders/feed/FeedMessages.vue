@@ -17,8 +17,6 @@ function roleLabel(role: string): string {
       return "Trader"
     case "prompt":
       return "Prompt"
-    case "notice":
-      return "Notice"
     case "warning":
       return "Warning"
     default:
@@ -54,7 +52,6 @@ function decisionClass(decision: string): string {
           'bg-primary-500':
             props.msg.role === 'trader' || props.msg.role === 'prompt',
           'bg-amber-500': props.msg.role === 'warning',
-          'bg-sky-500': props.msg.role === 'notice',
           'bg-surface-400': props.msg.role === 'system',
         }"
       ></span>
@@ -88,9 +85,7 @@ function decisionClass(decision: string): string {
     </div>
     <div
       v-else-if="
-        (props.msg.role === 'system' ||
-          props.msg.role === 'notice' ||
-          props.msg.role === 'warning') &&
+        (props.msg.role === 'system' || props.msg.role === 'warning') &&
         props.msg.title
       "
       class="pl-4 mt-0.5"

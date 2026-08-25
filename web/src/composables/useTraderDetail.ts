@@ -22,11 +22,6 @@ import type {
 } from "@/types/trading"
 
 const LIVE_OPEN_SKIPPED_CONSTRAINTS_EVENT = "live_open_skipped_constraints"
-const DECISION_NOTICE_EVENTS = new Set([
-  "risk_guard_active",
-  "market_data_unavailable",
-  "ai_fallback",
-])
 const ACTIVITY_POLL_INTERVAL_MS = 5_000
 const ACTIVITY_LIMIT = 100
 const ACTIVITY_WINDOW_HOURS = 24 * 365
@@ -35,12 +30,10 @@ const ACTIVITY_WINDOW_HOURS = 24 * 365
 export interface FeedMessage {
   id: string
   /** "prompt" = system prompt sent to AI;
-   *  "trader" = AI reasoning + decision (+ optional execution data);
-   *  "notice" = decision-path diagnostics (always visible, e.g. risk guard,
-   *  market data unavailable, AI fallback);
-   *  "system" = system operation (hidden by default, toggled by System Ops);
-   *  "warning" = action blocked by an exchange constraint (always visible). */
-  role: "prompt" | "notice" | "system" | "trader" | "warning"
+   *  "trader" = AI decision & reasoning (or system risk guard / capital protection);
+   *  "warning" = action blocked by an exchange constraint (always visible);
+   *  "system" = system operations & diagnostics (hidden by default, toggled by System Ops). */
+  role: "prompt" | "system" | "trader" | "warning"
   title: string
   content: string
   timestamp: number
@@ -108,11 +101,10 @@ function formatEventTitle(event: RuntimeEventPayload): string {
 function runtimeEventToFeedMessage(event: RuntimeEventPayload): FeedMessage {
   const isConstraintWarning =
     event.event_type === LIVE_OPEN_SKIPPED_CONSTRAINTS_EVENT
-  const isNotice = DECISION_NOTICE_EVENTS.has(event.event_type)
 
   return {
     id: `event-${event.id}`,
-    role: isConstraintWarning ? "warning" : isNotice ? "notice" : "system",
+    role: isConstraintWarning ? "warning" : "system",
     title: isConstraintWarning
       ? `Order not submitted: ${event.symbol} ${event.side}`.trim()
       : formatEventTitle(event),
@@ -217,14 +209,12 @@ function feedRoleOrder(role: FeedMessage["role"]): number {
       return 0
     case "trader":
       return 1
-    case "notice":
-      return 2
     case "warning":
-      return 3
+      return 2
     case "system":
-      return 4
+      return 3
     default:
-      return 5
+      return 4
   }
 }
 
