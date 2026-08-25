@@ -3,7 +3,7 @@ import { ref, onMounted, computed } from "vue"
 import Select from "primevue/select"
 import Button from "primevue/button"
 import { useSettingsStore } from "@/stores/settings"
-import { useToast } from "primevue/usetoast"
+import { useToast } from "@/utils/toast"
 import { detectBrowserTimeZone } from "@/utils/format"
 
 const settings = useSettingsStore()

@@ -1,6 +1,6 @@
 import router from "@/router"
 import { useAuthStore } from "@/stores/auth"
-import { useToast } from "@/stores/toast"
+import { toast } from "@/utils/toast"
 import type { ApiResponse } from "@/types/api"
 
 import axios, {
@@ -44,7 +44,6 @@ service.interceptors.response.use(
 
     if (!res.success) {
       const message = res.error || res.message || "请求失败"
-      const toast = useToast()
       toast.error(message)
 
       throw new Error(message)
@@ -53,7 +52,6 @@ service.interceptors.response.use(
     return response
   },
   async (error: AxiosError<ApiResponse<unknown>>) => {
-    const toast = useToast()
     const status = error.response?.status
 
     const message =

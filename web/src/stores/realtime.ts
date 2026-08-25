@@ -2,8 +2,8 @@ import { defineStore } from "pinia"
 import { computed, ref } from "vue"
 import type { PositionPayload } from "@/types/trading"
 import { SseClient } from "@/utils/sse-client"
+import { toast } from "@/utils/toast"
 import { useAuthStore } from "./auth"
-import { useToast } from "./toast"
 
 export interface RealtimeEvent {
   type: string
@@ -44,7 +44,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
         connecting.value = false
         connected.value = false
         if (wasConnecting) {
-          useToast().error(
+          toast.error(
             "Failed to connect to the server. Please try again.",
             "Connection Error",
           )

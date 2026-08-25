@@ -5,7 +5,7 @@ import InputText from "primevue/inputtext"
 import QRCode from "qrcode"
 import { resetConfirmApi, resetStartApi } from "@/api/auth"
 import { useAuthStore } from "@/stores/auth"
-import { useToast } from "primevue/usetoast"
+import { useToast } from "@/utils/toast"
 
 const auth = useAuthStore()
 const toast = useToast()

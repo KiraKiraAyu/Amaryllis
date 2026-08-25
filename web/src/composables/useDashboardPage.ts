@@ -10,7 +10,7 @@ import {
   syncTraderBalanceApi,
 } from "@/api/trading"
 import { useRealtimeStore } from "@/stores/realtime"
-import { useToast } from "@/stores/toast"
+import { useToast } from "@/utils/toast"
 import { formatTime } from "@/utils/format"
 import type {
   DashboardEquitySnapshot,

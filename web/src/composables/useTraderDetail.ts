@@ -11,7 +11,7 @@ import {
   wakeTraderApi,
 } from "@/api/trading"
 import { useRealtimeStore } from "@/stores/realtime"
-import { useToast } from "@/stores/toast"
+import { useToast } from "@/utils/toast"
 import { fmtUsd } from "@/utils/format"
 import type {
   TraderPayload,

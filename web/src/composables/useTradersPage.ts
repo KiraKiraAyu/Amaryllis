@@ -7,7 +7,7 @@ import {
   stopTraderApi,
   syncTraderBalanceApi,
 } from "@/api/trading"
-import { useToast } from "@/stores/toast"
+import { useToast } from "@/utils/toast"
 import { formatTime } from "@/utils/format"
 import type { TraderPayload } from "@/types/trading"
 import type { EquityHistoryPointPayload } from "@/types/public"

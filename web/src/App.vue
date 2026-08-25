@@ -5,31 +5,10 @@ import { useAuthStore } from "@/stores/auth"
 import { useRealtimeStore } from "@/stores/realtime"
 import { useSettingsStore } from "@/stores/settings"
 import Toast from "primevue/toast"
-import { useToast } from "@/stores/toast"
-import { useToast as usePrimeToast } from "primevue/usetoast"
 
 const auth = useAuthStore()
 const realtime = useRealtimeStore()
 const settings = useSettingsStore()
-const toastStore = useToast()
-const primeToast = usePrimeToast()
-
-// Watch custom Pinia toast store to dispatch toast messages via PrimeVue Toast globally
-watch(
-  () => toastStore.toastEvent,
-  (evt) => {
-    if (evt) {
-      primeToast.add({
-        severity: evt.severity,
-        summary: evt.summary,
-        detail: evt.detail,
-        life: evt.life,
-      })
-      toastStore.toastEvent = null // Reset channel
-    }
-  },
-  { deep: true },
-)
 
 onMounted(() => {
   if (auth.isLoggedIn) {
